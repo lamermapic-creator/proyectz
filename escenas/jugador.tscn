@@ -1,0 +1,35 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/jugador/jugador.gd" id="1_jug"]
+[ext_resource type="Script" path="res://scripts/jugador/rig_personaje.gd" id="2_rig"]
+[ext_resource type="Script" path="res://scripts/jugador/animador.gd" id="3_ani"]
+
+[sub_resource type="BoxShape3D" id="Box_cuerpo"]
+resource_local_to_scene = true
+size = Vector3(1.6, 1.8, 0.8)
+
+[sub_resource type="BoxShape3D" id="Box_piernas"]
+resource_local_to_scene = true
+size = Vector3(1, 0.95, 0.6)
+
+[node name="Jugador" type="CharacterBody3D"]
+script = ExtResource("1_jug")
+
+[node name="FormaCuerpo" type="CollisionShape3D" parent="."]
+shape = SubResource("Box_cuerpo")
+
+[node name="FormaPiernas" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.375, 0)
+shape = SubResource("Box_piernas")
+
+[node name="Rig" type="Node3D" parent="."]
+script = ExtResource("2_rig")
+
+[node name="Camara" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.4, 2, 8.5)
+current = true
+near = 0.1
+far = 3000.0
+
+[node name="Animador" type="Node" parent="."]
+script = ExtResource("3_ani")

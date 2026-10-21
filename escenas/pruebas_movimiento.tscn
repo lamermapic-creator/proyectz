@@ -1,0 +1,10 @@
+[gd_scene format=3 uid="uid://bstonadtw3ugy"]
+
+[ext_resource type="Script" uid="uid://b6crua1diis5j" path="res://scripts/nivel/nivel_pruebas.gd" id="1_niv"]
+[ext_resource type="PackedScene" path="res://escenas/jugador.tscn" id="2_jug"]
+
+[node name="PruebasMovimiento" type="Node3D" unique_id=786559681]
+script = ExtResource("1_niv")
+
+[node name="Jugador" parent="." unique_id=1126983332 instance=ExtResource("2_jug")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.2, 0)
