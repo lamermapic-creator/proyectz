@@ -1,0 +1,22 @@
+# Godot 4+ (caché: Godot la vuelve a crear al abrir el proyecto)
+.godot/
+/android/
+
+# ejecutables exportados (se vuelven a exportar cuando haga falta)
+*.exe
+*.pck
+*.console.exe
+/build/
+/versiones/
+
+# temporales del sistema y del editor
+*.tmp
+*.bak
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# opciones de cada jugador (no se comparten)
+override.cfg
