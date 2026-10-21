@@ -1,0 +1,19 @@
+# Normaliza los finales de línea de los archivos de texto
+* text=auto eol=lf
+
+# binarios (no se mezclan nunca, se sustituyen enteros)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.wav binary
+*.ogg binary
+*.mp3 binary
+*.glb binary
+*.gltf binary
+*.fbx binary
+*.blend binary
+*.ttf binary
+*.otf binary
+*.exe binary
+*.pck binary
