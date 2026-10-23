@@ -13,6 +13,15 @@ en el mismo commit que el cambio. Formato:
 
 ---
 
+## 2026-10-23 · Juan · Claude
+**Qué:** auditoría técnica completa del proyecto (arquitectura, fallos comprobados con Godot 4.7.2 headless,
+deuda técnica, ideas de mejora y hoja de ruta). Solo documentación: no se ha tocado código ni escenas.
+**Archivos:** `AUDITORIA.md` (nuevo), `CAMBIOS.md`.
+**Cómo probarlo:** leer `AUDITORIA.md`; la sección 11 explica cómo repetir las pruebas.
+**Pendiente / avisos:** hay 3 fallos comprobados que conviene arreglar pronto (golpes a través de paredes,
+cadencia que depende de los FPS, efectos que sobreviven al cambiar de escena). Las pruebas `tests/` que cita
+`CLAUDE.md` no están en el repo: quien las tenga, que las suba.
+
 ## 2026-10-21 · KangooG · Claude
 **Qué:** preparación del repositorio para trabajar entre dos: `.gitignore`, `.gitattributes`,
 `README.md` (cómo abrir el proyecto y configurar Godot AI), `CLAUDE.md` (diseño, estado y normas)
