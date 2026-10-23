@@ -385,6 +385,9 @@ func update_feet(root_cf: Transform3D, vel: Vector3, speed: float, dt: float, gr
 			var fy: float = sw.fromYaw if sw.fromYaw != null else body_yaw
 			f.swingYaw = fy + Rbx.wrap_a(body_yaw - fy) * Rbx.smooth(u)
 			if u >= 1:
+				# el pie toca el suelo: pisada (ruido que oyen los zombis)
+				if grounded:
+					Ruido.emitir(jugador, to, Ruido.radio_paso(step_k, bool(sw.get("idle", false))), Ruido.PASO, jugador)
 				f.pos = to
 				f.normal = idl[1]
 				f.swing = null
@@ -958,7 +961,12 @@ func update_rig(dt: float) -> void:
 		var pelvis_stand_y := root_cf.origin.y - 0.08
 		var drop := (pelvis_stand_y - (gy + 0.4)) * lay
 		# reptar estilo militar: brazo izquierdo adelante con la rodilla derecha y viceversa
+		var crawl_prev := crawl
 		crawl += (speed * 1.9 + absf(yaw_rate) * 1.6) * dt
+		# cada brazada (media fase) hace un poco de ruido; con Shift (reptar rápido) más
+		if crawling and floori(crawl / PI) != floori(crawl_prev / PI):
+			var r_rep: float = C.RUIDO.ReptarRapido if L.sprinting else C.RUIDO.Reptar
+			Ruido.emitir(jugador, root_cf.origin, r_rep, Ruido.REPTAR, jugador)
 		# al pivotar, la pelvis se desplaza hacia fuera del giro
 		var sweep := clampf(-yaw_rate * 0.18, -0.25, 0.25) * pb
 		var ph := crawl

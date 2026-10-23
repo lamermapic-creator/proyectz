@@ -107,6 +107,7 @@ func ahora() -> float:
 
 
 func _ready() -> void:
+	add_to_group("jugador") # así lo encuentran los zombis (y sus ruidos llevan esta marca)
 	motion_mode = MOTION_MODE_FLOATING
 	camara.top_level = true
 	yaw = rotation.y
@@ -121,6 +122,10 @@ func _ready() -> void:
 	var pausa := MenuPausa.new()
 	pausa.name = "MenuPausa"
 	add_child(pausa)
+	# medidor de ruido del HUD (lo que oyen los zombis)
+	var medidor := MedidorRuido.new()
+	medidor.name = "MedidorRuido"
+	add_child(medidor)
 	Opciones.aplicar(get_tree())
 	# en el ejecutable final no hay trucos de pruebas
 	if not OS.is_debug_build():
@@ -189,7 +194,7 @@ func _crear_hud() -> void:
 	capa.add_child(aviso)
 	_hud["aviso"] = aviso
 	var ayuda := Label.new()
-	ayuda.text = "1-4: armas · Clic der: apuntar · Clic izq: disparar/golpear · R: recargar · X: apoyar arma · F: recoger · Shift: correr · C: agacharse · Z: cuerpo a tierra · Espacio: saltar/sortear · Q/E: asomarse · V: hombro · Colgado: A/D moverse, Espacio subir, S soltarse · Esc: pausa" + (" · F4: estamina infinita · F5: balas infinitas" if OS.is_debug_build() else "")
+	ayuda.text = "1-4: armas · Clic der: apuntar · Clic izq: disparar/golpear · R: recargar · X: apoyar arma · F: recoger · Shift: correr · C: agacharse · Z: cuerpo a tierra · Espacio: saltar/sortear · Q/E: asomarse · V: hombro · Colgado: A/D moverse, Espacio subir, S soltarse · Esc: pausa" + (" · F4: estamina infinita · F5: balas infinitas · F6: ver ruido · F7: zombis sordos" if OS.is_debug_build() else "")
 	ayuda.add_theme_font_size_override("font_size", 14)
 	ayuda.modulate = Color(1, 1, 1, 0.7)
 	ayuda.anchor_top = 1.0
@@ -447,6 +452,7 @@ func start_vault(v: Dictionary) -> bool:
 	v.p0 = p0
 	v.t0 = ahora()
 	v.prev = p0
+	Ruido.emitir(self, e, C.RUIDO.Sortear if v.kind == "vault" else C.RUIDO.Encaramarse, Ruido.SORTEAR, self)
 	vaulting = v
 	L.vault = v
 	collision_layer = 0
@@ -615,6 +621,7 @@ func colgarse(c: Dictionary) -> void:
 	collision_mask = 0
 	velocity = Vector3.ZERO
 	_set_estado("Physics")
+	Ruido.emitir(self, c.edge, C.RUIDO.Colgarse, Ruido.SORTEAR, self)
 	if not estamina_infinita:
 		stamina = maxf(0.0, stamina - 3.0)
 	# las manos hacen falta: se guarda el arma
@@ -884,7 +891,70 @@ func _process(dt: float) -> void:
 	arsenal.actualizar(dt)
 	humanoid_step(dt)
 	update_camera(dt)
+	_paso_salud(dt)
 	_update_hud()
+
+
+## ---------------------------------------------------------------- daño, vida y muerte
+## (de momento solo hacen daño los zombis; ver docs/RUIDO_Y_ZOMBIS.md)
+const MUERTE_REINICIO := 4.0 # s desde que muere hasta que se reinicia el nivel
+var _danio_t := -99.0
+var _muerte_t := -1.0
+var _reiniciando := false
+
+
+## recibe un golpe de cantidad puntos desde la posición "desde" (para el empujón y la reacción)
+func recibir_danio(cantidad: float, desde: Vector3 = Vector3.ZERO) -> void:
+	if health <= 0.0 or cantidad <= 0.0:
+		return
+	health = maxf(0.0, health - cantidad)
+	_danio_t = reloj
+	shake = minf(1.0, shake + 0.45)
+	var dir := Rbx.flat(global_position - desde)
+	if dir.length() > 0.01:
+		empuje += dir.normalized() * 6.0
+	# el cuerpo encaja el golpe (muelles de impacto del animador)
+	var an := get_node_or_null("Animador") as Animador
+	if an and not an.S.is_empty():
+		(an.S.hitPitch as Rbx.Muelle).impulse(-4.0)
+		(an.S.hitHead as Rbx.Muelle).impulse(-5.0)
+	if health <= 0.0:
+		_morir()
+
+
+func _morir() -> void:
+	_muerte_t = reloj
+	if colgado != null:
+		soltar_cornisa()
+	if vaulting != null:
+		# a mitad de un salto de valla: recupera la colisión (el salto la quita) y cae
+		vaulting = null
+		L.vault = null
+		collision_layer = 1
+		collision_mask = 1 | 4
+		_set_estado("Freefall")
+	firing = false
+	aiming = false
+	arsenal.guardar_ya()
+	notify("HAS MUERTO")
+	_notif_hasta = reloj + MUERTE_REINICIO + 1.0
+
+
+## regenera vida si lleva un rato sin recibir daño (ZConfig.PLAYER.RegenDelay / RegenRate); muerto,
+## el cuerpo cae y el nivel se reinicia
+func _paso_salud(dt: float) -> void:
+	if health > 0.0:
+		if health < max_health and reloj - _danio_t > C.PLAYER.RegenDelay:
+			health = minf(max_health, health + C.PLAYER.RegenRate * dt)
+		return
+	# cae de espaldas alrededor de los pies (el animador deja de animar al morir)
+	var k := Rbx.smooth((reloj - _muerte_t) / 0.9)
+	var r := Basis(Vector3.RIGHT, k * PI * 0.5)
+	var pies := Vector3(0, -center_cur, 0)
+	rig.transform = Transform3D(r, pies - r * pies + Vector3(0, 0.45 * k, 0))
+	if reloj - _muerte_t > MUERTE_REINICIO and get_tree().current_scene and not _reiniciando:
+		_reiniciando = true
+		get_tree().reload_current_scene()
 
 
 func update_character(dt: float) -> void:
@@ -1248,6 +1318,8 @@ func humanoid_step(dt: float) -> void:
 		if v.y <= 0:
 			var gnd2 := _sondear_suelo(center_cur + maxf(0.2, -v.y * dt))
 			if not gnd2.is_empty() and pos.y - gnd2.position.y <= center_cur + 0.05:
+				# aterrizaje: cuanto más fuerte el golpe, más lejos se oye
+				Ruido.emitir(self, gnd2.position, Ruido.radio_aterrizaje(-v.y), Ruido.ATERRIZAJE, self)
 				_set_estado("Landed")
 				_set_estado("Running")
 				en_suelo = true

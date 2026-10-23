@@ -37,6 +37,7 @@ var S := {
 
 func _ready() -> void:
 	add_to_group("maniquies")
+	add_to_group("objetivos") # blanco de las armas (ver "contrato de objetivo" en docs/RUIDO_Y_ZOMBIS.md)
 	health = max_health
 	_yaw0 = rotation.y
 	_base = global_position
@@ -55,6 +56,7 @@ func _ready() -> void:
 		sb.collision_layer = 2
 		sb.collision_mask = 0
 		sb.set_meta("maniqui", self)
+		sb.set_meta("objetivo", self)
 		sb.set_meta("pieza", n)
 		var cs := CollisionShape3D.new()
 		var bx := BoxShape3D.new()
