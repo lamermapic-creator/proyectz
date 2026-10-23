@@ -56,3 +56,49 @@ const FALL := {
 }
 
 const HOLSTER_TIME := 0.42
+
+## RUIDO (ver docs/RUIDO_Y_ZOMBIS.md). Cada valor es un RADIO en studs: hasta dónde se oye ese ruido
+## en campo abierto. Una pared entre el ruido y quien escucha lo reduce (Oclusion).
+## Los disparos usan el "Alert" de cada arma (Armas.WEAPONS).
+const RUIDO := {
+	"PasoMin": 3.0,          # pisada más suave (agachado, muy despacio)
+	"PasoMax": 32.0,         # pisada corriendo (~10 m). Andar ~13 (~4 m), agachado ~5 (~1.5 m)
+	"PasoAjuste": 0.4,       # pasitos de recolocar los pies (parado): multiplicador
+	"Reptar": 3.0,           # tumbado, cada brazada
+	"ReptarRapido": 7.0,     # tumbado con Shift
+	"AterrizajeMin": 8.0,    # caer de un salto normal
+	"AterrizajeMax": 45.0,   # caída fuerte (velocidad de impacto >= 40 studs/s)
+	"Sortear": 12.0,         # saltar una valla (manos y pies golpean el obstáculo)
+	"Encaramarse": 10.0,
+	"Colgarse": 8.0,
+	"Impacto": 25.0,         # bala contra una superficie (sirve para distraer)
+	"GolpeAire": 5.0,        # blandir un arma blanca
+	"GolpeCarne": 16.0,      # cuchillo o machete que acierta
+	"GolpeContundente": 28.0, # bate que acierta
+	"Recarga": 10.0,
+	"Vacio": 5.0,            # clic del arma sin balas
+	"Grunido": 45.0,         # un zombi que empieza a perseguir avisa a los de alrededor
+	"Oclusion": 0.45,        # pared en medio: el radio se multiplica por esto
+}
+
+## ZOMBIS v0 (ver docs/RUIDO_Y_ZOMBIS.md). Velocidades en studs/s: el jugador anda a 4.8 y corre a 14.
+const ZOMBI := {
+	"Vida": 100.0,
+	"Andar": 2.4,            # deambular (~0.75 m/s)
+	"Trotar": 4.2,           # investigar un ruido con prisa
+	"Correr": 7.5,           # perseguir (más que andar, menos que correr: corriendo se escapa)
+	"Giro": 5.0,             # rapidez al girarse
+	"Oido": 1.0,             # multiplicador del radio de los ruidos (cada zombi varía ±15 %)
+	"AlertaDecae": 0.06,     # por segundo (de 1 a 0 en ~16 s)
+	"PerseguirAlerta": 0.55, # alerta necesaria para perseguir al jugador
+	"PerseguirMemoria": 2.5, # s que sigue persiguiendo sin oír nada nuevo del jugador
+	"Contacto": 4.0,         # a esta distancia nota al jugador aunque no haga ruido (~1.2 m)
+	"Alcance": 3.4,          # distancia de ataque
+	"Danio": 20.0,
+	"PreparaGolpe": 0.45,    # s desde que levanta los brazos hasta que golpea
+	"Cadencia": 1.4,         # s entre ataques
+	"Buscar": 6.0,           # s mirando alrededor al llegar a donde oyó el ruido
+	"Deambular": 18.0,       # radio alrededor de su sitio por el que deambula
+	"GrunidoCada": 8.0,      # s mínimos entre gruñidos de alerta
+	"Cadaver": 30.0,         # s que se queda el cuerpo antes de desaparecer
+}
