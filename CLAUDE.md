@@ -13,6 +13,9 @@ Responder SIEMPRE en español. Presupuesto 0 $: solo recursos gratuitos.
 6. Todo el juego usa **studs** (1 stud ≈ 0.31 m) y gravedad 35, como el original de Roblox.
 7. Probar antes de subir: abrir el juego desde el editor (F5) y comprobar que no hay errores en la Salida.
 
+8. Lee también **`AUDITORIA.md`** (2026-10-23): revisión técnica con fallos comprobados, deuda técnica,
+   ideas de mejora y hoja de ruta. Al arreglar algo de ahí, anotarlo en `CAMBIOS.md`.
+
 ## Reparto (rellenar entre los dos)
 - KangooG: …
 - Amigo: …
