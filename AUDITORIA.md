@@ -4,6 +4,10 @@
 > proyecto tal y como estaba el **2026-10-23** (commit `7498278`), hecha como la haría un ingeniero senior
 > que ve el repositorio por primera vez. Vive en su propia rama para no mezclarse con el trabajo diario.
 >
+> **Actualización 2026-10-23 (tarde):** §7.1 (golpes a través de paredes) **arreglado**; la idea §9.3.1
+> (sistema de ruido) y los zombis v0 **implementados** (ver `docs/RUIDO_Y_ZOMBIS.md`); ya hay pruebas
+> automáticas en `tests/` (§5.3/§8.6, en parte). Este documento no se reescribe: es la foto del día de la auditoría.
+>
 > **Cómo se hizo:** lectura completa del código propio (~6.400 líneas de GDScript, más escenas y configuración),
 > del historial de git y de la documentación, y **verificación con Godot 4.7.2 real** (Linux, headless) dentro
 > de un contenedor: importación del proyecto, compilación de los 15 scripts, ejecución del menú y del nivel de
