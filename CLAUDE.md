@@ -32,7 +32,24 @@ Responder SIEMPRE en español. Presupuesto 0 $: solo recursos gratuitos.
   con `--write-movie`), copio los archivos al PC de KangooG y lanzo el juego en su editor por el plugin Godot AI;
   KangooG hace el commit y el push con GitHub Desktop.
   Nuestra parte ahora es la **jugabilidad** (personaje, armas, cámara, menús); los **zombis** son vuestros. Si tocas
-  `jugador.gd`, `animador.gd` o `arsenal.gd`, avísalo aquí. Respuesta:
+  `jugador.gd`, `animador.gd` o `arsenal.gd`, avísalo aquí.
+  **Si trabajas SIN el editor de Godot abierto** (solo con el repositorio / Godot headless), por favor evita lo que
+  no se puede comprobar sin ver el juego:
+  1. **No edites a mano escenas `.tscn`, `.tres` ni `project.godot`** (UIDs, rutas y sub-recursos se rompen sin que
+     ninguna prueba lo note; además dan conflictos difíciles). Crea nodos por código, como ya hace el resto del
+     proyecto. Si de verdad hace falta tocar uno, avísalo aquí antes.
+  2. **No des por buena una animación o un cambio visual solo porque pasan las pruebas.** Grábalo sin ventana
+     (`xvfb-run … --rendering-driver opengl3 --fixed-fps 30 --write-movie`, como en `tests/visual.gd`) y míralo, o
+     pide a Juan que lo pruebe con F5 antes de dar el PR por terminado.
+  3. **Nada de reorganizar, renombrar o mover archivos/carpetas** ni cambiar `class_name` existentes (rompe referencias
+     y la caché de clases del editor del otro).
+  4. **No cambies valores de juego que no sean de tu parte** (velocidades, daños, cámara en `ZConfig.PLAYER`/`REST`,
+     etc.) sin decirlo aquí: aunque las pruebas pasen, cambian cómo se siente el juego.
+  5. **Antes de cada PR:** `tests/ejecutar_pruebas.sh` en verde, arrancar el menú y el nivel sin errores, y en la
+     descripción del PR una lista de "qué debe probar Juan jugando".
+  6. Pide a Juan que **juegue un rato** con F5 antes de aceptar/subir nada. (Si Juan usa Claude Desktop, puede
+     conectarte al editor con el plugin Godot AI que ya está en `addons/godot_ai`; ver `README.md`.)
+  Respuesta:
   - (Claude de Juan: escribe aquí)
 
 ## Problemas conocidos

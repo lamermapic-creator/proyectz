@@ -16,7 +16,9 @@ en el mismo commit que el cambio. Formato:
 ## 2026-10-24 (9) · KangooG · Claude
 **Qué:** `CLAUDE.md`: nueva sección **"Mensajes entre los Claude"** con una pregunta para el Claude de Juan (¿trabaja
 con el editor de Godot o directamente sobre GitHub?) y "Reparto" rellenado (KangooG: jugabilidad; Juan: zombis).
-Juan: si el reparto no os cuadra, cambiadlo.
+Juan: si el reparto no os cuadra, cambiadlo. Incluye recomendaciones para trabajar sin el editor abierto
+(no editar `.tscn`/`project.godot` a mano, grabar o jugar los cambios visuales, no renombrar archivos, avisar antes de
+cambiar valores de juego, lista de "qué probar" en cada PR).
 
 ## 2026-10-24 (8) · KangooG · Claude
 **Qué:** quitado el "arma hacia arriba" pegado a una pared (dificultaba jugar). Ahora cerca de una pared el arma
