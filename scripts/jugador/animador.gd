@@ -30,8 +30,14 @@ var ankle_in_foot := {}
 var wrist_in_hand := {}
 var S := {}
 var pelvis_drop := 0.0
-const ALZA_MARGEN := 0.15    # studs más allá de la boca del cañón a los que empieza a levantarse
-const ALZA_RECORRIDO := 1.0  # studs que hay que acercarse más para que quede del todo levantada
+## arma contra una pared: primero se recoge hacia el cuerpo (RETRO_MAX studs, sigue apuntando) y solo si no
+## basta, extremadamente pegado, se levanta (ALZA_RECORRIDO studs más para quedar del todo levantada)
+const ALZA_ACTIVA := false   # levantar el arma pegado a una pared: DESACTIVADO a pedido de KangooG (molestaba
+                             # al jugar). Solo se recoge hacia el cuerpo. Poner true para volver a activarlo
+const ALZA_MARGEN := 0.1     # studs más allá de la boca del cañón a los que empieza a recogerse
+const RETRO_MAX := 0.7       # cuánto se puede recoger el arma hacia el cuerpo
+const ALZA_RECORRIDO := 0.8
+var arma_retro := 0.0        # 0-1: arma recogida hacia el cuerpo por tener una pared delante
 var arma_alzada := 0.0 # 0-1: arma levantada por tener una pared delante (no se puede disparar)
 var conv_w := 0.0 # 0-1: cuánto se orienta el cañón hacia el punto de la mira
 var conv_q := Quaternion.IDENTITY
@@ -1528,6 +1534,7 @@ func update_rig(dt: float) -> void:
 	tool_shown = true
 	if tool == "" or w_cfg.get("Kind", "") != "Gun":
 		arma_alzada = 0.0
+		arma_retro = 0.0
 	if tool != "":
 		var mdl: Node3D = J.arsenal.modelo_mano
 		var kind: String = w_cfg.Kind
@@ -1572,16 +1579,37 @@ func update_rig(dt: float) -> void:
 			# pegado a una pared: el arma se levanta con el cañón hacia arriba en vez de atravesarla
 			# (mientras está alzada no se puede disparar: ver Arsenal.aim_check)
 			var alza_t := 0.0
-			if not reloading and pb < 0.5 and mdl and mdl.has_node("Muzzle") and draw_st == null and L.holster == null:
-				var mz_w: Vector3 = aim_base * target_rel * (mdl.get_node("Muzzle") as Node3D).position
+			var retro_t := 0.0
+			# con el arma apoyada (X) nunca se levanta: lo que hay delante es el propio apoyo
+			if not reloading and pb < 0.5 and mdl and mdl.has_node("Muzzle") and draw_st == null and L.holster == null \
+					and not L.get("rested", false):
+				var arma_w: Transform3D = aim_base * target_rel
+				var mz_w: Vector3 = arma_w * (mdl.get_node("Muzzle") as Node3D).position
+				var empu := arma_w.origin
 				var c0 := aim_base.origin
-				var largo := (mz_w - c0).length()
-				if largo > 0.1:
-					# solo muy pegado: empieza a levantarse cuando la pared está casi en la boca del cañón
-					var hw := J.raycast(c0, (mz_w - c0) / largo * (largo + ALZA_MARGEN))
+				var largo := (mz_w - empu).length()
+				if not J.raycast(c0, empu - c0).is_empty():
+					# la pared está entre el pecho y la empuñadura: del todo recogida (o levantada, si está activo)
+					retro_t = 1.0
+					alza_t = 1.0
+				elif largo > 0.1:
+					# a lo largo del propio cañón (no desde el pecho): apuntando por encima de un muro bajo o
+					# junto a una esquina el arma no se levanta. Cerca de la pared, primero el arma se RECOGE
+					# hacia el cuerpo (sigue apuntando y se puede disparar); solo si se está extremadamente
+					# pegado, y ya no se puede recoger más, se levanta
+					var hw := J.raycast(empu, (mz_w - empu) / largo * (largo + ALZA_MARGEN))
 					if not hw.is_empty():
-						alza_t = clampf((largo + ALZA_MARGEN - float(hw.distance)) / ALZA_RECORRIDO, 0.0, 1.0)
+						var dentro := largo + ALZA_MARGEN - float(hw.distance)
+						retro_t = clampf(dentro / RETRO_MAX, 0.0, 1.0)
+						alza_t = clampf((dentro - RETRO_MAX) / ALZA_RECORRIDO, 0.0, 1.0)
+			if not ALZA_ACTIVA:
+				alza_t = 0.0
+			arma_retro = Rbx.damp(arma_retro, retro_t, 12.0, dt)
 			arma_alzada = Rbx.damp(arma_alzada, alza_t, 12.0, dt)
+			# (al levantarse deja de estar recogida: si no, la culata se iría detrás de la espalda)
+			var retro_ef := arma_retro * (1.0 - arma_alzada)
+			if retro_ef > 0.001:
+				target_rel = Rbx.cf(0, 0, RETRO_MAX * retro_ef) * target_rel
 			if arma_alzada > 0.001:
 				target_rel = Rbx.cf(0, 0.3 * arma_alzada, 0.8 * arma_alzada) * target_rel * Rbx.ang(1.25 * arma_alzada, 0, 0)
 				speed_pose = maxf(speed_pose, 12.0)

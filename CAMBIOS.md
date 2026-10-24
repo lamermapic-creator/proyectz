@@ -13,6 +13,43 @@ en el mismo commit que el cambio. Formato:
 
 ---
 
+## 2026-10-24 (9) · KangooG · Claude
+**Qué:** `CLAUDE.md`: nueva sección **"Mensajes entre los Claude"** con una pregunta para el Claude de Juan (¿trabaja
+con el editor de Godot o directamente sobre GitHub?) y "Reparto" rellenado (KangooG: jugabilidad; Juan: zombis).
+Juan: si el reparto no os cuadra, cambiadlo.
+
+## 2026-10-24 (8) · KangooG · Claude
+**Qué:** quitado el "arma hacia arriba" pegado a una pared (dificultaba jugar). Ahora cerca de una pared el arma
+solo se recoge hacia el cuerpo y sigue apuntando y disparando; si la boca del cañón queda dentro de la pared, la
+bala da en la pared. Se puede volver a activar con `Animador.ALZA_ACTIVA = true`.
+**Archivos:** `scripts/jugador/animador.gd`.
+
+## 2026-10-24 (7) · KangooG · Claude
+**Qué:** con el arma apoyada en un muro (barrera agachado, muro de 1.3 m de pie) la bala chocaba contra el propio
+muro junto al torso: la comprobación "¿el cañón está metido en la pared?" iba del pecho a la boca y esa línea rozaba
+el muro. Ahora se mira a lo largo del arma (empuñadura → boca) y el rayo de la bala empieza en la empuñadura.
+**Archivos:** `scripts/jugador/arsenal.gd` (`salida_bala`), `tests/apoyo.gd` (comprueba dónde da la bala apoyada).
+
+## 2026-10-24 (6) · KangooG · Claude
+**Qué:** más libertad con el arma cerca de las paredes.
+- Cerca de una pared el arma primero se **recoge** hacia el cuerpo (`Animador.arma_retro`, hasta `RETRO_MAX` 0.7
+  studs) y sigue apuntando; solo **extremadamente pegado** (ya no se puede recoger más, o la pared entre el pecho
+  y la empuñadura) se levanta.
+- Círculo rojo: nunca con el arma apoyada, más pequeño (12 px) y sale menos (obstáculo a menos de 3 studs del
+  cañón y separado al menos 28 px de la mira). Constantes `CIRCULO_*` en `arsenal.gd`.
+**Archivos:** `scripts/jugador/animador.gd`, `scripts/jugador/arsenal.gd`, `tests/apoyo.gd`, `tests/visual.gd`.
+
+## 2026-10-24 (5) · KangooG · Claude
+**Qué:** apoyar el arma.
+- Con el arma apoyada (X) ya no se levanta: antes el propio muro en el que se apoyaba (barrera agachado, muro de
+  1.3 m de pie) la levantaba del todo. Además, para decidir si se levanta se mira a lo largo del cañón (desde la
+  empuñadura), no desde el pecho: apuntando por encima de un muro bajo o junto a una esquina ya no se levanta.
+- **Apoyo lateral:** de lado a una pared (izquierda o derecha, de pie o agachado) se puede apoyar el arma contra
+  ella (`find_rest` → `lado: true`, pared vertical a menos de `LADO_ALCANCE` 2 studs y más o menos paralela a donde
+  se apunta). Apoyada de lado se puede mirar más arriba/abajo que sobre un muro.
+**Archivos:** `scripts/jugador/animador.gd`, `scripts/jugador/arsenal.gd`, `scripts/jugador/jugador.gd`,
+`tests/apoyo.gd` (casos de pared de lado y campo abierto; comprueba que apoyada no se levanta).
+
 ## 2026-10-24 (4) · KangooG · Claude
 **Qué:** con un zombi pegado ya se le puede disparar (la boca del cañón quedaba dentro de él y la bala lo
 atravesaba sin tocarlo; ahora el rayo empieza en la línea del cañón a la altura del pecho y cuenta los blancos

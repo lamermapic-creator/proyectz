@@ -430,10 +430,14 @@ func punto_mira() -> Vector3:
 func salida_bala() -> Array:
 	var mz_t := (modelo_mano.get_node("Muzzle") as Node3D).global_transform
 	var dir := (-mz_t.basis.z).normalized()
+	var pecho: Vector3 = (J.rig.P.UpperTorso as Node3D).global_position
+	# ¿la boca del cañón está metida en una pared? Se mira A LO LARGO DEL ARMA (de la empuñadura a la boca),
+	# no desde el pecho: con el arma apoyada sobre un muro, la línea pecho-boca rozaba el propio muro y
+	# la bala "salía del torso" contra él
+	var empu: Vector3 = modelo_mano.global_position
+	var dentro := J.raycast(empu, mz_t.origin - empu)
 	# el arma aún está subiendo hacia la mira (primer disparo desde la pose baja): la bala va al punto
 	# de la mira desde el cañón, en vez de al suelo. Pegado a una pared (arma levantada), donde apunte
-	var pecho: Vector3 = (J.rig.P.UpperTorso as Node3D).global_position
-	var dentro := J.raycast(pecho, mz_t.origin - pecho)
 	if anim == null or anim.arma_alzada < 0.1:
 		var pm := punto_mira()
 		var al := pm - mz_t.origin
@@ -441,16 +445,17 @@ func salida_bala() -> Array:
 			# blanco PEGADO (un zombi encima): el cañón puede quedar a su lado o dentro de él; la bala va
 			# desde el pecho hacia lo que marca la mira
 			if (pm - pecho).length() > 0.3:
-				return [mz_t.origin, (pm - pecho).normalized(), dentro, pecho]
+				return [mz_t.origin, (pm - pecho).normalized(), {}, pecho]
 		elif dir.angle_to(al) > deg_to_rad(8):
 			dir = al.normalized()
-	# el rayo de la bala empieza en la línea del cañón a la altura del pecho, no en la boca: con un
-	# zombi pegado, la boca del cañón queda DENTRO de él y un rayo que empieza dentro no lo toca
-	var atras := maxf(0.0, (mz_t.origin - pecho).dot(dir))
+	# el rayo de la bala empieza en la línea del cañón a la altura de la empuñadura, no en la boca: con
+	# un zombi pegado, la boca del cañón queda DENTRO de él (el rayo cuenta los blancos desde dentro)
+	var atras := maxf(0.0, (mz_t.origin - empu).dot(dir))
 	return [mz_t.origin, dir, dentro, mz_t.origin - dir * atras]
 
 
 ## ---------------------------------------------------------------- apoyar el arma (X)
+const LADO_ALCANCE := 2.0 # studs: hasta dónde puede estar la pared para apoyar el arma de lado
 ## Busca delante una superficie a la altura adecuada (muro bajo, barrera, alféizar...). Tumbado: el suelo.
 func find_rest():
 	var w := cfg()
@@ -496,6 +501,19 @@ func find_rest():
 			rest_motivo = "alto"
 			continue
 		return {"top": top, "point": hit.position, "gap": maxf(0.0, gap), "ground": false}
+	# APOYO LATERAL: de lado a una pared (o al borde de una esquina), el arma se apoya contra ella.
+	# Hace falta una pared vertical justo al lado del arma, más o menos paralela a donde se apunta
+	var der := Vector3(-fwd.z, 0, fwd.x)
+	for d: float in [0.4, 0.9, 1.4]:
+		var base: Vector3 = Vector3(rp.x, gun_y, rp.z) + fwd * d
+		for lado: float in [-1.0, 1.0]:
+			var hl := J.raycast(base, der * lado * LADO_ALCANCE)
+			if hl.is_empty():
+				continue
+			var n: Vector3 = hl.normal
+			if absf(n.y) > 0.3 or absf(n.dot(fwd)) > 0.6:
+				continue
+			return {"top": gun_y, "point": hl.position, "gap": 0.0, "ground": false, "lado": true, "normal": n}
 	return null
 
 
@@ -818,13 +836,15 @@ func actualizar(dt: float) -> void:
 ## ---------------------------------------------------------------- HUD de armas
 ## círculo rojo del HUD: pegado a una estructura (pared, esquina, muro) el cañón no da donde marca la
 ## mira: marca el punto donde daría la bala. Solo si lo que tapa el cañón está a menos de CIRCULO_CERCA
-const CIRCULO_CERCA := 6.0
+const CIRCULO_CERCA := 3.0   # studs
+const CIRCULO_PX := 12.0     # tamaño del círculo
+const CIRCULO_MIN_PX := 28.0 # solo si en pantalla se separa al menos esto de la mira
 func _actualizar_circulo(gun: bool) -> void:
 	var circ: Panel = _hud.impacto
 	circ.visible = false
 	if not gun or modelo_mano == null or not modelo_mano.has_node("Muzzle") or not modelo_mano.visible:
 		return
-	if recargando > 0.0 or switching != null or ahora() < draw_until or J.colgado != null:
+	if recargando > 0.0 or switching != null or ahora() < draw_until or J.colgado != null or rest != null:
 		return
 	var sb := salida_bala()
 	var imp: Dictionary = sb[2]
@@ -843,7 +863,7 @@ func _actualizar_circulo(gun: bool) -> void:
 	# solo si en pantalla no coincide con la mira (al centro)
 	var sp := J.camara.unproject_position(p)
 	var centro := J.camara.get_viewport().get_visible_rect().size * 0.5
-	if sp.distance_to(centro) < 14.0:
+	if sp.distance_to(centro) < CIRCULO_MIN_PX:
 		return
 	circ.visible = true
 	circ.position = sp - circ.size * 0.5
@@ -902,9 +922,9 @@ func _crear_hud() -> void:
 	sbx.bg_color = Color(0, 0, 0, 0)
 	sbx.border_color = Color8(235, 50, 40)
 	sbx.set_border_width_all(2)
-	sbx.set_corner_radius_all(9)
+	sbx.set_corner_radius_all(int(CIRCULO_PX * 0.5))
 	circ.add_theme_stylebox_override("panel", sbx)
-	circ.size = Vector2(18, 18)
+	circ.size = Vector2(CIRCULO_PX, CIRCULO_PX)
 	circ.visible = false
 	capa.add_child(circ)
 	_hud.impacto = circ

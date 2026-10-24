@@ -1449,7 +1449,8 @@ func update_camera(dt: float) -> void:
 			var rel := Rbx.wrap_a(yaw - float(ra.yaw0))
 			if absf(rel) > lim:
 				yaw = float(ra.yaw0) + signf(rel) * lim
-			pitch = clampf(pitch, -0.06, 0.3)
+			# apoyada de lado contra una pared se puede subir y bajar bastante más
+			pitch = clampf(pitch, -0.5, 0.6) if ra.get("lado", false) else clampf(pitch, -0.06, 0.3)
 	_mouse_delta = Vector2.ZERO
 
 	# el hombro se desplaza de un lado a otro (no se teletransporta); al asomarse, la cámara

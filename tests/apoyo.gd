@@ -18,6 +18,10 @@ func _ready() -> void:
 		["mesa80_pie", Vector3(-6 * M, 3.2, 14 * M - 2.6), PI, 0, false],
 		["mesa80_agachado", Vector3(-6 * M, 3.2, 14 * M - 2.6), PI, 1, false],
 		["muro130_pie", Vector3(2 * M, 3.2, 14 * M - 1.4), PI, 0, false],
+		["pared_lado_izq_pie", Vector3(0, 3.2, 62.6), PI / 2, 0, false],
+		["pared_lado_der_pie", Vector3(0, 3.2, 62.6), -PI / 2, 0, false],
+		["pared_lado_agachado", Vector3(0, 3.2, 62.6), PI / 2, 1, false],
+		["campo_abierto", Vector3(-100, 3.2, 100), 0.0, 0, false],
 		["tumbado", Vector3(-100, 3.2, 100), 0.0, 2, false],
 		["boca_arriba", Vector3(-100, 3.2, 100), 0.0, 2, true],
 	]
@@ -48,9 +52,20 @@ func _process(dt: float) -> void:
 		return
 	var c: Array = casos[i]
 	j.supine = c[4]
-	if tc > 2.2:
+	if tc > 2.2 and not has_meta("x%d" % i):
+		set_meta("x%d" % i, true)
 		j.arsenal.set_rest(true)
 		var r = j.arsenal.rest
-		print("APOYO ", c[0], " -> ", "SI gap=%.2f" % r.gap if r != null else "NO (" + j._hud["aviso"].text + ")")
+		print("APOYO ", c[0], " -> ", ("SI gap=%.2f%s" % [r.gap, " (de lado)" if r.get("lado", false) else ""]) if r != null else "NO (" + j._hud["aviso"].text + ")")
+		if r == null:
+			_sig()
+	elif tc > 3.4:
+		# apoyada y apuntando, el arma no se levanta (antes el muro de delante la levantaba)
+		print("APOYO   %s arma_alzada=%.2f circulo=%s" % [c[0], j.get_node("Animador").arma_alzada, str(j.arsenal._hud.impacto.visible)])
+		var sb: Array = j.arsenal.salida_bala()
+		var forz: Dictionary = sb[2]
+		var r2: Dictionary = forz if not forz.is_empty() else j.arsenal._rayo_bala(sb[3], sb[1], 300.0)
+		var dist_imp: float = (r2.position as Vector3).distance_to(sb[0]) if not r2.is_empty() else 999.0
+		print("APOYO   %s bala: forzada=%s impacto a %.1f studs del cañón%s" % [c[0], str(not forz.is_empty()), dist_imp, "  <-- MAL" if dist_imp < 3.0 else ""])
 		j.arsenal.end_rest()
 		_sig()

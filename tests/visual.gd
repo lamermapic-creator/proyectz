@@ -140,7 +140,7 @@ func _process(dt: float) -> void:
 			j.firing = t > 4.6 and t < 5.6
 		if OS.get_cmdline_user_args().has("--logpared") and Engine.get_process_frames() % 6 == 0:
 			var ac: Array = j.arsenal.aim_check()
-			print("PARED t=%.2f z=%.2f alza=%.2f disparo=%s" % [t, j.global_position.z, j.get_node("Animador").arma_alzada, str(ac)])
+			print("PARED t=%.2f z=%.2f retro=%.2f alza=%.2f disparo=%s" % [t, j.global_position.z, j.get_node("Animador").arma_retro, j.get_node("Animador").arma_alzada, str(ac)])
 	if esc in ["pared_espalda", "pared_lado"]:
 		# gira la cámara despacio alrededor del personaje (como con el ratón)
 		if t > 1.0:
