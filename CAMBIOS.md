@@ -13,6 +13,23 @@ en el mismo commit que el cambio. Formato:
 
 ---
 
+## 2026-10-24 (5) · Juan · Claude
+**Qué:** zombis v1, **vista e ingenio**, sin cambiar sus velocidades. Ven en un cono de 120° y con visión periférica
+según tu postura (de pie ~15 m, agachado ~9 m, tumbado ~5 m; usa `STANCE[].Sight/Near`, que no se usaban), con una
+**sospecha gradual**: primero "les parece ver algo" y van a mirar; si te siguen viendo, te persiguen. Al perderte van a
+donde estarías (anticipan), registran 3 sitios alrededor y se rinden; tardan 0,5 s en reaccionar a un ruido; rodean
+obstáculos si se atascan. Indicador **"visto"** en el HUD (bajo el de ruido). F8 = zombis ciegos (también en F1).
+**Archivos:** `scripts/zombis/zombi.gd`, `scripts/zombis/director_zombis.gd`, `scripts/config/zconfig.gd` (claves nuevas en
+`ZOMBI`), `scripts/ui/medidor_ruido.gd`, `tests/pruebas_ruido.gd` (+10 pruebas), `tests/ejecutar_pruebas.sh`, `docs/RUIDO_Y_ZOMBIS.md`,
+`CLAUDE.md`, `README.md`. **De KangooG (mínimo):** `scripts/ui/menu_trucos.gd` (+ casilla "Zombis ciegos (F8)", 2 líneas),
+`scripts/jugador/jugador.gd` ("F8" en el texto de ayuda), `tests/cerca.gd` (+ `Zombi.ciegos = true`, 1 línea).
+**Cómo probarlo:** F5 → Jugar → F6 (ves el cono de cada zombi y su sospecha). Ponte delante de uno de pie y luego
+agachado; escóndete tras la pared alta y mira cómo te busca. Automático: `tests/ejecutar_pruebas.sh` (26/26).
+**Pendiente / avisos:** KangooG: los zombis ahora **ven**; tu acción "Zombi delante" (F1) crea uno que te descubre en
+~1-2 s y viene a por ti. Si alguna prueba tuya necesita un zombi quieto, pon `Zombi.ciegos = true` además de `sordos`
+(ya hecho en `tests/cerca.gd`, que vuelve a dar exactamente lo de antes). Tus escenas de prueba se pasaron antes y
+después: sin cambios salvo tiempos que ya variaban. Anotado en "Problemas conocidos" un detalle de `cerca -- --muneco`.
+
 ## 2026-10-24 (4) · KangooG · Claude
 **Qué:** con un zombi pegado ya se le puede disparar (la boca del cañón quedaba dentro de él y la bala lo
 atravesaba sin tocarlo; ahora el rayo empieza en la línea del cañón a la altura del pecho y cuenta los blancos
