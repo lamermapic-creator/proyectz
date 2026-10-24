@@ -2,7 +2,7 @@ class_name MenuTrucos
 extends CanvasLayer
 ## Menú de trucos para probar las mecánicas (F1). SOLO en desarrollo (OS.is_debug_build()): en el
 ## ejecutable final no existe. Mientras está abierto el juego se pausa y el ratón queda libre.
-## Interruptores (estamina/balas infinitas, invencible, ver ruido, zombis sordos, cámara lenta),
+## Interruptores (estamina/balas infinitas, invencible, ver ruido, zombis sordos/ciegos, cámara lenta),
 ## acciones (vida, estamina, munición, armas al suelo, muñecos, zombis) y teletransporte a cada zona
 ## del nivel de pruebas.
 
@@ -71,6 +71,7 @@ func _ready() -> void:
 	_check(g1, "lenta", "Cámara lenta (x0.3)", func(on): Engine.time_scale = 0.3 if on else 1.0)
 	_check(g1, "ruido", "Ver ruido y zombis (F6)", func(on): Ruido.ver = on)
 	_check(g1, "sordos", "Zombis sordos (F7)", func(on): Zombi.sordos = on)
+	_check(g1, "ciegos", "Zombis ciegos (F8)", func(on): Zombi.ciegos = on)
 
 	_seccion(v, "Jugador")
 	var g2 := _rejilla(v)
@@ -147,11 +148,11 @@ func _check(padre: Control, id: String, txt: String, f: Callable) -> void:
 	_checks[id] = c
 
 
-## pone las casillas como está el juego ahora (también lo que se cambió con F4-F7)
+## pone las casillas como está el juego ahora (también lo que se cambió con F4-F8)
 func _refrescar() -> void:
 	var estado := {
 		"estamina": J.estamina_infinita, "balas": J.arsenal.balas_infinitas, "invencible": J.invencible,
-		"lenta": Engine.time_scale < 0.99, "ruido": Ruido.ver, "sordos": Zombi.sordos,
+		"lenta": Engine.time_scale < 0.99, "ruido": Ruido.ver, "sordos": Zombi.sordos, "ciegos": Zombi.ciegos,
 	}
 	for id in estado:
 		(_checks[id] as CheckBox).set_pressed_no_signal(estado[id])

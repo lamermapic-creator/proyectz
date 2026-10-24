@@ -217,7 +217,7 @@ func _crear_hud() -> void:
 	capa.add_child(aviso)
 	_hud["aviso"] = aviso
 	var ayuda := Label.new()
-	ayuda.text = "1-4: armas · Clic der: apuntar · Clic izq: disparar/golpear · R: recargar · X: apoyar arma · F: recoger · Shift: correr · C: agacharse · Z: cuerpo a tierra · Espacio: saltar/sortear · Q/E: asomarse · V: hombro · Rueda: acercar/alejar cámara · Colgado: A/D moverse (Shift: rápido), Espacio subir, S soltarse · Esc: pausa" + (" · F1: trucos · F4: estamina infinita · F5: balas infinitas · F6: ver ruido · F7: zombis sordos" if OS.is_debug_build() else "")
+	ayuda.text = "1-4: armas · Clic der: apuntar · Clic izq: disparar/golpear · R: recargar · X: apoyar arma · F: recoger · Shift: correr · C: agacharse · Z: cuerpo a tierra · Espacio: saltar/sortear · Q/E: asomarse · V: hombro · Rueda: acercar/alejar cámara · Colgado: A/D moverse (Shift: rápido), Espacio subir, S soltarse · Esc: pausa" + (" · F1: trucos · F4: estamina infinita · F5: balas infinitas · F6: ver ruido · F7: zombis sordos · F8: zombis ciegos" if OS.is_debug_build() else "")
 	ayuda.add_theme_font_size_override("font_size", 14)
 	ayuda.modulate = Color(1, 1, 1, 0.7)
 	ayuda.anchor_top = 1.0
