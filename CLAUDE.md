@@ -91,8 +91,21 @@ Freesound (sonidos), Poly Haven y ambientCG (texturas/HDRI), Quaternius y Kenney
 - `escenas/menu_principal.tscn` (escena principal) + `scripts/ui/menu_principal.gd`: fondo con el nivel al atardecer y el superviviente con el rifle, cámara orbitando; Jugar (fundido), Opciones, Controles, Salir.
 - `scripts/ui/menu_pausa.gd` (MenuPausa, lo crea el Jugador): Esc pausa (`get_tree().paused`); Continuar, Opciones, Volver al menú, Salir. Se pausa solo al perder el foco (solo en el ejecutable).
 - `scripts/ui/opciones.gd` (Opciones, estático, `user://opciones.cfg`): sensibilidad, invertir Y, campo de visión, calidad (baja/media/alta: MSAA/FXAA, escala 3D, sombras, SSAO), pantalla completa, VSync, volumen. `panel_opciones.gd` (PanelOpciones) y `estilo.gd` (EstiloUI, tema oscuro con acento ocre).
-- Trucos F4/F5 solo en compilaciones de depuración (`OS.is_debug_build()`).
+- Trucos F4/F5 solo en compilaciones de depuración (`OS.is_debug_build()`). **F1 = menú de trucos** (`scripts/ui/menu_trucos.gd`,
+  MenuTrucos, lo crea el Jugador solo en desarrollo): interruptores, acciones y teletransporte (`Jugador.teletransportar`,
+  zonas en `MenuTrucos.ZONAS`, en metros). Si se añade una zona o mecánica nueva al nivel, añadirla ahí.
+- **Pantalla de carga:** `PantallaCarga.ir_a(get_tree(), ruta)` (`scripts/ui/pantalla_carga.gd`); la usan Jugar y "Volver al menú".
 - Ejecutable: Proyecto → Exportar → Windows Desktop, PCK embebido, sin depuración → `C:\Users\ferna\Documents\godotproyectz\versiones\v0.2 con menu\ProyectoZ.exe` (un solo .exe, ~110 MB). Las plantillas de exportación 4.7.2 ya están instaladas.
+
+## Arreglos de jugabilidad (2026-10-24, KangooG)
+- Disparo: la bala sale del `Muzzle` en la dirección del cañón (`Arsenal.salida_bala`); al apuntar/disparar el
+  animador orienta el cañón hacia `Arsenal.punto_mira()` (`conv_w`). Círculo rojo del HUD = impacto real si no
+  coincide con la mira. Pegado a una pared no se bloquea el disparo.
+- Cámara: `Jugador.zoom_cam` (rueda), `apretado_cur` (sin sitio detrás → sube sobre la cabeza), `_esfera_choca`.
+- Arma contra la pared: `Animador.arma_alzada` (0-1) levanta el cañón (se puede disparar: la bala va hacia arriba).
+- Cabeza: `FormaCabeza` (caja creada en `_actualizar_formas`, solo de pie, hasta `CABEZA_ALTO` 2.45 sobre el centro);
+  agachado bajo techo bajo: `Animador.agache_techo`.
+- Colgado: Shift = `COLGAR_RAPIDO` (x1.9, doble gasto). Andar de lado: `Animador.lat_k` (pasos cortos, rodillas dobladas).
 
 ## Ruido y zombis v0 (2026-10-23, a pedido de Juan) — guía completa: `docs/RUIDO_Y_ZOMBIS.md`
 - **Sistema de ruido** (`scripts/ruido/ruido.gd`, clase estática `Ruido`, sin autoload): quien hace ruido llama a

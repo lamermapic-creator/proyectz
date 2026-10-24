@@ -403,12 +403,51 @@ func aim_check() -> Array:
 		var lim := deg_to_rad(40) if J.stance == 2 else deg_to_rad(75)
 		if rel > lim:
 			return [false, "body"]
-	if modelo_mano and modelo_mano.has_node("Muzzle"):
-		var mz: Vector3 = (modelo_mano.get_node("Muzzle") as Node3D).global_position
-		var head: Vector3 = (J.rig.P.Head as Node3D).global_position
-		if not J.raycast(head, mz - head).is_empty():
-			return [false, "wall"]
+	# pegado a una pared NO se bloquea: la bala sale hacia donde apunta el cañón (ver shoot)
 	return [true, ""]
+
+
+## punto al que apunta la mira (rayo de la cámara, sin dispersión); se calcula una vez por fotograma
+var _mira_f := -1
+var _mira_p := Vector3.ZERO
+func punto_mira() -> Vector3:
+	var f := Engine.get_process_frames()
+	if f == _mira_f:
+		return _mira_p
+	_mira_f = f
+	var cam := J.camara.global_transform
+	var look := Rbx.look(cam)
+	var head: Vector3 = (J.rig.P.Head as Node3D).global_position
+	var origin := cam.origin + look * maxf(0.0, (head - cam.origin).dot(look))
+	var rango := float(cfg().get("Range", 1000.0))
+	var r := _rayo_bala(origin, look, rango)
+	_mira_p = r.position if not r.is_empty() else origin + look * rango
+	return _mira_p
+
+
+## por dónde sale la bala: del cañón, en la dirección del cañón. Si el cañón está metido en una pared
+## (pegado a ella), la bala da en la pared ahí mismo. Devuelve [origen, dirección, impacto_forzado]
+func salida_bala() -> Array:
+	var mz_t := (modelo_mano.get_node("Muzzle") as Node3D).global_transform
+	var dir := (-mz_t.basis.z).normalized()
+	# el arma aún está subiendo hacia la mira (primer disparo desde la pose baja): la bala va al punto
+	# de la mira desde el cañón, en vez de al suelo. Pegado a una pared (arma levantada), donde apunte
+	var pecho: Vector3 = (J.rig.P.UpperTorso as Node3D).global_position
+	var dentro := J.raycast(pecho, mz_t.origin - pecho)
+	if anim == null or anim.arma_alzada < 0.1:
+		var pm := punto_mira()
+		var al := pm - mz_t.origin
+		if al.length() < 3.0 or al.dot(pm - pecho) < 0.0:
+			# blanco PEGADO (un zombi encima): el cañón puede quedar a su lado o dentro de él; la bala va
+			# desde el pecho hacia lo que marca la mira
+			if (pm - pecho).length() > 0.3:
+				return [mz_t.origin, (pm - pecho).normalized(), dentro, pecho]
+		elif dir.angle_to(al) > deg_to_rad(8):
+			dir = al.normalized()
+	# el rayo de la bala empieza en la línea del cañón a la altura del pecho, no en la boca: con un
+	# zombi pegado, la boca del cañón queda DENTRO de él y un rayo que empieza dentro no lo toca
+	var atras := maxf(0.0, (mz_t.origin - pecho).dot(dir))
+	return [mz_t.origin, dir, dentro, mz_t.origin - dir * atras]
 
 
 ## ---------------------------------------------------------------- apoyar el arma (X)
@@ -540,40 +579,33 @@ func shoot() -> void:
 		spread *= C.REST.ProneSpread if rest.ground else C.REST.Spread
 	spread_bloom = minf(6.0, spread_bloom + (0.45 if w.Auto else 0.9) * (0.4 if rest != null else 1.0))
 
+	# la bala sale del CAÑÓN y en la dirección del CAÑÓN (el animador orienta el arma hacia la mira al
+	# apuntar o disparar). Si entre el arma y lo que se ve en la mira hay algo (esquina, muro bajo,
+	# la pared contra la que está pegado), la bala da ahí; el círculo rojo del HUD lo avisa.
 	var cam := J.camara.global_transform
 	var look := Rbx.look(cam)
-	var head: Vector3 = (J.rig.P.Head as Node3D).global_position
-	var tproj := (head - cam.origin).dot(look)
-	var origin := cam.origin + look * maxf(0.0, tproj)
+	var origin := cam.origin
+	var eje := look
+	var forzado := {}
+	var desde := origin
+	if modelo_mano and modelo_mano.has_node("Muzzle"):
+		var sb := salida_bala()
+		origin = sb[0]
+		eje = sb[1]
+		forzado = sb[2]
+		desde = sb[3]
 	var r := deg_to_rad(spread) * sqrt(randf())
 	var a := randf() * TAU
-	var dir := Rbx.look(Rbx.look_at(Vector3.ZERO, look) * Rbx.ang(cos(a) * r, sin(a) * r, 0))
-
-	# impacto (las balas dan en el escenario y en las zonas de los muñecos)
-	var q := PhysicsRayQueryParameters3D.create(origin, origin + dir * float(w.Range), 1 | 2)
-	var excluir: Array[RID] = [J.get_rid()]
-	var res := {}
-	# un blanco con un único cuerpo de impacto (el zombi) dice qué pieza ha tocado la bala; si pasa sin
-	# tocar ninguna (entre los brazos), la bala sigue (ver "contrato de objetivo" en docs/RUIDO_Y_ZOMBIS.md)
-	for intento in 4:
-		q.exclude = excluir
-		res = J.get_world_3d().direct_space_state.intersect_ray(q)
-		var c: Object = res.get("collider")
-		if res.is_empty() or c == null or not c.has_meta("objetivo") or c.has_meta("pieza"):
-			break
-		var imp: Dictionary = c.get_meta("objetivo").impacto_bala(origin, dir)
-		if not imp.is_empty():
-			res.position = imp.punto
-			res.pieza = imp.pieza
-			break
-		excluir.append(res.rid)
-		res = {}
+	var dir := Rbx.look(Rbx.look_at(Vector3.ZERO, eje) * Rbx.ang(cos(a) * r, sin(a) * r, 0))
+	var res := forzado if not forzado.is_empty() else _rayo_bala(desde, dir, float(w.Range) + desde.distance_to(origin))
 	var hit_pos := origin + dir * float(w.Range)
 	var tipo := "none"
 	var normal := Vector3.UP
 	if not res.is_empty():
 		hit_pos = res.position
 		normal = res.normal
+		if normal.length() < 0.1: # el rayo empezó dentro (blanco pegado al arma)
+			normal = -dir
 		tipo = "surface"
 		var col: Object = res.collider
 		# zonas de impacto de un blanco (maniquí o zombi): ver "contrato de objetivo" en docs/RUIDO_Y_ZOMBIS.md
@@ -609,6 +641,30 @@ func shoot() -> void:
 	J.pitch = clampf(J.pitch + deg_to_rad(w.Recoil * k * (0.8 + randf() * 0.4)), -1.35, 1.2)
 	J.yaw += deg_to_rad((randf() - 0.5) * 2.0 * w.RecoilYaw * k)
 	J.shake = minf(1.0, J.shake + (0.12 if w.Auto else 0.25) * (0.35 if rest != null else 1.0))
+
+
+## rayo de una bala (escenario y zonas de impacto de los blancos). Un blanco con un único cuerpo de
+## impacto (el zombi) dice qué pieza ha tocado la bala; si pasa sin tocar ninguna (entre los brazos),
+## la bala sigue (ver "contrato de objetivo" en docs/RUIDO_Y_ZOMBIS.md)
+func _rayo_bala(origin: Vector3, dir: Vector3, rango: float) -> Dictionary:
+	var q := PhysicsRayQueryParameters3D.create(origin, origin + dir * rango, 1 | 2)
+	q.hit_from_inside = true # un blanco pegado al arma también cuenta
+	var excluir: Array[RID] = [J.get_rid()]
+	var res := {}
+	for intento in 4:
+		q.exclude = excluir
+		res = J.get_world_3d().direct_space_state.intersect_ray(q)
+		var c: Object = res.get("collider")
+		if res.is_empty() or c == null or not c.has_meta("objetivo") or c.has_meta("pieza"):
+			break
+		var imp: Dictionary = c.get_meta("objetivo").impacto_bala(origin, dir)
+		if not imp.is_empty():
+			res.position = imp.punto
+			res.pieza = imp.pieza
+			break
+		excluir.append(res.rid)
+		res = {}
+	return res
 
 
 func _confirmar(killed: bool, headshot: bool) -> void:
@@ -760,6 +816,39 @@ func actualizar(dt: float) -> void:
 
 
 ## ---------------------------------------------------------------- HUD de armas
+## círculo rojo del HUD: pegado a una estructura (pared, esquina, muro) el cañón no da donde marca la
+## mira: marca el punto donde daría la bala. Solo si lo que tapa el cañón está a menos de CIRCULO_CERCA
+const CIRCULO_CERCA := 6.0
+func _actualizar_circulo(gun: bool) -> void:
+	var circ: Panel = _hud.impacto
+	circ.visible = false
+	if not gun or modelo_mano == null or not modelo_mano.has_node("Muzzle") or not modelo_mano.visible:
+		return
+	if recargando > 0.0 or switching != null or ahora() < draw_until or J.colgado != null:
+		return
+	var sb := salida_bala()
+	var imp: Dictionary = sb[2]
+	if imp.is_empty():
+		# solo pegado a una estructura: lo que tapa el cañón tiene que estar muy cerca
+		imp = _rayo_bala(sb[0], sb[1], CIRCULO_CERCA)
+	if imp.is_empty():
+		return
+	# un muñeco o un zombi no es una estructura
+	var col: Object = imp.get("collider")
+	if col != null and col.has_meta("objetivo"):
+		return
+	var p: Vector3 = imp.position
+	if J.camara.is_position_behind(p):
+		return
+	# solo si en pantalla no coincide con la mira (al centro)
+	var sp := J.camara.unproject_position(p)
+	var centro := J.camara.get_viewport().get_visible_rect().size * 0.5
+	if sp.distance_to(centro) < 14.0:
+		return
+	circ.visible = true
+	circ.position = sp - circ.size * 0.5
+
+
 ## la interfaz nunca recibe el ratón (no debe bloquear la cámara ni los clics)
 static func _ignorar_raton(n: Node) -> void:
 	if n is Control:
@@ -807,6 +896,18 @@ func _crear_hud() -> void:
 	bx.position = Vector2(-9, -19)
 	mira.add_child(bx)
 	_hud.bloqueo = bx
+	# círculo rojo: dónde va a dar de verdad la bala cuando no es donde marca la mira (pared, esquina)
+	var circ := Panel.new()
+	var sbx := StyleBoxFlat.new()
+	sbx.bg_color = Color(0, 0, 0, 0)
+	sbx.border_color = Color8(235, 50, 40)
+	sbx.set_border_width_all(2)
+	sbx.set_corner_radius_all(9)
+	circ.add_theme_stylebox_override("panel", sbx)
+	circ.size = Vector2(18, 18)
+	circ.visible = false
+	capa.add_child(circ)
+	_hud.impacto = circ
 	# panel del arma (abajo a la derecha)
 	var panel := VBoxContainer.new()
 	panel.anchor_left = 1.0
@@ -922,6 +1023,7 @@ func _actualizar_hud() -> void:
 		(l as ColorRect).visible = gun
 		(l as ColorRect).color = Color(0.9, 0.24, 0.2, 0.4) if aim_blocked else Color(0.94, 0.94, 0.94, 1)
 	_hud.bloqueo.visible = gun and aim_blocked
+	_actualizar_circulo(gun and vivo)
 	var ht := clampf(1.0 - (ahora() - hit_t) / 0.25, 0, 1)
 	for h in _hud.hit:
 		(h as ColorRect).color = Color(hit_color, ht)

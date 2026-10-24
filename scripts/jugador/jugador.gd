@@ -48,6 +48,12 @@ var exhausted := false
 var fatiga := 0.0                  # 0..1: cansancio (poca estamina) -> andar con fatiga
 var estamina_infinita: bool = C.PLAYER.get("InfiniteStamina", false) # F4 la activa/desactiva
 var cam_dist := 9.0
+# zoom de la cámara con la rueda del ratón (multiplica la distancia normal; apuntando no cambia)
+const ZOOM_MIN := 0.45
+const ZOOM_MAX := 1.6
+const ZOOM_PASO := 0.1
+var zoom_cam := 1.0
+var apretado_cur := 0.0 # 0-1: sin sitio detrás de la cámara (espalda contra una pared)
 var cam_fov := 70.0
 var fade_cur := 0.0
 var vaulting = null
@@ -122,6 +128,11 @@ func _ready() -> void:
 	var pausa := MenuPausa.new()
 	pausa.name = "MenuPausa"
 	add_child(pausa)
+	# menú de trucos (F1), solo en desarrollo
+	if OS.is_debug_build():
+		var trucos := MenuTrucos.new()
+		trucos.name = "MenuTrucos"
+		add_child(trucos)
 	# medidor de ruido del HUD (lo que oyen los zombis)
 	var medidor := MedidorRuido.new()
 	medidor.name = "MedidorRuido"
@@ -141,6 +152,18 @@ func raycast(desde: Vector3, dir: Vector3, excluir_extra: Array = []) -> Diction
 		return {}
 	r["distance"] = desde.distance_to(r.position)
 	return r
+
+
+## ¿una esfera en ese punto toca el escenario?
+func _esfera_choca(p: Vector3, radio: float) -> bool:
+	var sh := SphereShape3D.new()
+	sh.radius = radio
+	var q := PhysicsShapeQueryParameters3D.new()
+	q.shape = sh
+	q.transform = Transform3D(Basis.IDENTITY, p)
+	q.collision_mask = 1
+	q.exclude = [get_rid()]
+	return not get_world_3d().direct_space_state.intersect_shape(q, 1).is_empty()
 
 
 ## workspace:Spherecast: devuelve la distancia recorrida hasta chocar (o -1 si no choca)
@@ -194,7 +217,7 @@ func _crear_hud() -> void:
 	capa.add_child(aviso)
 	_hud["aviso"] = aviso
 	var ayuda := Label.new()
-	ayuda.text = "1-4: armas · Clic der: apuntar · Clic izq: disparar/golpear · R: recargar · X: apoyar arma · F: recoger · Shift: correr · C: agacharse · Z: cuerpo a tierra · Espacio: saltar/sortear · Q/E: asomarse · V: hombro · Colgado: A/D moverse, Espacio subir, S soltarse · Esc: pausa" + (" · F4: estamina infinita · F5: balas infinitas · F6: ver ruido · F7: zombis sordos" if OS.is_debug_build() else "")
+	ayuda.text = "1-4: armas · Clic der: apuntar · Clic izq: disparar/golpear · R: recargar · X: apoyar arma · F: recoger · Shift: correr · C: agacharse · Z: cuerpo a tierra · Espacio: saltar/sortear · Q/E: asomarse · V: hombro · Rueda: acercar/alejar cámara · Colgado: A/D moverse (Shift: rápido), Espacio subir, S soltarse · Esc: pausa" + (" · F1: trucos · F4: estamina infinita · F5: balas infinitas · F6: ver ruido · F7: zombis sordos" if OS.is_debug_build() else "")
 	ayuda.add_theme_font_size_override("font_size", 14)
 	ayuda.modulate = Color(1, 1, 1, 0.7)
 	ayuda.anchor_top = 1.0
@@ -234,6 +257,10 @@ func _unhandled_input(e: InputEvent) -> void:
 	if e is InputEventMouseButton:
 		if e.button_index == MOUSE_BUTTON_RIGHT:
 			aiming = e.pressed
+		elif e.pressed and e.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN] and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+			# rueda: acercar / alejar la cámara (no cambia la distancia al apuntar)
+			var paso := -ZOOM_PASO if e.button_index == MOUSE_BUTTON_WHEEL_UP else ZOOM_PASO
+			zoom_cam = clampf(zoom_cam + paso, ZOOM_MIN, ZOOM_MAX)
 		elif e.button_index == MOUSE_BUTTON_LEFT and e.pressed and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED and not free_mouse:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	elif e is InputEventKey and not e.echo:
@@ -574,6 +601,7 @@ const COLGAR_SEP := 0.8        # separación del centro del cuerpo a la pared
 const COLGAR_VEL := 2.6        # studs/s desplazándose de lado
 const COLGAR_GASTO := 2.0      # estamina/s colgado quieto
 const COLGAR_GASTO_MOV := 5.0  # estamina/s desplazándose
+const COLGAR_RAPIDO := 1.9     # con Shift: velocidad x1.9 (y el doble de gasto)
 
 
 ## borde superior de la pared en (punto de la pared w, normal n): devuelve top_y o NAN
@@ -610,7 +638,7 @@ func buscar_cornisa(dir_h: Vector3) -> Dictionary:
 
 
 func colgarse(c: Dictionary) -> void:
-	colgado = {"edge": c.edge, "n": c.n, "top": c.top, "ph": 0.0, "mv": 0.0, "giro": null, "t0": ahora(),
+	colgado = {"edge": c.edge, "n": c.n, "top": c.top, "ph": 0.0, "mv": 0.0, "rapido": false, "giro": null, "t0": ahora(),
 		"desde": global_position}
 	vaulting = null
 	L.vault = null
@@ -817,7 +845,9 @@ func step_colgado(dt: float) -> void:
 	elif lat != 0.0:
 		var r := (-n).cross(Vector3.UP).normalized()
 		var a := r * lat
-		var paso := COLGAR_VEL * dt
+		# con Shift se desplaza más rápido (y gasta más estamina)
+		cg.rapido = Input.is_physical_key_pressed(KEY_SHIFT) and stamina > 0.0
+		var paso := COLGAR_VEL * (COLGAR_RAPIDO if cg.rapido else 1.0) * dt
 		# ¿esquina interior? (otra pared justo delante, en la dirección del movimiento)
 		var wi := raycast(edge + n * 0.6 + Vector3(0, -0.4, 0), a * 1.0)
 		var giro_i := false
@@ -838,7 +868,7 @@ func step_colgado(dt: float) -> void:
 					cg.edge = ahora_e
 					cg.top = (ahora_e as Vector3).y
 				cg.mv = lat
-				cg.ph += lat * dt * 6.0
+				cg.ph += lat * dt * 6.0 * (COLGAR_RAPIDO if cg.rapido else 1.0)
 			else:
 				cg.mv = 0.0
 				# ¿esquina exterior? (la pared se acaba y gira hacia dentro)
@@ -855,6 +885,8 @@ func step_colgado(dt: float) -> void:
 	# estamina
 	if not estamina_infinita:
 		var gasto := COLGAR_GASTO_MOV if (absf(float(cg.mv)) > 0.1 or cg.giro != null) else COLGAR_GASTO
+		if cg.get("rapido", false) and absf(float(cg.mv)) > 0.1:
+			gasto *= 2.0
 		stamina = maxf(0.0, stamina - gasto * dt)
 		if stamina <= 0.0:
 			soltar_cornisa("Te has quedado sin fuerzas")
@@ -895,6 +927,33 @@ func _process(dt: float) -> void:
 	_update_hud()
 
 
+## ---------------------------------------------------------------- teletransporte (menú de trucos)
+var invencible := false # truco: no recibe daño
+
+
+## pone al jugador de pie en "pies" (studs) mirando hacia "giro"; suelta la cornisa o el salto en curso
+func teletransportar(pies: Vector3, giro: float) -> void:
+	if colgado != null:
+		soltar_cornisa()
+	if vaulting != null:
+		vaulting = null
+		L.vault = null
+	_subir_a = null
+	collision_layer = 1
+	collision_mask = 1 | 4
+	global_position = pies + Vector3(0, center_cur + 0.1, 0)
+	velocity = Vector3.ZERO
+	vel_real = Vector3.ZERO
+	cur_move = 0.0
+	yaw = giro
+	rotation.y = giro
+	pitch = -0.12
+	cam_pivot = null
+	var an := get_node_or_null("Animador") as Animador
+	if an:
+		an.replant = true
+
+
 ## ---------------------------------------------------------------- daño, vida y muerte
 ## (de momento solo hacen daño los zombis; ver docs/RUIDO_Y_ZOMBIS.md)
 const MUERTE_REINICIO := 4.0 # s desde que muere hasta que se reinicia el nivel
@@ -905,7 +964,7 @@ var _reiniciando := false
 
 ## recibe un golpe de cantidad puntos desde la posición "desde" (para el empujón y la reacción)
 func recibir_danio(cantidad: float, desde: Vector3 = Vector3.ZERO) -> void:
-	if health <= 0.0 or cantidad <= 0.0:
+	if health <= 0.0 or cantidad <= 0.0 or invencible:
 		return
 	health = maxf(0.0, health - cantidad)
 	_danio_t = reloj
@@ -1202,6 +1261,9 @@ var _capsula: CapsuleShape3D
 var _caja_tumbado: BoxShape3D
 var _cil_piernas: CylinderShape3D
 const RADIO_CUERPO := 0.85
+const CABEZA_ALTO := 2.45 # coronilla de pie, sobre el centro del cuerpo (studs)
+var _caja_cabeza: BoxShape3D
+var forma_cabeza: CollisionShape3D
 
 
 func _actualizar_formas() -> void:
@@ -1224,6 +1286,18 @@ func _actualizar_formas() -> void:
 		_capsula.height = maxf(STAND_SIZE.y + 0.7, RADIO_CUERPO * 2.0)
 	else:
 		forma_cuerpo.position = Vector3.ZERO
+	# cabeza (solo de pie): una caja de techo plano entre lo alto de la cápsula y la coronilla. La
+	# cápsula llega a los hombros; sin esto la cabeza atravesaba los techos bajos (túneles) y la
+	# cápsula, redondeada arriba, se colaba por debajo del borde
+	if _caja_cabeza == null:
+		_caja_cabeza = BoxShape3D.new()
+		_caja_cabeza.size = Vector3(0.9, CABEZA_ALTO - 1.25, 0.9)
+		forma_cabeza = CollisionShape3D.new()
+		forma_cabeza.name = "FormaCabeza"
+		forma_cabeza.shape = _caja_cabeza
+		forma_cabeza.position = Vector3(0, (1.25 + CABEZA_ALTO) * 0.5, 0)
+		add_child(forma_cabeza)
+	forma_cabeza.disabled = prone_shape or stance != 0 or getup_p > 0.001
 	var top := -root_size.y / 2
 	var bottom := -center_cur + PASO_MAX
 	if top - bottom > 0.1:
@@ -1393,10 +1467,15 @@ func update_camera(dt: float) -> void:
 	var pivot := global_position + Vector3(0, eye_cur - rest_lower_cur, 0)
 	# ladeo: la cabeza (y la cámara) salen hacia el lado y bajan un poco
 	pivot += Rbx.right(Rbx.ang(0, yaw, 0)) * lean_cur * 1.15 - Vector3(0, absf(lean_cur) * 0.18, 0)
-	var sprinting: bool = walk_speed > C.PLAYER.WalkSpeed + 1
+	# la cámara de carrera (más lejos, más campo de visión, balanceo) solo si de verdad se corre: chocando
+	# contra una pared con Shift pulsado el personaje se para y la cámara también
+	var vel_h := Vector2(vel_real.x, vel_real.z).length()
+	var sprinting: bool = walk_speed > C.PLAYER.WalkSpeed + 1 and vel_h > C.PLAYER.WalkSpeed + 1
 	var dist := 4.6 if aiming else (9.5 if sprinting else 8.5)
 	if stance == 2:
 		dist = 4.0 if aiming else 6.5
+	if not aiming:
+		dist *= zoom_cam
 	var fov := (62.0 if aiming else (76.0 if sprinting else 70.0)) + (Opciones.fov - 70.0)
 	var shoulder := (2.1 if aiming else 2.4) * side_cur
 	var height := 0.55 if aiming else 0.4
@@ -1451,8 +1530,23 @@ func update_camera(dt: float) -> void:
 	if stance != 2:
 		height_cur = maxf(height_cur, height + (1 - comp_cur) * 0.55)
 
+	# poco sitio detrás (de espaldas a una pared): la cámara sube por encima de la cabeza para ver por
+	# encima de ella en vez de pegarse a la nuca (sin pasar del techo)
+	var apretado := clampf((4.5 - cam_dist) / 3.0, 0.0, 1.0) if stance != 2 else 0.0
+	apretado_cur += (apretado - apretado_cur) * minf(1, dt * (10.0 if apretado > apretado_cur else 3.0))
+	var sube := apretado_cur * 1.4
+	if not up_hit.is_empty():
+		sube = minf(sube, maxf(0.0, up_hit.distance - 0.7 - height_cur))
 	# colisión esférica hacia atrás: acercarse al instante, alejarse despacio
-	var shoulder_pt := (Rbx.cfp(pivot) * rot * Rbx.cf(shoulder, height_cur, 0)).origin
+	var shoulder_pt := (Rbx.cfp(pivot) * rot * Rbx.cf(shoulder, height_cur + sube, 0)).origin
+	# el punto de partida nunca puede quedar dentro de una pared (girando la cámara pegado a una
+	# pared, el hombro acababa dentro y la cámara se iba a la nuca): se acerca al centro hasta que cabe
+	if _esfera_choca(shoulder_pt, 0.42):
+		for k in [0.66, 0.33, 0.0]:
+			var p2 := (Rbx.cfp(pivot) * rot * Rbx.cf(shoulder * k, height_cur + sube, 0)).origin
+			shoulder_pt = p2
+			if not _esfera_choca(p2, 0.42):
+				break
 	var back := -Rbx.look(rot) * dist
 	var c_hit := spherecast(shoulder_pt, 0.4, back)
 	var allowed := maxf(0.5, c_hit - 0.1) if c_hit >= 0 else dist
@@ -1471,8 +1565,8 @@ func update_camera(dt: float) -> void:
 	var shake_rot := Rbx.ang(sin(t * 37.1) * shk, sin(t * 29.3 + 1.0) * shk, sin(t * 23.7 + 2.0) * shk * 0.5)
 	# balanceo al correr
 	var bob := Transform3D.IDENTITY
-	if move_direction.length() > 0.1 and en_suelo:
-		var k := walk_speed / 20.0
+	if move_direction.length() > 0.1 and en_suelo and vel_h > 0.5:
+		var k := minf(walk_speed, vel_h) / 20.0
 		bob = Rbx.ang(sin(t * 9 * k) * 0.004 * k, 0, sin(t * 4.5 * k) * 0.006 * k)
 	# ladeo: la cámara se inclina un poco con el cuerpo
 	var roll := Rbx.ang(0, 0, -lean_cur * 0.08)
@@ -1486,6 +1580,7 @@ func update_camera(dt: float) -> void:
 		fade_t = clampf((2.6 - d) / 1.4, 0, 1) * 0.75
 		if comp_cur < 0.5 and cam_dist < 5:
 			fade_t = maxf(fade_t, (0.5 - comp_cur) * 1.1)
+		fade_t = maxf(fade_t, apretado_cur * 0.9)
 	fade_cur += (fade_t - fade_cur) * minf(1, dt * 10)
 	if fade_cur < 0.01:
 		fade_cur = 0

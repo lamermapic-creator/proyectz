@@ -30,6 +30,13 @@ var ankle_in_foot := {}
 var wrist_in_hand := {}
 var S := {}
 var pelvis_drop := 0.0
+const ALZA_MARGEN := 0.15    # studs más allá de la boca del cañón a los que empieza a levantarse
+const ALZA_RECORRIDO := 1.0  # studs que hay que acercarse más para que quede del todo levantada
+var arma_alzada := 0.0 # 0-1: arma levantada por tener una pared delante (no se puede disparar)
+var conv_w := 0.0 # 0-1: cuánto se orienta el cañón hacia el punto de la mira
+var conv_q := Quaternion.IDENTITY
+var agache_techo := 0.0 # agachado bajo un techo bajo: cuánto más se agacha
+var lat_k := 0.0 # 0-1: cuánto se anda de lado (pasos laterales)
 var prev_lv := Vector3.ZERO
 var acc := Vector3.ZERO
 var prev_yaw := 0.0
@@ -327,6 +334,14 @@ func update_feet(root_cf: Transform3D, vel: Vector3, speed: float, dt: float, gr
 	threshold = (0.22 + speed * step_dur * k_thr * (1 - 0.65 * lat_f)) * (1.0 - 0.2 * fw_k)
 	if lat_f > 0.5:
 		step_dur *= 0.85
+	# andando de lado (con el arma, el cuerpo no gira hacia donde va): pasos laterales cortos con
+	# las rodillas algo dobladas y el pie levantado (si no, las piernas se abren como un compás)
+	# (solo si se pide ir de lado con A/D: resbalar a lo largo de una pared no cuenta)
+	var md: Vector3 = jugador.move_direction
+	var lat_in := absf(Rbx.vec_to_obj(frame, md).x) / md.length() if md.length() > 0.1 else 0.0
+	lat_k = Rbx.damp(lat_k, minf(lat_f, lat_in) * (1.0 - run01) if speed > 0.8 else 0.0, 6, dt)
+	threshold *= 1.0 - 0.5 * lat_k
+	arc += 0.18 * lat_k
 
 	# red de seguridad: un pie apoyado demasiado lejos del cuerpo (teletransporte) se recoloca
 	for s in feet:
@@ -1108,6 +1123,17 @@ func update_rig(dt: float) -> void:
 		if speed < 0.5:
 			pelvis_roll += sin(now * 0.45 + breath_t * 0.1) * 0.025
 
+		# de lado: rodillas algo dobladas (ver update_feet)
+		crouch += 0.3 * lat_k
+		# agachado bajo un techo bajo (túnel): se agacha un poco más para que la cabeza no lo atraviese
+		var techo_t := 0.0
+		if grounded and stance == 1 and va == null:
+			var hd: Vector3 = (P.Head as Node3D).global_position
+			var arriba := J.raycast(Vector3(hd.x, root_cf.origin.y, hd.z), Vector3(0, 4.0, 0))
+			if not arriba.is_empty():
+				techo_t = clampf(agache_techo + (hd.y + 0.56) - ((arriba.position as Vector3).y - 0.1), 0.0, 0.8)
+		agache_techo = Rbx.damp(agache_techo, techo_t, 10.0, dt)
+		crouch += agache_techo
 		# altura de pelvis: bajarla si algún pie no llega (zancadas largas, bordillos)
 		var yaw_only := Rbx.cfp(root_cf.origin) * yaw_cf
 		# cuánto hay que bajar la pelvis para que la pierna de apoyo llegue al pie (péndulo invertido:
@@ -1500,6 +1526,8 @@ func update_rig(dt: float) -> void:
 	var melee_lean := 0.0
 	correr_libre = false
 	tool_shown = true
+	if tool == "" or w_cfg.get("Kind", "") != "Gun":
+		arma_alzada = 0.0
 	if tool != "":
 		var mdl: Node3D = J.arsenal.modelo_mano
 		var kind: String = w_cfg.Kind
@@ -1541,6 +1569,22 @@ func update_rig(dt: float) -> void:
 			if pb > 0.8 and not reloading:
 				target_rel = Rbx.ang(pc, 0, 0) * Armas.pose(tool, "PRONE")
 				speed_pose = 5.0
+			# pegado a una pared: el arma se levanta con el cañón hacia arriba en vez de atravesarla
+			# (mientras está alzada no se puede disparar: ver Arsenal.aim_check)
+			var alza_t := 0.0
+			if not reloading and pb < 0.5 and mdl and mdl.has_node("Muzzle") and draw_st == null and L.holster == null:
+				var mz_w: Vector3 = aim_base * target_rel * (mdl.get_node("Muzzle") as Node3D).position
+				var c0 := aim_base.origin
+				var largo := (mz_w - c0).length()
+				if largo > 0.1:
+					# solo muy pegado: empieza a levantarse cuando la pared está casi en la boca del cañón
+					var hw := J.raycast(c0, (mz_w - c0) / largo * (largo + ALZA_MARGEN))
+					if not hw.is_empty():
+						alza_t = clampf((largo + ALZA_MARGEN - float(hw.distance)) / ALZA_RECORRIDO, 0.0, 1.0)
+			arma_alzada = Rbx.damp(arma_alzada, alza_t, 12.0, dt)
+			if arma_alzada > 0.001:
+				target_rel = Rbx.cf(0, 0.3 * arma_alzada, 0.8 * arma_alzada) * target_rel * Rbx.ang(1.25 * arma_alzada, 0, 0)
+				speed_pose = maxf(speed_pose, 12.0)
 			if reload_st != null and not reloading:
 				cancelar_recarga()
 		else:
@@ -1625,6 +1669,29 @@ func update_rig(dt: float) -> void:
 						handle_cf = holster_w.interpolate_with(mid_w, u3).interpolate_with(mid_w.interpolate_with(handle_cf, u3), u3)
 						support_w = Rbx.smooth(clampf((u3 - 0.7) / 0.3, 0, 1))
 
+		# apuntando o disparando, el cañón se orienta hacia lo que marca la mira (la cámara va al hombro,
+		# así que sin esto el arma iba paralela a la mira y la bala salía con otra inclinación). La bala
+		# sale en la dirección del cañón (Arsenal.shoot), así que lo que se ve es lo que pasa
+		var conv_t := 0.0
+		if kind == "Gun" and tool_shown and mdl and mdl.has_node("Muzzle") and draw_st == null and holster_t == null \
+				and not reloading and va == null and (aiming or firing_recent or L.firing) \
+				and not (sprinting and not aiming and not firing_recent):
+			conv_t = 1.0 - clampf(arma_alzada * 3.0, 0.0, 1.0)
+		conv_w = Rbx.damp(conv_w, conv_t, 10.0, dt)
+		if conv_w > 0.001 and mdl and mdl.has_node("Muzzle"):
+			var mz_l: Vector3 = (mdl.get_node("Muzzle") as Node3D).position
+			var mz_w := handle_cf * mz_l
+			var d0 := (-handle_cf.basis.z).normalized()
+			var obj: Vector3 = J.arsenal.punto_mira() - mz_w
+			if obj.length() > 3.0 and d0.angle_to(obj) < deg_to_rad(35):
+				var q := Quaternion(d0, obj.normalized())
+				conv_q = conv_q.slerp(q, 1.0 - exp(-25.0 * dt))
+			else:
+				# la mira está pegada al arma (blanco encima) o muy desviada: sin corrección
+				conv_q = conv_q.slerp(Quaternion.IDENTITY, 1.0 - exp(-10.0 * dt))
+			var qw := Quaternion.IDENTITY.slerp(conv_q, conv_w)
+			# gira alrededor de la empuñadura (la mano no se mueve; el cañón sube/baja/gira un poco)
+			handle_cf = Transform3D(Basis(qw) * handle_cf.basis, handle_cf.origin)
 		# las armas blancas nunca atraviesan el propio cuerpo (torso, cabeza, cadera, muslos)
 		if kind == "Melee" and tool_shown and pb < 0.5:
 			handle_cf = _arma_fuera_del_cuerpo(handle_cf, tool, pelvis_cf, chest_cf)

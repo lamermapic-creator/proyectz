@@ -75,8 +75,8 @@ func _abrir_opciones() -> void:
 
 
 func _al_menu() -> void:
-	get_tree().paused = false
-	get_tree().change_scene_to_file(MENU_PRINCIPAL)
+	# la pantalla de carga tapa el cambio (y quita la pausa al cambiar de escena)
+	PantallaCarga.ir_a(get_tree(), MENU_PRINCIPAL)
 
 
 func _unhandled_input(e: InputEvent) -> void:

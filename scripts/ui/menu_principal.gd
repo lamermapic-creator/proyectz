@@ -182,7 +182,8 @@ func _panel_controles() -> PanelContainer:
 		["C o Ctrl", "Agacharse"], ["Z", "Cuerpo a tierra"], ["Q / E", "Asomarse"],
 		["1 - 4", "Armas"], ["Clic derecho", "Apuntar"], ["Clic izquierdo", "Disparar / golpear"],
 		["R", "Recargar"], ["X", "Apoyar el arma"], ["F", "Recoger"], ["V", "Cambiar de hombro"],
-		["Colgado", "A/D moverse · Espacio subir · S soltarse"], ["Esc", "Pausa"],
+		["Rueda del ratón", "Acercar / alejar la cámara"],
+		["Colgado", "A/D moverse (Shift: rápido) · Espacio subir · S soltarse"], ["Esc", "Pausa"],
 	]
 	var grid := GridContainer.new()
 	grid.columns = 2
@@ -239,4 +240,4 @@ func _jugar() -> void:
 	_saliendo = true
 	var tw := create_tween()
 	tw.tween_property(_fundido, "color:a", 1.0, 0.6)
-	tw.tween_callback(func(): get_tree().change_scene_to_file(JUEGO))
+	tw.tween_callback(func(): PantallaCarga.ir_a(get_tree(), JUEGO))

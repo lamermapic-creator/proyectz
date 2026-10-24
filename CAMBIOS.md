@@ -13,6 +13,70 @@ en el mismo commit que el cambio. Formato:
 
 ---
 
+## 2026-10-24 (4) · KangooG · Claude
+**Qué:** con un zombi pegado ya se le puede disparar (la boca del cañón quedaba dentro de él y la bala lo
+atravesaba sin tocarlo; ahora el rayo empieza en la línea del cañón a la altura del pecho y cuenta los blancos
+pegados, `hit_from_inside`). El arma solo se levanta muy pegado a la pared (`Animador.ALZA_MARGEN` 0.15 /
+`ALZA_RECORRIDO` 1.0; antes empezaba ~1 stud antes).
+**Archivos:** `scripts/jugador/arsenal.gd` (`salida_bala`, `_rayo_bala`), `scripts/jugador/animador.gd`.
+Prueba nueva: `tests/cerca.gd` + `escena_cerca.tscn` (`-- --dist=2 [--rifle] [--muneco]`): le da a 1.5–6 studs.
+
+## 2026-10-24 (3) · KangooG · Claude
+**Qué:** menú de trucos, pantalla de carga y el círculo rojo solo pegado a una estructura.
+- **Menú de trucos (F1, solo en el editor):** pausa el juego y deja el ratón libre. Interruptores: estamina y balas
+  infinitas, invencible, cámara lenta, ver ruido (F6), zombis sordos (F7). Acciones: vida al máximo / herido /
+  agotado / estamina al máximo, munición al máximo, recargar, armas al suelo (machete, pistola, rifle, cuchillo),
+  revivir muñecos, zombi delante. "Ir a…": inicio, bloques, rampas, escalera, túneles, muros y mesa, pared alta,
+  cornisa, zona de tiro, tras la pared. F1 o Esc lo cierran.
+- **Pantalla de carga** al pulsar Jugar y al volver al menú desde la pausa: título, un consejo al azar y barra de
+  progreso (carga en segundo plano + el nivel construyéndose), luego se desvanece.
+- **Círculo rojo:** solo si lo que tapa el cañón es una estructura a menos de 6 studs (no muñecos ni zombis).
+**Archivos:** nuevos `scripts/ui/menu_trucos.gd` (MenuTrucos) y `scripts/ui/pantalla_carga.gd` (PantallaCarga);
+`scripts/jugador/jugador.gd` (crea MenuTrucos en desarrollo; `teletransportar()`; `invencible`: una línea en
+`recibir_danio` de Juan), `scripts/jugador/arsenal.gd`, `scripts/ui/menu_principal.gd` y `menu_pausa.gd` (usan la
+pantalla de carga). Pruebas: `tests/trucos.gd` + `escena_trucos.tscn` (todas las zonas: de pie, en el suelo y sin
+meterse en nada), `tests/menu_test.gd` amplía a la carga, F1 y volver al menú.
+**Cómo probarlo:** F5 → Jugar (pantalla de carga) → F1.
+
+## 2026-10-24 (2) · KangooG · Claude
+**Qué:** ajustes del disparo y la cámara pedidos por KangooG:
+- La bala sale del cañón **en la dirección del cañón**. Al apuntar o disparar, el arma se orienta hacia lo que
+  marca la mira (`Animador.conv_w`/`conv_q`), así que la trazadora ya no sale con otra inclinación que el arma.
+  (Primer disparo desde la pose baja: la bala va al punto de la mira mientras el arma sube.)
+- Pegado a una pared **ya no se bloquea el disparo**: sale hacia donde apunta el arma (levantada). Si el cañón
+  está metido en la pared, la bala da en la pared.
+- **Círculo rojo** en el HUD donde va a dar la bala cuando no coincide con la mira (pared, esquina, muro bajo).
+- Chocando contra algo corriendo, la cámara deja el modo carrera (FOV, distancia y balanceo según la velocidad real).
+**Archivos:** `scripts/jugador/arsenal.gd` (`punto_mira`, `salida_bala`, `_actualizar_circulo`; `aim_check` ya
+no bloquea por pared), `scripts/jugador/animador.gd`, `scripts/jugador/jugador.gd`, `tests/visual.gd`.
+**Cómo probarlo:** pegarse a una pared con el rifle y disparar; apuntar al muñeco por encima de un muro bajo
+(círculo rojo en el muro); correr contra una esquina. Las 16 pruebas siguen en verde.
+
+## 2026-10-24 · KangooG · Claude
+**Qué:** seis arreglos de jugabilidad pedidos por KangooG:
+1. La bala sale del **cañón** (antes salía de la cámara): la mira marca el punto, pero si entre el arma y ese
+   punto hay algo (esquina, muro bajo), la bala da ahí.
+2. **Cámara:** rueda del ratón para acercar/alejar (`zoom_cam`, 0.45–1.6; apuntando no cambia). De espaldas a una
+   pared la cámara sube por encima de la cabeza y el personaje se transparenta; girando pegado a una pared la
+   cámara ya no se va a la nuca (el hombro nunca queda dentro de la pared).
+3. Pegado a una pared, el **arma de fuego se levanta** (cañón arriba) en vez de atravesarla, y no se puede
+   disparar (`Animador.arma_alzada`, lo mira `Arsenal.aim_check`).
+4. **Colisión de la cabeza:** caja `FormaCabeza` (solo de pie): ya no se entra de pie en el túnel de 1.4 m.
+   Agachado bajo un techo bajo, el personaje se agacha un poco más para que la cabeza no lo atraviese.
+5. **Colgado + Shift:** se desplaza por la cornisa x1.9 más rápido (y gasta el doble de estamina).
+6. **Andar de lado con el arma (A/D):** pasos laterales más cortos, rodillas algo dobladas y pie levantado
+   (antes una pierna iba recta y la otra se abría como un compás).
+**Archivos:** `scripts/jugador/jugador.gd`, `scripts/jugador/animador.gd`, `scripts/jugador/arsenal.gd`,
+`scripts/ui/menu_principal.gd` (controles). Suben también las pruebas de KangooG a `tests/` (AUDITORIA §5.3):
+`choques`, `combate`, `salto`, `apoyo`, `visual`, `menu_test` y las nuevas `canon` y `tunel` (todas con la meta
+`sin_zombis`).
+**Cómo probarlo:** F5 → Jugar. Rueda del ratón; de espaldas a la pared alta girar la cámara; ir con el rifle
+contra una pared; intentar entrar de pie en el túnel gris de 1.4 m; colgarse de la cornisa y A/D con Shift;
+andar con A/D con el rifle. Automático: `tests/escena_canon.tscn`, `tests/escena_tunel.tscn` (`-- --agachado`).
+Las 16 pruebas de `tests/ejecutar_pruebas.sh` siguen en verde.
+**Pendiente / avisos:** Juan: en `arsenal.gd` el rayo de la bala ahora está en `_rayo_bala()` (mismo
+"contrato de objetivo", sin cambios para los zombis).
+
 ## 2026-10-23 · Juan · Claude
 **Qué:** sistema de RUIDO y ZOMBIS v0 (la "idea estrella" de la auditoría). Todo lo que hace el jugador suena
 (pisadas según velocidad y postura, disparos, golpes, caídas…) y los zombis lo oyen: investigan, persiguen

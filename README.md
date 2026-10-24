@@ -12,9 +12,9 @@ Todo lo que haces suena: agachado no te oyen, corriendo o disparando sí. Ver `d
 
 ## Controles
 WASD moverse · Shift correr (tumbado: reptar rápido) · Espacio saltar/sortear/trepar · C o Ctrl agacharse ·
-Z cuerpo a tierra · Q/E asomarse · 1-4 armas · Clic der. apuntar · Clic izq. disparar/golpear · R recargar ·
+Z cuerpo a tierra · Q/E asomarse · Rueda acercar/alejar cámara · 1-4 armas · Clic der. apuntar · Clic izq. disparar/golpear · R recargar ·
 X apoyar el arma · F recoger · V cambiar de hombro · Colgado: A/D moverse, Espacio subir, S soltarse · Esc pausa.
-Solo en el editor: F4 estamina infinita, F5 balas infinitas, F6 ver el ruido y el estado de los zombis,
+Solo en el editor: F1 menú de trucos, F4 estamina infinita, F5 balas infinitas, F6 ver el ruido y el estado de los zombis,
 F7 zombis sordos.
 
 ## Pruebas automáticas
