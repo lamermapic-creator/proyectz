@@ -101,4 +101,20 @@ const ZOMBI := {
 	"Deambular": 18.0,       # radio alrededor de su sitio por el que deambula
 	"GrunidoCada": 8.0,      # s mínimos entre gruñidos de alerta
 	"Cadaver": 30.0,         # s que se queda el cuerpo antes de desaparecer
+	# VISTA (v1). Verte no es instantáneo: la "sospecha" sube (0..1) mientras te ve y al llegar a 1 te ha visto.
+	# El alcance y la visión periférica dependen de tu postura (STANCE[].Sight y .Near).
+	"VistaAlcance": 50.0,    # studs de pie (~15 m); agachado x0.6 (~9 m), tumbado x0.35 (~5 m)
+	"VistaAngulo": 60.0,     # semiángulo del cono de visión (grados): 120° en total
+	"VistaPeriferica": 0.35, # x STANCE.Near: te nota alrededor aunque no mire (de pie ~3 m, agachado ~1.7 m)
+	"VistaRapidez": 0.7,     # rapidez de la sospecha: de pie y quieto, de frente a 6 m tarda ~1.6 s (tabla en la guía)
+	"VistaOlvido": 0.3,      # cuánto baja la sospecha por segundo cuando no te ve
+	"VistaSospecha": 0.45,   # a partir de aquí "le parece ver algo" y se acerca a mirar (sin perseguir)
+	"VistaIntervalo": 0.1,   # s entre comprobaciones de vista (rendimiento)
+	# INGENIO (v1)
+	"Anticipar": 1.2,        # al perderte de vista, va a donde estarías en este tiempo (máx. 12 studs)
+	"Reaccion": 0.5,         # s que tarda en reaccionar (girarse) a un ruido estando tranquilo
+	"BuscarPuntos": 3,       # sitios que registra al buscarte (además de mirar alrededor)
+	"BuscarRadio": 12.0,     # studs alrededor de donde te perdió
+	"BuscarMirar": 1.6,      # s mirando alrededor en cada sitio
+	"BuscarTiempo": 20.0,    # s máximos buscándote antes de rendirse
 }
