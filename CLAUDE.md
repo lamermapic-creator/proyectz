@@ -12,6 +12,11 @@ Responder SIEMPRE en español. Presupuesto 0 $: solo recursos gratuitos.
 5. No borrar ni reescribir código del otro sin hablarlo. Si algo suyo falla, anotarlo en "Problemas conocidos".
 6. Todo el juego usa **studs** (1 stud ≈ 0.31 m) y gravedad 35, como el original de Roblox.
 7. Probar antes de subir: abrir el juego desde el editor (F5) y comprobar que no hay errores en la Salida.
+   Además, si se puede ejecutar Godot por consola: `tests/ejecutar_pruebas.sh <ruta a Godot>` (16 pruebas
+   automáticas, ~1 min; en Windows con Git Bash). Si añades algo importante, añade su prueba.
+
+8. Lee también **`AUDITORIA.md`** (2026-10-23): revisión técnica con fallos comprobados, deuda técnica,
+   ideas de mejora y hoja de ruta. Al arreglar algo de ahí, anotarlo en `CAMBIOS.md`.
 
 ## Reparto (rellenar entre los dos)
 - KangooG: …
@@ -38,7 +43,7 @@ Juego de zombis en tercera persona, realista. Empezó en Roblox Studio, pasó po
   - `scripts/jugador/animador.gd` (Animador): port de ProceduralAnimator para ir a pie (pies anclados con IK analítica, pelvis, salto por fases, vault/mantle, tumbarse/reptar/rodar, reacciones, cabeza).
   - `escenas/jugador.tscn`, `escenas/pruebas_movimiento.tscn` (escena principal; nivel de pruebas en metros convertido a studs).
 - Flujo de trabajo de Claude (sesión de KangooG): edita en un contenedor, comprueba con Godot 4.7.2 Linux headless y copia los archivos al PC. Cualquier Claude puede trabajar directamente sobre los archivos del repositorio.
-- **Pendiente de portar**: daño por caída y ragdoll activo Euphoria (levantarse), sonidos reales (pasos, respiración, armas), zombis, moto, carro, mapa de ciudad. (Armas y combate: hechos, ver abajo.)
+- **Pendiente de portar**: daño por caída y ragdoll activo Euphoria (levantarse), sonidos reales (pasos, respiración, armas), vista de los zombis, moto, carro, mapa de ciudad. (Armas y combate: hechos; ruido y zombis v0: hechos, ver abajo.)
 
 ## Conexión Claude ↔ Godot (resuelta 2026-10-20)
 - Godot 4.7.2 portable: `C:\Users\ferna\Desktop\Godot_v4.7.2-stable_win64.exe` (para computer use hay que resolverlo por su ruta completa).
@@ -54,7 +59,7 @@ Juego de zombis en tercera persona, realista. Empezó en Roblox Studio, pasó po
 ## Plan por etapas (en Godot)
 1. Personaje y cámara (hecho lo principal; faltan caídas/ragdoll y sonidos).
 2. Armas: disparo, apuntado, retroceso, apoyar arma, dispersión (hecho, con muñecos de prueba).
-3. Zombis: navegación, ataques, ragdoll activo, atropello.
+3. Zombis: navegación, ataques, ragdoll activo, atropello. (v0 hecha el 2026-10-23: oído, navegación, ataques; faltan vista, ragdoll y atropello.)
 4. Vehículos: carro y moto.
 5. Mapa de ciudad, iluminación, sonido, interfaz.
 6. Multijugador (opcional).
@@ -77,7 +82,7 @@ Freesound (sonidos), Poly Haven y ambientCG (texturas/HDRI), Quaternius y Kenney
 - `scripts/armas/efectos.gd` (Efectos): chispas, sangre, manchas redondas, trazadoras, fogonazo y sonidos sintetizados (AudioStreamWAV generado; aún no hay archivos de audio).
 - `scripts/jugador/arsenal.gd` (Arsenal, hijo de Jugador creado en código): inventario, 1-4 cambiar (guardar 0.42 s + sacar DrawTime), disparo (dispersión, retroceso, caída de daño, bloqueo si el cuerpo no puede apuntar o el cañón está en la pared), recarga R, golpes cuerpo a cuerpo (HitTime, 2 objetivos, 25 % crítico, el bate derriba), apoyar el arma X, recoger F (machete en el suelo; coge y suelta la del mismo hueco), HUD (mira, munición, huecos, marcador de impacto).
 - Animador: sección de armas portada (sacar/guardar desde la funda, LOW/HIP/AIM/SPRINT/PRONE, recarga con cargador que cae y uno nuevo en la mano, golpes por claves, retroceso con muelles kick/kickRot, giro "blade" del rifle, mano izquierda en LeftGrip/SupportGrip, IK con muñeca exacta).
-- Capas de colisión: 1 escenario, 2 zonas de impacto de los muñecos (solo balas), 4 cuerpos de los muñecos (el jugador choca con ellos). `Jugador.raycast` y `spherecast` solo miran la capa 1.
+- Capas de colisión: 1 escenario, 2 zonas de impacto de muñecos y zombis (solo balas), 4 cuerpos de muñecos y zombis (el jugador choca con ellos). `Jugador.raycast` y `spherecast` solo miran la capa 1.
 - `scripts/nivel/maniqui.gd` (Maniqui): muñeco de madera con el mismo rig R15 (`RigPersonaje.maniqui = true`), daño por zonas, reacción con muelles, empujón, derribo y muerte con caída, se levanta con la vida llena; vida en una etiqueta. Zona de tiro en el nivel: barrera de 1 m en x = 26 m y muñecos a 7, 13 y 21 m (+ uno cerca del inicio).
 - Otros cambios del día: reptar rápido tumbado con Shift (ProneSprintSpeed 3.2, drain x1.4), andar con fatiga por debajo del 40 % de estamina (más lento, encorvado, pasos cortos arrastrando los pies), F4 activa/desactiva la estamina infinita de pruebas (`ZConfig.PLAYER.InfiniteStamina`), salto con distancia fija (`JumpDistance` 8), agarrarse a un borde en el aire tras saltar.
 - Pruebas: `tests/combate.gd` + `tests/escena_combate.tscn` (`--modo=pistola|rifle|cuchillo|bate|machete|cambiar|apoyar`, `--video`, `--camjuego`).
@@ -89,3 +94,23 @@ Freesound (sonidos), Poly Haven y ambientCG (texturas/HDRI), Quaternius y Kenney
 - Trucos F4/F5 solo en compilaciones de depuración (`OS.is_debug_build()`).
 - Ejecutable: Proyecto → Exportar → Windows Desktop, PCK embebido, sin depuración → `C:\Users\ferna\Documents\godotproyectz\versiones\v0.2 con menu\ProyectoZ.exe` (un solo .exe, ~110 MB). Las plantillas de exportación 4.7.2 ya están instaladas.
 
+## Ruido y zombis v0 (2026-10-23, a pedido de Juan) — guía completa: `docs/RUIDO_Y_ZOMBIS.md`
+- **Sistema de ruido** (`scripts/ruido/ruido.gd`, clase estática `Ruido`, sin autoload): quien hace ruido llama a
+  `Ruido.emitir(ctx, pos, radio_studs, tipo, fuente)`; los nodos del grupo `oyentes_ruido` reciben `oir(ev)`.
+  Una pared (capa 1) entre el ruido y quien escucha lo reduce al 45 % (`Ruido.radio_percibido`). Radios en `ZConfig.RUIDO`.
+- **Fuentes:** pisadas (Animador, al apoyar cada pie, según `step_k`: agachado ~5, andando ~13, corriendo ~32 studs),
+  reptar, aterrizajes, vallas, cornisas (Jugador), disparos (`Alert` de cada arma), impacto de la bala (sin fuente:
+  sirve para distraer), golpes, recarga (Arsenal) y gruñidos (Zombi).
+- **Zombi v0** (`scripts/zombis/zombi.gd`): solo oye (sin vista). Estados DEAMBULAR → INVESTIGAR → PERSEGUIR →
+  ATACAR, BUSCAR, CAIDO, MUERTO. Persigue siguiendo los ruidos del jugador (no conoce su posición); al empezar a
+  perseguir gruñe y alerta a los cercanos. Animación barata sin IK (~0,09 ms por zombi). Valores en `ZConfig.ZOMBI`.
+- **DirectorZombis** (`scripts/zombis/director_zombis.gd`): hornea la navegación al cargar (~0,5 s), coloca y repone
+  zombis. El nivel de pruebas trae 4 (`nivel_pruebas.gd`, `_crear_zombis`; meta `sin_zombis` para no crearlos).
+- **Contrato de objetivo:** las armas golpean a cualquier nodo del grupo `objetivos` con `vivo`, `en_pie`, `centro`,
+  `recibir_danio`, `empujar`, `derribar` y `rig`; las balas buscan cuerpos de la capa 2 con meta `objetivo` (y `pieza`,
+  o el método `impacto_bala`). Los golpes ya no atraviesan paredes (AUDITORIA §7.1 arreglado).
+- **Jugador:** grupo `jugador`; `recibir_danio(cantidad, desde)`, regenera con `RegenDelay`/`RegenRate`, muere y el
+  nivel se reinicia a los 4 s. Medidor de ruido bajo la estamina (`scripts/ui/medidor_ruido.gd`).
+- **Depuración (solo editor):** F6 ver ruidos y estado de los zombis; F7 zombis sordos.
+- **Pruebas:** `tests/pruebas_ruido.gd` + `tests/ejecutar_pruebas.sh` (16 pruebas, incluidas regresiones de movimiento,
+  cadencia y maniquí). Ojo: la oclusión es real; en el nivel, los bloques naranjas tapan el ruido.

@@ -1,7 +1,8 @@
 # Proyecto Z
 
-Juego de zombis en tercera persona, realista, hecho en **Godot 4.7.2** (empezó en Roblox).
-Estado: prototipo de movimiento y combate (nivel de pruebas con muñecos; aún sin zombis ni mapa).
+Juego de zombis en tercera persona, realista y de sigilo, hecho en **Godot 4.7.2** (empezó en Roblox).
+Estado: prototipo de movimiento, combate y zombis v0 que se guían por el ruido (nivel de pruebas; aún sin mapa).
+Todo lo que haces suena: agachado no te oyen, corriendo o disparando sí. Ver `docs/RUIDO_Y_ZOMBIS.md`.
 
 ## Abrir el proyecto
 1. Instala **Godot 4.7.2** (versión estándar, no .NET): https://godotengine.org/download/archive/
@@ -13,7 +14,13 @@ Estado: prototipo de movimiento y combate (nivel de pruebas con muñecos; aún s
 WASD moverse · Shift correr (tumbado: reptar rápido) · Espacio saltar/sortear/trepar · C o Ctrl agacharse ·
 Z cuerpo a tierra · Q/E asomarse · 1-4 armas · Clic der. apuntar · Clic izq. disparar/golpear · R recargar ·
 X apoyar el arma · F recoger · V cambiar de hombro · Colgado: A/D moverse, Espacio subir, S soltarse · Esc pausa.
-Solo en el editor: F4 estamina infinita, F5 balas infinitas.
+Solo en el editor: F4 estamina infinita, F5 balas infinitas, F6 ver el ruido y el estado de los zombis,
+F7 zombis sordos.
+
+## Pruebas automáticas
+`tests/ejecutar_pruebas.sh <ruta a Godot 4.7.2>` importa el proyecto, compila todos los scripts, pasa las
+16 pruebas (ruido, zombis y regresión) y arranca el menú y el nivel buscando errores (~1 minuto, sin
+ventana). En Windows se ejecuta con Git Bash. Detalle en `docs/RUIDO_Y_ZOMBIS.md`, sección "Pruebas".
 
 ## Trabajar con Claude en Godot (opcional)
 El proyecto incluye el plugin **Godot AI** (`addons/godot_ai`), que deja a Claude Desktop controlar el editor.

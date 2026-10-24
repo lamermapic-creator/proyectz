@@ -25,6 +25,23 @@ func _ready() -> void:
 		_construir()
 	if not Engine.is_editor_hint() and not has_meta("sin_maniquies"):
 		_crear_maniquies()
+		_crear_zombis()
+
+
+## zombis de prueba (solo al jugar; ver docs/RUIDO_Y_ZOMBIS.md). El director hornea la navegación
+## siempre; los zombis por defecto se omiten con la meta "sin_zombis" (lo usan las pruebas automáticas).
+func _crear_zombis() -> void:
+	var dz := DirectorZombis.new()
+	dz.name = "Zombis"
+	add_child(dz)
+	dz.preparar(get_node("Geometria"))
+	if has_meta("sin_zombis"):
+		return
+	# [pies en metros, giro]: tras la pared alta (probar que las paredes tapan el ruido), junto a la
+	# cornisa, en una esquina y más allá de la zona de tiro (disparar ahí los atrae)
+	for d in [[Vector3(2, 0, 26), 180.0], [Vector3(-30, 0, -14), 90.0], [Vector3(-15, 0, 32), 0.0],
+			[Vector3(58, 0, 8), 90.0]]:
+		dz.crear_zombi(d[0] * M, d[1])
 
 
 ## muñecos de prueba para el combate (solo al jugar)

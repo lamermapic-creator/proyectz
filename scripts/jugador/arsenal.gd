@@ -366,6 +366,7 @@ func reload() -> void:
 		return
 	recargando = ahora() + w.Reload
 	anim.on_reload(equipado, w.Reload)
+	Ruido.emitir(J, J.global_position, C.RUIDO.Recarga, Ruido.ARMA, J)
 	Efectos.sonido(J, "Reload", J.global_position, 0.9, 1.5 / w.Reload * 1.1)
 
 
@@ -519,12 +520,15 @@ func shoot() -> void:
 	if d.mag <= 0:
 		last_shot = now
 		Efectos.sonido(J, "Empty", J.global_position, 0.4, 0.6)
+		Ruido.emitir(J, J.global_position, C.RUIDO.Vacio, Ruido.ARMA, J)
 		J.firing = false
 		reload()
 		return
 	last_shot = now
 	if not balas_infinitas:
 		d.mag -= 1
+	# el disparo se oye muy lejos (radio "Alert" del arma)
+	Ruido.emitir(J, J.global_position, float(w.Alert), Ruido.DISPARO, J)
 
 	# dispersión: apuntar, movimiento, saltar y ráfaga
 	var move_speed := Vector3(J.vel_real.x, 0, J.vel_real.z).length()
@@ -547,8 +551,23 @@ func shoot() -> void:
 
 	# impacto (las balas dan en el escenario y en las zonas de los muñecos)
 	var q := PhysicsRayQueryParameters3D.create(origin, origin + dir * float(w.Range), 1 | 2)
-	q.exclude = [J.get_rid()]
-	var res := J.get_world_3d().direct_space_state.intersect_ray(q)
+	var excluir: Array[RID] = [J.get_rid()]
+	var res := {}
+	# un blanco con un único cuerpo de impacto (el zombi) dice qué pieza ha tocado la bala; si pasa sin
+	# tocar ninguna (entre los brazos), la bala sigue (ver "contrato de objetivo" en docs/RUIDO_Y_ZOMBIS.md)
+	for intento in 4:
+		q.exclude = excluir
+		res = J.get_world_3d().direct_space_state.intersect_ray(q)
+		var c: Object = res.get("collider")
+		if res.is_empty() or c == null or not c.has_meta("objetivo") or c.has_meta("pieza"):
+			break
+		var imp: Dictionary = c.get_meta("objetivo").impacto_bala(origin, dir)
+		if not imp.is_empty():
+			res.position = imp.punto
+			res.pieza = imp.pieza
+			break
+		excluir.append(res.rid)
+		res = {}
 	var hit_pos := origin + dir * float(w.Range)
 	var tipo := "none"
 	var normal := Vector3.UP
@@ -557,16 +576,17 @@ func shoot() -> void:
 		normal = res.normal
 		tipo = "surface"
 		var col: Object = res.collider
-		if col and col.has_meta("maniqui"):
+		# zonas de impacto de un blanco (maniquí o zombi): ver "contrato de objetivo" en docs/RUIDO_Y_ZOMBIS.md
+		if col and col.has_meta("objetivo"):
 			tipo = "flesh"
-			var man: Maniqui = col.get_meta("maniqui")
-			var pieza: String = col.get_meta("pieza")
+			var obj = col.get_meta("objetivo")
+			var pieza: String = res.pieza if res.has("pieza") else col.get_meta("pieza")
 			var dmg: float = w.Damage * Maniqui.mult_pieza(pieza, w)
 			# caída de daño con la distancia
 			if hit_pos.distance_to(origin) > float(w.Range) * 0.5:
 				dmg *= 0.75
-			if man.vivo():
-				var killed := man.recibir_danio(dmg, pieza, dir * 45.0)
+			if obj.vivo():
+				var killed: bool = obj.recibir_danio(dmg, pieza, dir * 45.0)
 				_confirmar(killed, pieza == "Head")
 
 	# efectos
@@ -578,6 +598,10 @@ func shoot() -> void:
 	Efectos.tracer(J, mz_t.origin, hit_pos)
 	if tipo != "none":
 		Efectos.impacto(J, hit_pos, normal, tipo)
+	# la bala que golpea una superficie también suena allí (sin "fuente": los zombis van a mirar ese
+	# sitio, no saben que ha sido el jugador). Disparar a una pared lejana sirve para distraerlos.
+	if tipo == "surface":
+		Ruido.emitir(J, hit_pos, C.RUIDO.Impacto, Ruido.IMPACTO, null)
 	anim.on_shot(equipado)
 
 	# retroceso
@@ -613,6 +637,7 @@ func melee() -> void:
 	last_melee = now
 	J.stamina = maxf(0.0, J.stamina - w.Stamina)
 	Efectos.sonido(J, "Swing", J.global_position, 0.8, 0.9 + randf() * 0.2)
+	Ruido.emitir(J, J.global_position, C.RUIDO.GolpeAire, Ruido.GOLPE, J)
 	anim.on_melee(equipado)
 	# el impacto llega en el punto de golpe de la animación
 	golpes_pendientes.append([now + float(w.get("HitTime", 0.26)), equipado, false])
@@ -624,22 +649,27 @@ func _resolver_golpe(arma: String) -> void:
 	var root := J.root_cf()
 	var look := Rbx.look(root)
 	var hits := []
-	for m in J.get_tree().get_nodes_in_group("maniquies"):
-		var man := m as Maniqui
+	var pecho := root.origin + Vector3(0, 1.2, 0)
+	# blancos: maniquíes y zombis (grupo "objetivos", ver "contrato de objetivo" en docs/RUIDO_Y_ZOMBIS.md)
+	for man in J.get_tree().get_nodes_in_group("objetivos"):
 		if not man.vivo():
 			continue
 		var off: Vector3 = man.centro() - root.origin
 		var flat := Vector3(off.x, 0, off.z)
 		if flat.length() < float(w.Range) and absf(off.y) < 5 and (flat.length() < 2 or flat.normalized().dot(look) > 0.35):
+			# nada de golpear a través de paredes (AUDITORIA.md §7.1)
+			if not J.raycast(pecho, man.centro() - pecho).is_empty():
+				continue
 			hits.append([flat.length(), man])
 	hits.sort_custom(func(a, b): return a[0] < b[0])
 	for i in mini(2, hits.size()):
-		var man: Maniqui = hits[i][1]
+		var man = hits[i][1]
 		var crit := randf() < 0.25
 		var dmg: float = w.Damage * (w.HeadMult if crit else 1.0) * (0.5 if i == 1 else 1.0)
 		var pieza := "Head" if crit else "UpperTorso"
 		var ppos: Vector3 = (man.rig.P[pieza] as Node3D).global_position
-		var killed := man.recibir_danio(dmg, pieza, look * float(w.Knockback))
+		var killed: bool = man.recibir_danio(dmg, pieza, look * float(w.Knockback))
+		Ruido.emitir(J, ppos, C.RUIDO.GolpeContundente if arma == "Bate" else C.RUIDO.GolpeCarne, Ruido.GOLPE, J)
 		_confirmar(killed, crit)
 		if not killed and man.en_pie():
 			if arma == "Bate" and (crit or randf() < 0.45):
