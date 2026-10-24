@@ -16,7 +16,8 @@ if ! "$GODOT" --version >/dev/null 2>&1; then
 fi
 
 MODOS=(unidad pasos disparo oye_disparo sigilo oclusion jauria navegacion ataque_y_muerte regeneracion
-	danio_zombi maniqui andar cadencia completo rendimiento)
+	danio_zombi maniqui andar cadencia completo rendimiento
+	vista_frente vista_espalda vista_pared vista_lejos vista_postura vista_sigue anticipar busqueda reaccion indicador)
 [ ${#SOLO[@]} -gt 0 ] && MODOS=("${SOLO[@]}")
 
 fallos=0

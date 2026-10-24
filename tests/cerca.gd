@@ -15,6 +15,7 @@ func _ready() -> void:
 	j.global_position = Vector3(-100, 3.2, 100)
 	j.yaw = 0.0
 	Zombi.sordos = true
+	Zombi.ciegos = true # (Juan, v1) los zombis ya ven: sin esto, de espaldas a 2.5 studs te nota y se mueve
 
 func _process(dt: float) -> void:
 	t += dt
