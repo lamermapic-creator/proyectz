@@ -33,7 +33,7 @@ var pelvis_drop := 0.0
 ## arma contra una pared: primero se recoge hacia el cuerpo (RETRO_MAX studs, sigue apuntando) y solo si no
 ## basta, extremadamente pegado, se levanta (ALZA_RECORRIDO studs más para quedar del todo levantada)
 const ALZA_ACTIVA := false   # levantar el arma pegado a una pared: DESACTIVADO a pedido de KangooG (molestaba
-                             # al jugar). Solo se recoge hacia el cuerpo. Poner true para volver a activarlo
+							 # al jugar). Solo se recoge hacia el cuerpo. Poner true para volver a activarlo
 const ALZA_MARGEN := 0.1     # studs más allá de la boca del cañón a los que empieza a recogerse
 const RETRO_MAX := 0.7       # cuánto se puede recoger el arma hacia el cuerpo
 const ALZA_RECORRIDO := 0.8
