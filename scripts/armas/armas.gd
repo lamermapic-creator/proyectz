@@ -11,7 +11,7 @@ const WEAPONS := {
 		"Kind": "Gun", "Sound": "Pistol", "Damage": 34.0, "HeadMult": 3.0, "LimbMult": 0.7,
 		"RPM": 320.0, "Auto": false, "Mag": 12, "StartReserve": 48, "MaxReserve": 96,
 		"Reload": 1.7, "HipSpread": 2.6, "AimSpread": 0.5, "Recoil": 2.2, "RecoilYaw": 0.6,
-		"Range": 450.0, "Alert": 180.0, "Slot": "Corta", "DrawTime": 0.55, "Tip": "Pistola 9mm",
+		"Range": 450.0, "Alert": 180.0, "Slot": "Corta", "DrawTime": 0.55, "Tip": "Pistola 9mm", "UnaMano": true,
 	},
 	"Rifle": {
 		"Kind": "Gun", "Sound": "Rifle", "Damage": 30.0, "HeadMult": 3.0, "LimbMult": 0.7,
@@ -32,7 +32,44 @@ const WEAPONS := {
 	"Bate": {
 		"Kind": "Melee", "Damage": 38.0, "HeadMult": 1.8, "Range": 8.0, "Cooldown": 0.95, "Stamina": 16.0,
 		"Knockback": 45.0, "Stagger": 1.2, "Sound": "Blunt", "Slot": "BlancaLarga", "DrawTime": 0.8,
-		"HitTime": 0.36, "Tip": "Bate con clavos",
+		"HitTime": 0.36, "Tip": "Bate con clavos", "DosManos": true, "Derriba": 0.45,
+	},
+	## ---- v0.4: armas nuevas ("Base" = arma de la que toma poses y animaciones si no tiene las suyas)
+	"Revolver": {
+		"Kind": "Gun", "Base": "Pistola", "Sound": "Revolver", "Damage": 58.0, "HeadMult": 3.0, "LimbMult": 0.75,
+		"RPM": 150.0, "Auto": false, "Mag": 6, "StartReserve": 24, "MaxReserve": 48,
+		"Reload": 2.4, "HipSpread": 2.8, "AimSpread": 0.35, "Recoil": 4.2, "RecoilYaw": 0.9,
+		"Range": 500.0, "Alert": 240.0, "Slot": "Corta", "DrawTime": 0.6, "Tip": "Revólver .357", "UnaMano": true,
+	},
+	"Subfusil": {
+		"Kind": "Gun", "Base": "Rifle", "Sound": "SMG", "Damage": 21.0, "HeadMult": 2.6, "LimbMult": 0.7,
+		"RPM": 850.0, "Auto": true, "Mag": 32, "StartReserve": 64, "MaxReserve": 192,
+		"Reload": 2.1, "HipSpread": 3.6, "AimSpread": 1.2, "Recoil": 0.85, "RecoilYaw": 1.0,
+		"Range": 380.0, "Alert": 200.0, "Slot": "Corta", "DrawTime": 0.65, "Tip": "Subfusil", "UnaMano": true,
+	},
+	"Escopeta": {
+		"Kind": "Gun", "Base": "Rifle", "Sound": "Shotgun", "Damage": 15.0, "HeadMult": 2.0, "LimbMult": 0.8,
+		"RPM": 68.0, "Auto": false, "Mag": 6, "StartReserve": 18, "MaxReserve": 42,
+		"Reload": 0.5, "ShellTime": 0.5, "Pellets": 9, "PelletSpread": 4.2, "Pump": true,
+		"HipSpread": 1.2, "AimSpread": 0.6, "Recoil": 6.5, "RecoilYaw": 1.6,
+		"Range": 170.0, "Alert": 320.0, "Slot": "Larga", "DrawTime": 0.9, "Tip": "Escopeta de corredera",
+	},
+	"Francotirador": {
+		"Kind": "Gun", "Base": "Rifle", "Sound": "Sniper", "Damage": 120.0, "HeadMult": 3.0, "LimbMult": 0.8,
+		"RPM": 42.0, "Auto": false, "Mag": 5, "StartReserve": 15, "MaxReserve": 40,
+		"Reload": 3.0, "HipSpread": 7.5, "AimSpread": 0.04, "Recoil": 7.5, "RecoilYaw": 1.2, "Bolt": true,
+		"Range": 2200.0, "Alert": 430.0, "Slot": "Larga", "DrawTime": 1.05, "Tip": "Fusil de francotirador",
+		"Scope": 13.0, # campo de visión con la mira telescópica (grados)
+	},
+	"Hacha": {
+		"Kind": "Melee", "Base": "Machete", "Damage": 72.0, "HeadMult": 1.5, "Range": 7.8, "Cooldown": 1.05,
+		"Stamina": 16.0, "Knockback": 26.0, "Stagger": 0.75, "Sound": "Flesh", "Slot": "BlancaLarga",
+		"DrawTime": 0.85, "HitTime": 0.4, "Tip": "Hacha de bombero", "DosManos": true, "Derriba": 0.25,
+	},
+	"Palanca": {
+		"Kind": "Melee", "Base": "Machete", "Damage": 46.0, "HeadMult": 1.8, "Range": 7.2, "Cooldown": 0.8,
+		"Stamina": 12.0, "Knockback": 30.0, "Stagger": 0.9, "Sound": "Blunt", "Slot": "BlancaLarga",
+		"DrawTime": 0.75, "HitTime": 0.27, "Tip": "Palanca", "Derriba": 0.3,
 	},
 }
 
@@ -47,6 +84,26 @@ const LOADOUT := ["Pistola", "Rifle", "Cuchillo", "Bate"]
 const HOLSTER_TIME := 0.42
 
 ## ---------------------------------------------------------------- ayudas
+## arma de la que toma poses y animaciones (las nuevas se parecen a alguna de las originales)
+static func base(nombre: String) -> String:
+	return str(WEAPONS.get(nombre, {}).get("Base", nombre))
+
+
+## armas blancas que se cogen con las dos manos (no se pueden usar tumbado ni en la moto)
+static func dos_manos(nombre: String) -> bool:
+	return bool(WEAPONS.get(nombre, {}).get("DosManos", false))
+
+
+## ¿se puede usar en la moto? (armas de fuego de una mano y armas blancas de una mano)
+static func en_moto(nombre: String) -> bool:
+	var w: Dictionary = WEAPONS.get(nombre, {})
+	if w.is_empty():
+		return false
+	if w.Kind == "Gun":
+		return bool(w.get("UnaMano", false))
+	return not dos_manos(nombre)
+
+
 static func ang(x: float, y: float, z: float) -> Transform3D:
 	return Rbx.ang(x * D2R, y * D2R, z * D2R)
 
@@ -73,6 +130,16 @@ static func holster(nombre: String) -> Dictionary:
 		# bate y machete metidos en la mochila, el mango asoma por encima del hombro derecho
 		"Bate": return {"Part": "UpperTorso", "CF": at(Vector3(0.55, 1.05, 1.2), Vector3(-0.25, -1, 0), Vector3(0, 0, 1))}
 		"Machete": return {"Part": "UpperTorso", "CF": at(Vector3(0.55, 1.0, 1.05), Vector3(-0.2, -1, 0), Vector3(0, 0, 1))}
+		# revólver en la funda del muslo, como la pistola
+		"Revolver": return {"Part": "RightUpperLeg", "CF": at(Vector3(0.34, 0.5, 0.3), Vector3(0, -1, 0), Vector3(0, 0, -1))}
+		# subfusil colgado en el pecho, cañón hacia abajo a la izquierda
+		"Subfusil": return {"Part": "UpperTorso", "CF": at(Vector3(0.12, -0.32, -0.66), Vector3(-0.55, -0.83, 0), Vector3(0, 0, -1))}
+		# escopeta y fusil a la espalda como el rifle (solo se lleva un arma larga)
+		"Escopeta": return {"Part": "UpperTorso", "CF": at(Vector3(0.42, -0.45, 0.98), Vector3(-0.707, 0.707, 0), Vector3(0.707, 0.707, 0))}
+		"Francotirador": return {"Part": "UpperTorso", "CF": at(Vector3(0.42, -0.5, 1.0), Vector3(-0.707, 0.707, 0), Vector3(0.707, 0.707, 0))}
+		# hacha y palanca en la mochila: el mango asoma por encima del hombro
+		"Hacha": return {"Part": "UpperTorso", "CF": at(Vector3(0.55, 1.15, 1.2), Vector3(-0.25, -1, 0), Vector3(0, 0, 1))}
+		"Palanca": return {"Part": "UpperTorso", "CF": at(Vector3(0.5, 1.0, 1.1), Vector3(-0.2, -1, 0), Vector3(0, 0, 1))}
 	return {}
 
 
@@ -84,6 +151,12 @@ static func grip(nombre: String) -> Transform3D:
 		"Machete": return cf(0, 0, 0.05)
 		"Bate": return cf(0, 0, 0.18)
 		"Cuchillo": return cf(0, 0, 0.04)
+		"Revolver": return cf(0, -0.06, 0.07)
+		"Subfusil": return cf(0, -0.05, 0.05)
+		"Escopeta": return cf(0, -0.05, 0.05)
+		"Francotirador": return cf(0, -0.05, 0.05)
+		"Hacha": return cf(0, 0, 0.2)
+		"Palanca": return cf(0, 0, 0.12)
 	return Transform3D.IDENTITY
 
 
@@ -99,6 +172,32 @@ static func handle_en_mano(nombre: String) -> Transform3D:
 
 ## ---------------------------------------------------------------- poses (relativas al pecho)
 static func pose(nombre: String, clave: String) -> Transform3D:
+	match nombre:
+		"Subfusil":
+			match clave:
+				"AIM": return cf(0.26, 0.52, -1.05)
+				"HIP": return cf(0.42, 0.22, -1.05) * ang(-4, 6, 0)
+				"LOW": return cf(0.42, -0.05, -1.0) * ang(-30, 18, 0)
+				"SPRINT": return cf(0.35, 0.1, -0.9) * ang(35, 30, -20)
+		"Escopeta":
+			match clave:
+				"AIM": return cf(0.28, 0.48, -0.95)
+				"HIP": return cf(0.45, 0.18, -0.95) * ang(-4, 6, 0)
+				"LOW": return cf(0.45, -0.08, -0.9) * ang(-34, 22, 0)
+		"Francotirador":
+			match clave:
+				# con la mira: la culata en el hombro y la cara en la carrillera
+				"AIM": return cf(0.26, 0.46, -0.92)
+				"LOW": return cf(0.45, -0.1, -0.9) * ang(-36, 24, 0)
+		"Hacha":
+			match clave:
+				"READY": return at(Vector3(0.6, 0.0, -0.75), Vector3(0.1, 0.9, -0.42), Vector3(0, 0.42, 0.9))
+				"SPRINT": return at(Vector3(0.5, 0.5, -0.4), Vector3(-0.1, 0.55, 0.83), Vector3(0, 0.83, -0.55))
+		"Palanca":
+			match clave:
+				"READY": return at(Vector3(0.75, -0.2, -0.85), Vector3(0.1, 0.5, -0.86), Vector3(0, 0.86, 0.5))
+	if base(nombre) != nombre:
+		return pose(base(nombre), clave)
 	match nombre:
 		"Rifle":
 			match clave:
@@ -142,7 +241,7 @@ static func pose(nombre: String, clave: String) -> Transform3D:
 
 
 static func tiene_pose(nombre: String, clave: String) -> bool:
-	if nombre == "Rifle" or nombre == "Pistola":
+	if str(WEAPONS.get(nombre, {}).get("Kind", "")) == "Gun":
 		return clave in ["AIM", "HIP", "LOW", "SPRINT", "RELOAD", "PRONE"]
 	return clave in ["READY", "SPRINT", "WIND", "STRIKE", "FOLLOW"]
 
@@ -162,6 +261,9 @@ static func draw(nombre: String) -> Dictionary:
 		"Cuchillo": return {"reach": 0.42, "mid": cf(-0.1, -0.2, -0.75) * ang(-40, 0, 0)}
 		"Bate": return {"reach": 0.36, "mid": cf(0.85, 1.5, 0.05) * ang(80, 0, 0)}
 		"Machete": return {"reach": 0.36, "mid": cf(0.85, 1.45, 0.05) * ang(80, 0, 0)}
+		"Subfusil": return {"reach": 0.38, "mid": cf(0.25, -0.35, -0.8) * ang(-40, 20, 0)}
+	if base(nombre) != nombre:
+		return draw(base(nombre))
 	return {}
 
 
@@ -170,6 +272,18 @@ static func golpe(nombre: String) -> Dictionary:
 	# claves: [t, pose]; la pose es la del Handle relativa al pecho (dirección del arma = -Z del Handle).
 	# El golpe (STRIKE) cae justo en HitTime. "lunge" = cuánto se echa el cuerpo hacia delante.
 	match nombre:
+		"Hacha":
+			# hachazo de arriba abajo a dos manos: sube por encima del hombro derecho y baja delante
+			return {"dur": 1.05,
+				"pose": [[0.0, pose("Hacha", "READY")],
+					[0.26, at(Vector3(0.75, 1.25, 0.25), Vector3(-0.1, 0.55, 0.83), Vector3(0, 0.83, -0.55))],
+					[0.34, at(Vector3(0.35, 1.0, -0.6), Vector3(-0.1, 0.75, -0.66), Vector3(0, 0.66, 0.75))],
+					[0.4, at(Vector3(0.15, 0.15, -1.35), Vector3(-0.1, -0.45, -0.89), Vector3(0, 0.89, -0.45))],
+					[0.55, at(Vector3(0.1, -0.45, -1.1), Vector3(-0.05, -0.85, -0.5), Vector3(0, 0.5, -0.86))],
+					[1.05, pose("Hacha", "READY")]],
+				"twist": [[0.0, 0.0], [0.26, -0.3], [0.4, 0.15], [0.55, 0.1], [1.05, 0.0]],
+				"lean": [[0.0, 0.0], [0.26, 0.14], [0.4, -0.32], [0.55, -0.28], [1.05, 0.0]],
+				"lunge": [[0.0, 0.0], [0.26, 0.0], [0.4, 1.0], [0.55, 0.85], [1.05, 0.0]]}
 		"Cuchillo":
 			# puñalada: lleva la mano a la cadera y clava hacia delante con todo el cuerpo
 			return {"dur": 0.5,
@@ -208,11 +322,42 @@ static func golpe(nombre: String) -> Dictionary:
 				"twist": [[0.0, 0.0], [0.24, -0.75], [0.31, -0.35], [0.335, -0.1], [0.36, 0.15], [0.5, 0.75], [0.72, 0.25], [0.95, 0.0]],
 				"lean": [[0.0, 0.0], [0.24, 0.06], [0.31, -0.05], [0.335, -0.1], [0.36, -0.16], [0.5, -0.08], [0.72, -0.03], [0.95, 0.0]],
 				"lunge": [[0.0, 0.0], [0.24, 0.0], [0.31, 0.4], [0.335, 0.6], [0.36, 0.8], [0.5, 0.6], [0.72, 0.2], [0.95, 0.0]]}
+	if base(nombre) != nombre:
+		return golpe(base(nombre))
 	return {}
 
 
 ## recarga: giro del arma y recorrido de la mano izquierda (cargador, bolsa, palanca/corredera)
-static func recarga(nombre: String) -> Dictionary:
+static func recarga(nombre: String, cartuchos := 0) -> Dictionary:
+	match nombre:
+		"Revolver":
+			# abre el tambor hacia la izquierda, saca el cargador rápido de la bolsa y lo mete
+			return {"dur": 2.4,
+				"gun": [[0.0, Transform3D.IDENTITY], [0.3, ang(10, 0, 45)], [2.0, ang(10, 0, 45)], [2.2, ang(-4, 0, 0)], [2.4, Transform3D.IDENTITY]],
+				"hand": [[0.0, "gun", "grip"], [0.35, "gun", "mag", Vector3(-0.1, 0, 0)], [0.8, "pouch"], [1.05, "pouch"],
+					[1.5, "gun", "mag", Vector3(0, 0, -0.35)], [1.75, "gun", "mag"], [2.05, "gun", "mag", Vector3(-0.05, 0.1, 0)], [2.4, "gun", "grip"]],
+				"events": [[0.95, "new"], [1.75, "insert"]]}
+		"Escopeta":
+			# cartucho a cartucho por la ventana de carga (debajo del cajón)
+			var n := maxi(1, cartuchos)
+			var t0 := 0.35
+			var g := [[0.0, Transform3D.IDENTITY], [t0, ang(-6, 0, -35)]]
+			var h := [[0.0, "gun", "grip"], [t0, "gun", "mag", Vector3(0, -0.15, 0.1)]]
+			var ev := []
+			for i in n:
+				var a0 := t0 + i * 0.5
+				h.append([a0 + 0.15, "pouch"])
+				h.append([a0 + 0.32, "gun", "mag", Vector3(0, -0.2, 0.05)])
+				h.append([a0 + 0.45, "gun", "mag"])
+				ev.append([a0 + 0.18, "shell_new_%d" % i])
+				ev.append([a0 + 0.44, "shell_in_%d" % i])
+			var fin := t0 + n * 0.5
+			g.append([fin, ang(-6, 0, -35)])
+			g.append([fin + 0.2, Transform3D.IDENTITY])
+			h.append([fin + 0.2, "gun", "grip"])
+			return {"dur": fin + 0.25, "gun": g, "hand": h, "events": ev}
+	if base(nombre) != nombre:
+		return recarga(base(nombre))
 	match nombre:
 		"Rifle":
 			return {"dur": 2.5,
@@ -234,64 +379,8 @@ static func recarga(nombre: String) -> Dictionary:
 
 
 ## ---------------------------------------------------------------- modelos
-## piezas: [nombre, forma, tamaño, posición (rel. al Handle), giro XYZ en grados, color, material]
-const MODELOS := {
-	"Pistola": [
-		["Handle", "box", Vector3(0.211, 0.561, 0.330), Vector3(0, 0, 0), Vector3.ZERO, Color8(30, 30, 32), "Plastic"],
-		["Slide", "box", Vector3(0.238, 0.251, 0.990), Vector3(0, 0.363, -0.277), Vector3.ZERO, Color8(45, 46, 48), "Metal"],
-		["Guard", "box", Vector3(0.066, 0.079, 0.297), Vector3(0, 0.099, -0.297), Vector3.ZERO, Color8(30, 30, 32), "Plastic"],
-		["Mag", "box", Vector3(0.158, 0.330, 0.251), Vector3(0, -0.198, 0.013), Vector3.ZERO, Color8(25, 25, 25), "Metal"],
-	],
-	"Rifle": [
-		["Handle", "box", Vector3(0.147, 0.393, 0.221), Vector3(0, 0, 0), Vector3.ZERO, Color8(30, 30, 32), "Plastic"],
-		["Receiver", "box", Vector3(0.206, 0.344, 1.130), Vector3(0, 0.270, -0.270), Vector3.ZERO, Color8(45, 46, 48), "Metal"],
-		["Handguard", "box", Vector3(0.187, 0.226, 0.688), Vector3(0, 0.270, -1.179), Vector3.ZERO, Color8(60, 58, 50), "Plastic"],
-		["Barrel", "box", Vector3(0.079, 0.079, 0.688), Vector3(0, 0.305, -1.769), Vector3.ZERO, Color8(30, 30, 32), "Metal"],
-		["Stock", "box", Vector3(0.167, 0.369, 0.737), Vector3(0, 0.197, 0.639), Vector3.ZERO, Color8(30, 30, 32), "Plastic"],
-		["Mag", "box", Vector3(0.138, 0.516, 0.221), Vector3(0, -0.025, -0.516), Vector3(-12, 0, 0), Color8(30, 30, 32), "Metal"],
-		["Sight", "box", Vector3(0.069, 0.138, 0.246), Vector3(0, 0.501, -0.197), Vector3.ZERO, Color8(30, 30, 32), "Metal"],
-	],
-	"Machete": [
-		["Handle", "box", Vector3(0.150, 0.190, 0.550), Vector3(0, 0, 0), Vector3.ZERO, Color8(40, 30, 22), "Wood"],
-		["Blade", "box", Vector3(0.035, 0.275, 1.400), Vector3(0, 0.040, -0.975), Vector3.ZERO, Color8(165, 165, 160), "Metal"],
-		["Guard", "box", Vector3(0.170, 0.250, 0.060), Vector3(0, 0.025, -0.290), Vector3.ZERO, Color8(30, 30, 32), "Metal"],
-	],
-	"Bate": [
-		["Handle", "box", Vector3(0.180, 0.180, 0.780), Vector3(0, 0, 0), Vector3.ZERO, Color8(35, 30, 28), "Fabric"],
-		["Body", "cylx", Vector3(1.920, 0.300, 0.300), Vector3(0, 0, -1.320), Vector3(0, 90, 0), Color8(150, 110, 70), "Wood"],
-		["Knob", "box", Vector3(0.270, 0.270, 0.090), Vector3(0, 0, 0.420), Vector3.ZERO, Color8(150, 110, 70), "Wood"],
-		["Nail", "box", Vector3(0.030, 0.030, 0.540), Vector3(0, 0, -1.608), Vector3(70, 90, 0), Color8(120, 120, 120), "Metal"],
-		["Nail", "box", Vector3(0.030, 0.030, 0.540), Vector3(0, 0, -1.476), Vector3(140, 90, 0), Color8(120, 120, 120), "Metal"],
-		["Nail", "box", Vector3(0.030, 0.030, 0.540), Vector3(0, 0, -1.344), Vector3(-150, 90, 0), Color8(120, 120, 120), "Metal"],
-		["Nail", "box", Vector3(0.030, 0.030, 0.540), Vector3(0, 0, -1.212), Vector3(-80, 90, 0), Color8(120, 120, 120), "Metal"],
-		["Nail", "box", Vector3(0.030, 0.030, 0.540), Vector3(0, 0, -1.080), Vector3(-10, 90, 0), Color8(120, 120, 120), "Metal"],
-	],
-	"Cuchillo": [
-		["Handle", "box", Vector3(0.130, 0.170, 0.420), Vector3(0, 0, 0), Vector3.ZERO, Color8(28, 28, 28), "Rubber"],
-		["Pommel", "box", Vector3(0.150, 0.180, 0.060), Vector3(0, 0, 0.230), Vector3.ZERO, Color8(90, 90, 95), "Metal"],
-		["Guard", "box", Vector3(0.160, 0.300, 0.050), Vector3(0, 0.010, -0.235), Vector3.ZERO, Color8(90, 90, 95), "Metal"],
-		["Blade", "box", Vector3(0.030, 0.170, 0.580), Vector3(0, 0.010, -0.550), Vector3.ZERO, Color8(185, 188, 192), "Metal"],
-		["Tip", "box", Vector3(0.030, 0.170, 0.160), Vector3(0, -0.010, -0.900), Vector3(-26, 0, 0), Color8(185, 188, 192), "Metal"],
-		["Spine", "box", Vector3(0.035, 0.030, 0.500), Vector3(0, 0.100, -0.500), Vector3.ZERO, Color8(120, 122, 126), "Metal"],
-	],
-}
-
-## puntos de referencia (Attachments), relativos al Handle
-static func puntos(nombre: String) -> Dictionary:
-	match nombre:
-		"Pistola":
-			return {"SupportGrip": Vector3(-0.132, -0.033, 0.033), "Muzzle": Vector3(0, 0.363 + 0.033, -0.277 - 0.528),
-				"SlideRear": Vector3(0, 0.363 + 0.066, -0.277 + 0.363), "MagBottom": Vector3(0, -0.198 - 0.165, 0.013)}
-		"Rifle":
-			# Mag girada -12°: su base queda algo adelantada
-			var mag_b := Vector3(0, -0.025, -0.516) + Basis(Vector3.RIGHT, -12 * D2R) * Vector3(0, -0.246, 0)
-			return {"ChargingHandle": Vector3(-0.049, 0.270 + 0.221, -0.270 + 0.344), "LeftGrip": Vector3(0, 0.270 - 0.190, -0.270 - 0.510),
-				"Muzzle": Vector3(0, 0.305, -1.769 - 0.369), "MagBottom": mag_b}
-		"Bate":
-			return {"LeftGrip": Vector3(0, 0, 0.180)}
-	return {}
-
-
+## Los modelos (v0.4, unas 3 veces más piezas que los de Roblox) están en ModelosArmas
+## (scripts/armas/modelos_armas.gd). Aquí solo se construyen.
 static var _mats := {}
 
 
@@ -305,50 +394,123 @@ static func material(c: Color, tipo: String) -> StandardMaterial3D:
 		"Metal":
 			m.metallic = 0.8
 			m.roughness = 0.35
+		"Steel":
+			m.metallic = 0.9
+			m.roughness = 0.22
+		"Brass":
+			m.metallic = 0.95
+			m.roughness = 0.3
 		"Wood":
 			m.roughness = 0.8
-		"Fabric", "Rubber":
+		"Fabric", "Rubber", "Leather":
 			m.roughness = 0.95
+		"Polymer":
+			m.roughness = 0.62
+		"Glass":
+			m.metallic = 0.6
+			m.roughness = 0.05
+		"Glow":
+			m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			m.emission_enabled = true
+			m.emission = c
 		_:
 			m.roughness = 0.5
 	_mats[k] = m
 	return m
 
 
-## Construye el arma: un Node3D con el origen en el Handle, una malla por pieza y un Marker3D
-## por punto de referencia. Las piezas se llaman igual que en Roblox (Mag, Slide...).
+static func puntos(nombre: String) -> Dictionary:
+	return ModelosArmas.puntos(nombre)
+
+
+## Construye el arma: un Node3D con el origen en el Handle, una malla por pieza y un Marker3D por punto
+## de referencia. Las piezas con grupo (p. ej. "Mag", "Pump", "Bolt") van dentro de un Node3D con ese
+## nombre, para poder moverlas o soltarlas juntas (el cargador al recargar, la corredera de la escopeta).
+## Formas: box, cylz/cylx/cyly (cilindro; tam.x = diámetro, tam.z = largo), conoz (tam.y = diámetro del
+## extremo de atrás), hexz (barra hexagonal), esf (esfera, tam.x = diámetro).
 static func construir_modelo(nombre: String) -> Node3D:
 	var raiz := Node3D.new()
 	raiz.name = "Arma_" + nombre
 	raiz.set_meta("arma", nombre)
-	for d in MODELOS.get(nombre, []):
+	var grupos := {}
+	for d in ModelosArmas.piezas(nombre):
+		var padre: Node3D = raiz
+		var grupo: String = d[7] if d.size() > 7 else ""
+		if grupo != "":
+			if not grupos.has(grupo):
+				var gn := Node3D.new()
+				gn.name = grupo
+				raiz.add_child(gn)
+				grupos[grupo] = gn
+			padre = grupos[grupo]
 		var mi := MeshInstance3D.new()
 		mi.name = d[0]
 		var t := Transform3D(Rbx.angb(d[4].x * D2R, d[4].y * D2R, d[4].z * D2R), d[3])
-		if d[1] == "cylx":
-			var cm := CylinderMesh.new()
-			cm.top_radius = d[2].y * 0.5
-			cm.bottom_radius = d[2].y * 0.5
-			cm.height = d[2].x
-			cm.radial_segments = 14
-			mi.mesh = cm
-			t = t * Transform3D(Basis(Vector3(0, 0, 1), PI / 2), Vector3.ZERO)
-		else:
-			var bm := BoxMesh.new()
-			bm.size = d[2]
-			mi.mesh = bm
+		var tam: Vector3 = d[2]
+		match d[1]:
+			"cylz", "cylx", "cyly", "conoz", "hexz":
+				var cm := CylinderMesh.new()
+				cm.top_radius = tam.x * 0.5
+				cm.bottom_radius = (tam.y if d[1] == "conoz" else tam.x) * 0.5
+				cm.height = tam.z
+				cm.radial_segments = 6 if d[1] == "hexz" else (16 if tam.x > 0.12 else 10)
+				cm.rings = 1
+				mi.mesh = cm
+				match d[1]:
+					"cylz", "conoz", "hexz":
+						# el cilindro de Godot va a lo largo de Y: se tumba a lo largo de Z (la tapa "top" hacia -Z)
+						t = t * Transform3D(Basis(Vector3(1, 0, 0), -PI / 2), Vector3.ZERO)
+					"cylx":
+						t = t * Transform3D(Basis(Vector3(0, 0, 1), PI / 2), Vector3.ZERO)
+			"esf":
+				var sm := SphereMesh.new()
+				sm.radius = tam.x * 0.5
+				sm.height = tam.x
+				sm.radial_segments = 10
+				sm.rings = 5
+				mi.mesh = sm
+			_:
+				var bm := BoxMesh.new()
+				bm.size = tam
+				mi.mesh = bm
 		mi.transform = t
 		mi.material_override = material(d[5], d[6])
-		raiz.add_child(mi)
-	for k in puntos(nombre):
+		if tam.length() < 0.25:
+			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		padre.add_child(mi)
+	var pts := puntos(nombre)
+	for k in pts:
 		var mk := Marker3D.new()
-		mk.name = k
-		mk.position = puntos(nombre)[k]
-		raiz.add_child(mk)
-	# funda de cuero del cuchillo (solo en el cuerpo, ver Arsenal)
+		var ruta: String = k
+		var padre2: Node3D = raiz
+		if ruta.contains("/"):
+			var partes := ruta.split("/")
+			padre2 = grupos.get(partes[0], raiz)
+			ruta = partes[1]
+		mk.name = ruta
+		mk.position = pts[k]
+		padre2.add_child(mk)
 	return raiz
+
+
+## posición de un punto de referencia en el espacio del arma (aunque esté dentro de un grupo que se mueve)
+static func punto_local(mdl: Node3D, nombre: String) -> Vector3:
+	var n := mdl.find_child(nombre, true, false) as Node3D
+	if n == null:
+		return Vector3.ZERO
+	var p := n.position
+	var padre := n.get_parent() as Node3D
+	while padre != null and padre != mdl:
+		p = padre.transform * p
+		padre = padre.get_parent() as Node3D
+	return p
 
 
 static func es_larga_blanca(nombre: String) -> bool:
 	var w: Dictionary = WEAPONS.get(nombre, {})
 	return not w.is_empty() and w.Kind == "Melee" and w.Slot != "BlancaCorta"
+
+
+## todas las armas (para el menú de trucos y el armero del nivel)
+static func todas() -> Array:
+	return WEAPONS.keys()

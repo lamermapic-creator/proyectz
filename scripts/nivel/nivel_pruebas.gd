@@ -26,6 +26,22 @@ func _ready() -> void:
 	if not Engine.is_editor_hint() and not has_meta("sin_maniquies"):
 		_crear_maniquies()
 		_crear_zombis()
+	if not Engine.is_editor_hint() and not has_meta("sin_motos"):
+		_crear_motos()
+
+
+## motos (v0.4, scripts/vehiculos/moto.gd): una junto al inicio (mirando a -X, hacia campo abierto) y dos
+## en la zona de motos
+func _crear_motos() -> void:
+	var cont := Node3D.new()
+	cont.name = "Motos"
+	add_child(cont)
+	for d in [[Vector3(-8, 0, -4), 90.0], [Vector3(4, 0, -30), 0.0], [Vector3(8, 0, -30), 0.0]]:
+		var m := Moto.new()
+		m.name = "Moto_%d" % cont.get_child_count()
+		m.position = d[0] * M
+		m.rotation_degrees = Vector3(0, d[1], 0)
+		cont.add_child(m)
 
 
 ## zombis de prueba (solo al jugar; ver docs/RUIDO_Y_ZOMBIS.md). El director hornea la navegación
@@ -114,6 +130,11 @@ func _construir() -> void:
 	_caja(g, "Barrera_tiro", Vector3(26, 0.5, 0), Vector3(0.3, 1.0, 3.0), _mat(GRIS))
 	_caja(g, "Linea_tiro", Vector3(25, 0.005, 0), Vector3(0.1, 0.01, 12), _mat(Color(0.85, 0.75, 0.2)), false)
 
+	# Zona de motos (v0.4): dos rampas de salto (12° y 20°) y un muro para probar los choques
+	_rampa_salto(g, 12.0, 6.0, Vector3(5, 0, -48))
+	_rampa_salto(g, 20.0, 5.0, Vector3(15, 0, -48))
+	_caja(g, "Muro_choque", Vector3(30, 1.5, -62), Vector3(14, 3, 0.5), _mat(GRIS_OSCURO))
+
 	# Luz y ambiente
 	var sol := DirectionalLight3D.new()
 	sol.name = "Sol"
@@ -166,6 +187,18 @@ func _rampa(padre: Node, grados: float, base: Vector3) -> void:
 	cuerpo.position = (base + Vector3(0, alto * 0.5 - 0.1, -cos(a) * largo * 0.5)) * M
 	# Plataforma arriba
 	_caja(padre, "Plataforma_%d" % int(grados), base + Vector3(0, alto * 0.5, -cos(a) * largo - 1.5), Vector3(3, alto, 3), _mat(GRIS))
+
+
+## rampa para saltar con la moto (sube hacia -Z, sin plataforma arriba)
+func _rampa_salto(padre: Node, grados: float, largo: float, base: Vector3) -> void:
+	var a := deg_to_rad(grados)
+	var alto := sin(a) * largo
+	var cuerpo := _caja(padre, "RampaSalto_%d" % int(grados), Vector3.ZERO, Vector3(3.5, 0.3, largo), _mat(Color(0.75, 0.6, 0.3)))
+	cuerpo.rotation.x = a
+	cuerpo.position = (base + Vector3(0, alto * 0.5 - 0.1, -cos(a) * largo * 0.5)) * M
+	# el hueco de debajo, cerrado (para que no se meta nada debajo de la rampa)
+	var relleno := _caja(padre, "RampaSaltoBase_%d" % int(grados), base + Vector3(0, alto * 0.25, -cos(a) * largo * 0.8), Vector3(3.3, alto * 0.5, cos(a) * largo * 0.4), _mat(Color(0.5, 0.4, 0.25)))
+	relleno.name = "RampaSaltoBase_%d" % int(grados)
 
 
 func _tunel(padre: Node, nombre: String, pos: Vector3, alto_libre: float) -> void:

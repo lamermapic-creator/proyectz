@@ -55,6 +55,7 @@ const ZOOM_PASO := 0.1
 var zoom_cam := 1.0
 var apretado_cur := 0.0 # 0-1: sin sitio detrás de la cámara (espalda contra una pared)
 var cam_fov := 70.0
+var mira_tele := false # apuntando con la mira telescópica (francotirador)
 var fade_cur := 0.0
 var vaulting = null
 var air_vel = null
@@ -93,6 +94,7 @@ var L := {
 	"sprinting": false, "stance": 0, "stanceT": -10.0, "stanceFrom": 0, "proneP": 0.0,
 	"yaw": 0.0, "supine": false, "rollSide": 1.0, "lean": 0.0, "vault": null, "jumpPrep": null,
 	"knocked": false, "gettingUp": false, "hang": null, "restGap": null, "rested": false, "holster": null,
+	"moto": null, "levanta": null,
 }
 
 var _hud: Dictionary = {}
@@ -146,7 +148,7 @@ func _ready() -> void:
 ## ---------------------------------------------------------------- utilidades de física
 func raycast(desde: Vector3, dir: Vector3, excluir_extra: Array = []) -> Dictionary:
 	var q := PhysicsRayQueryParameters3D.create(desde, desde + dir, 1)
-	q.exclude = [get_rid()] + excluir_extra
+	q.exclude = _excluir() + excluir_extra
 	var r := get_world_3d().direct_space_state.intersect_ray(q)
 	if r.is_empty():
 		return {}
@@ -162,7 +164,7 @@ func _esfera_choca(p: Vector3, radio: float) -> bool:
 	q.shape = sh
 	q.transform = Transform3D(Basis.IDENTITY, p)
 	q.collision_mask = 1
-	q.exclude = [get_rid()]
+	q.exclude = _excluir()
 	return not get_world_3d().direct_space_state.intersect_shape(q, 1).is_empty()
 
 
@@ -175,7 +177,7 @@ func spherecast(desde: Vector3, radio: float, dir: Vector3) -> float:
 	q.transform = Transform3D(Basis.IDENTITY, desde)
 	q.motion = dir
 	q.collision_mask = 1
-	q.exclude = [get_rid()]
+	q.exclude = _excluir()
 	var space := get_world_3d().direct_space_state
 	if not space.intersect_shape(q, 1).is_empty():
 		return 0.0
@@ -187,6 +189,13 @@ func spherecast(desde: Vector3, radio: float, dir: Vector3) -> float:
 
 func root_cf() -> Transform3D:
 	return global_transform
+
+
+## lo que los rayos del jugador no ven: él mismo y la moto que conduce
+func _excluir() -> Array:
+	if moto != null and is_instance_valid(moto):
+		return [get_rid(), moto.get_rid()]
+	return [get_rid()]
 
 
 ## ---------------------------------------------------------------- HUD
@@ -217,7 +226,7 @@ func _crear_hud() -> void:
 	capa.add_child(aviso)
 	_hud["aviso"] = aviso
 	var ayuda := Label.new()
-	ayuda.text = "1-4: armas · Clic der: apuntar · Clic izq: disparar/golpear · R: recargar · X: apoyar arma · F: recoger · Shift: correr · C: agacharse · Z: cuerpo a tierra · Espacio: saltar/sortear · Q/E: asomarse · V: hombro · Rueda: acercar/alejar cámara · Colgado: A/D moverse (Shift: rápido), Espacio subir, S soltarse · Esc: pausa" + (" · F1: trucos · F4: estamina infinita · F5: balas infinitas · F6: ver ruido · F7: zombis sordos" if OS.is_debug_build() else "")
+	ayuda.text = "1-4: armas · Clic der: apuntar · Clic izq: disparar/golpear · R: recargar · X: apoyar arma · F: recoger / subir a la moto · Shift: correr · C: agacharse · Z: cuerpo a tierra · Espacio: saltar/sortear · Q/E: asomarse · V: hombro · Rueda: acercar/alejar cámara · Colgado: A/D moverse (Shift: rápido), Espacio subir, S soltarse · Esc: pausa" + (" · F1: trucos · F4: estamina infinita · F5: balas infinitas · F6: ver ruido · F7: zombis sordos" if OS.is_debug_build() else "")
 	ayuda.add_theme_font_size_override("font_size", 14)
 	ayuda.modulate = Color(1, 1, 1, 0.7)
 	ayuda.anchor_top = 1.0
@@ -225,6 +234,26 @@ func _crear_hud() -> void:
 	ayuda.offset_top = -32
 	ayuda.offset_left = 24
 	capa.add_child(ayuda)
+	_hud["ayuda"] = ayuda
+	_hud["ayuda_pie"] = ayuda.text
+	# velocímetro de la moto (abajo a la izquierda; solo en la moto)
+	var velo := Label.new()
+	velo.add_theme_font_size_override("font_size", 40)
+	velo.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
+	velo.add_theme_constant_override("outline_size", 6)
+	velo.anchor_left = 0.0
+	velo.anchor_right = 0.0
+	velo.anchor_top = 1.0
+	velo.anchor_bottom = 1.0
+	velo.offset_left = 28
+	velo.offset_right = 290
+	velo.offset_top = -150
+	velo.offset_bottom = -44
+	velo.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	velo.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	velo.visible = false
+	capa.add_child(velo)
+	_hud["velo"] = velo
 	Arsenal._ignorar_raton(capa)
 
 
@@ -239,6 +268,16 @@ func _update_hud() -> void:
 	_hud["estamina"].color = Color8(150, 90, 40) if exhausted else Color8(220, 190, 80)
 	if ahora() > _notif_hasta:
 		_hud["aviso"].text = ""
+	# en la moto: velocidad (km/h: 1 stud = 0.31 m), marcha y ayuda de los mandos
+	var velo: Label = _hud["velo"]
+	velo.visible = moto != null
+	if moto != null:
+		var kmh := absf(moto.velocidad()) * C.STUD * 3.6
+		var m_txt := "R" if moto.velocidad() < -0.5 else str(moto.marcha)
+		velo.text = "%d km/h\n%sª%s" % [roundi(kmh), m_txt, " · luces" if moto.luces else ""]
+		_hud["ayuda"].text = "W: gas · S: freno / marcha atrás · A/D: girar · Espacio: freno de mano (derrapar) · En el aire: Shift/Ctrl inclinarse · Clic der: apuntar · Clic izq: disparar/golpear · 1-4: armas de una mano · F: bajarse (en marcha, saltar) · L: luces · V: hombro · Esc: pausa"
+	else:
+		_hud["ayuda"].text = _hud["ayuda_pie"]
 
 
 ## ---------------------------------------------------------------- entrada
@@ -247,6 +286,9 @@ func _update_hud() -> void:
 func _input(e: InputEvent) -> void:
 	if e is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		var sens := (0.0017 if aiming else 0.0032) * Opciones.sensibilidad
+		# con la mira telescópica, el ratón va mucho más fino (proporcional al aumento)
+		if mira_tele:
+			sens *= cam_fov / 62.0
 		var rel: Vector2 = e.relative
 		if Opciones.invertir_y:
 			rel.y = -rel.y
@@ -265,8 +307,29 @@ func _unhandled_input(e: InputEvent) -> void:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	elif e is InputEventKey and not e.echo:
 		var k: int = e.physical_keycode
+		if e.pressed and moto != null:
+			# en la moto: F bajar, L luces, V hombro de la cámara (el resto lo lleva _paso_moto)
+			match k:
+				KEY_F:
+					bajar_moto()
+				KEY_L:
+					moto.luces = not moto.luces
+				KEY_V:
+					side = -side
+				KEY_ALT:
+					free_mouse = true
+					Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+			return
 		if e.pressed:
 			match k:
+				KEY_F:
+					# subir a una moto cercana (o levantarla si está tirada); si no, F es recoger (Arsenal)
+					var mc := moto_cercana()
+					if mc != null and levantando_moto == null:
+						if mc.caida:
+							levantar_moto(mc)
+						else:
+							subir_moto(mc)
 				KEY_C, KEY_CTRL:
 					if colgado != null:
 						soltar_cornisa()
@@ -916,10 +979,29 @@ func step_colgado(dt: float) -> void:
 func _process(dt: float) -> void:
 	dt = minf(dt, 0.1)
 	reloj += dt
+	if ragdoll != null:
+		# en el suelo / por los aires: el cuerpo lo lleva la física (Ragdoll); el jugador solo lo sigue
+		_paso_ragdoll(dt)
+		update_camera(dt)
+		_paso_salud(dt)
+		_update_hud()
+		return
+	if moto != null:
+		_paso_moto(dt)
+		if moto != null:
+			arsenal.actualizar(dt)
+			update_camera(dt)
+			_paso_salud(dt)
+			_update_hud()
+			return
 	move_direction = _leer_movimiento() if health > 0 else Vector3.ZERO
+	if levantando_moto != null:
+		_paso_levantar(dt)
 	_aproximar_escalada()
 	arsenal.dirigir()
 	update_character(dt)
+	if levantando_moto != null:
+		rotation.y = float(levantando_moto.giro) # mirando a la moto mientras la levanta
 	arsenal.actualizar(dt)
 	humanoid_step(dt)
 	update_camera(dt)
@@ -933,6 +1015,14 @@ var invencible := false # truco: no recibe daño
 
 ## pone al jugador de pie en "pies" (studs) mirando hacia "giro"; suelta la cornisa o el salto en curso
 func teletransportar(pies: Vector3, giro: float) -> void:
+	if ragdoll != null:
+		ragdoll.terminar(0.0)
+		ragdoll = null
+		L.knocked = false
+		collision_layer = 1
+		collision_mask = 1 | 4
+	if moto != null:
+		bajar_moto()
 	if colgado != null:
 		soltar_cornisa()
 	if vaulting != null:
@@ -972,6 +1062,18 @@ func recibir_danio(cantidad: float, desde: Vector3 = Vector3.ZERO) -> void:
 	var dir := Rbx.flat(global_position - desde)
 	if dir.length() > 0.01:
 		empuje += dir.normalized() * 6.0
+		_golpe_dir = dir.normalized()
+	if ragdoll != null and dir.length() > 0.01:
+		# ya en el suelo: el golpe sacude el cuerpo
+		ragdoll.golpe("UpperTorso", dir.normalized() * minf(cantidad * 0.3, 8.0) + Vector3(0, 1, 0))
+	elif health > 0.0 and moto == null and ragdoll == null and cantidad >= 15.0 and reloj - _ragdoll_t > DERRIBO_ESPERA \
+			and colgado == null and vaulting == null:
+		# un golpe fuerte puede tirarte al suelo (más fácil si ya estás muy herido)
+		var prob := 0.12 + (0.3 if health < max_health * 0.35 else 0.0) + clampf((cantidad - 25.0) / 40.0, 0.0, 0.5)
+		if randf() < prob:
+			var dd := dir.normalized() if dir.length() > 0.01 else -Rbx.look(root_cf())
+			ragdoll_iniciar(vel_real, {"comportamiento": "caer", "impulso": dd * (8.0 + cantidad * 0.15) + Vector3(0, 2.5, 0),
+				"pieza": "UpperTorso", "duracion": 1.4})
 	# el cuerpo encaja el golpe (muelles de impacto del animador)
 	var an := get_node_or_null("Animador") as Animador
 	if an and not an.S.is_empty():
@@ -983,6 +1085,11 @@ func recibir_danio(cantidad: float, desde: Vector3 = Vector3.ZERO) -> void:
 
 func _morir() -> void:
 	_muerte_t = reloj
+	if moto != null:
+		expulsar_moto(moto.vel_h * 0.6 + Vector3(0, 4, 0), 0.0, "muerte")
+	if levantando_moto != null:
+		levantando_moto = null
+		L.levanta = null
 	if colgado != null:
 		soltar_cornisa()
 	if vaulting != null:
@@ -995,6 +1102,12 @@ func _morir() -> void:
 	firing = false
 	aiming = false
 	arsenal.guardar_ya()
+	# muere con el ragdoll activo: se agarra la herida, le fallan las piernas, cae y se apaga
+	if ragdoll != null:
+		ragdoll.morir()
+	else:
+		ragdoll_iniciar(vel_real, {"comportamiento": "morir", "vivo": false, "duracion": -1.0,
+			"impulso": _golpe_dir * 9.0 + Vector3(0, 2, 0), "pieza": "UpperTorso"})
 	notify("HAS MUERTO")
 	_notif_hasta = reloj + MUERTE_REINICIO + 1.0
 
@@ -1006,11 +1119,7 @@ func _paso_salud(dt: float) -> void:
 		if health < max_health and reloj - _danio_t > C.PLAYER.RegenDelay:
 			health = minf(max_health, health + C.PLAYER.RegenRate * dt)
 		return
-	# cae de espaldas alrededor de los pies (el animador deja de animar al morir)
-	var k := Rbx.smooth((reloj - _muerte_t) / 0.9)
-	var r := Basis(Vector3.RIGHT, k * PI * 0.5)
-	var pies := Vector3(0, -center_cur, 0)
-	rig.transform = Transform3D(r, pies - r * pies + Vector3(0, 0.45 * k, 0))
+	# (el cuerpo cae con el ragdoll; ver _morir)
 	if reloj - _muerte_t > MUERTE_REINICIO and get_tree().current_scene and not _reiniciando:
 		_reiniciando = true
 		get_tree().reload_current_scene()
@@ -1387,6 +1496,9 @@ func humanoid_step(dt: float) -> void:
 	if estado == "Jumping" or estado == "Freefall":
 		en_suelo = false
 		v.y -= g * dt
+		_aire_t += dt
+		if _caida_ragdoll(v):
+			return
 		if estado == "Jumping" and v.y < 0:
 			_set_estado("Freefall")
 		if v.y <= 0:
@@ -1394,10 +1506,14 @@ func humanoid_step(dt: float) -> void:
 			if not gnd2.is_empty() and pos.y - gnd2.position.y <= center_cur + 0.05:
 				# aterrizaje: cuanto más fuerte el golpe, más lejos se oye
 				Ruido.emitir(self, gnd2.position, Ruido.radio_aterrizaje(-v.y), Ruido.ATERRIZAJE, self)
+				var golpe_pies := -v.y
 				_set_estado("Landed")
 				_set_estado("Running")
 				en_suelo = true
 				v.y = 0
+				_aterrizaje_fuerte(golpe_pies)
+	if estado != "Jumping" and estado != "Freefall":
+		_aire_t = 0.0
 	if _salto_pedido:
 		_salto_pedido = false
 		if en_suelo and jump_height > 0:
@@ -1436,6 +1552,8 @@ func humanoid_step(dt: float) -> void:
 func update_camera(dt: float) -> void:
 	var now_t := ahora()
 	var alive := health > 0
+	if _mouse_delta.length() > 0.0005:
+		_moto_raton_t = now_t
 	if alive and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		yaw -= _mouse_delta.x
 		pitch = clampf(pitch - _mouse_delta.y, -1.35, 1.2)
@@ -1452,10 +1570,20 @@ func update_camera(dt: float) -> void:
 			# apoyada de lado contra una pared se puede subir y bajar bastante más
 			pitch = clampf(pitch, -0.5, 0.6) if ra.get("lado", false) else clampf(pitch, -0.06, 0.3)
 	_mouse_delta = Vector2.ZERO
+	# en la moto: si no tocas el ratón, la cámara vuelve sola detrás de la moto (como en un vehículo)
+	var en_moto := moto != null
+	var v_moto := absf(moto.velocidad()) if en_moto else 0.0
+	if en_moto and alive and not aiming and not firing and now_t - _moto_raton_t > 0.9 and v_moto > 0.5:
+		# (entra poco a poco con la velocidad: sin saltos al arrancar o casi parado)
+		var k_c := (1.0 - exp(-dt * clampf(v_moto / 8.0, 1.6, 3.2))) * clampf((v_moto - 0.5) / 4.0, 0.0, 1.0)
+		yaw = yaw + Rbx.wrap_a(moto.rumbo - yaw) * k_c
+		pitch = Rbx.damp(pitch, -0.2, 1.5, dt)
 
 	# el hombro se desplaza de un lado a otro (no se teletransporta); al asomarse, la cámara
 	# pasa automáticamente al lado del ladeo
 	var want_side := side
+	if en_moto and not aiming:
+		want_side = 0.0 # en la moto la cámara va centrada detrás (al apuntar, al hombro)
 	if absf(lean_cur) > 0.15:
 		want_side = 1.0 if lean_cur > 0 else -1.0
 	side_cur += (want_side - side_cur) * minf(1, dt * 5)
@@ -1471,23 +1599,38 @@ func update_camera(dt: float) -> void:
 	# la cámara de carrera (más lejos, más campo de visión, balanceo) solo si de verdad se corre: chocando
 	# contra una pared con Shift pulsado el personaje se para y la cámara también
 	var vel_h := Vector2(vel_real.x, vel_real.z).length()
-	var sprinting: bool = walk_speed > C.PLAYER.WalkSpeed + 1 and vel_h > C.PLAYER.WalkSpeed + 1
+	var sprinting: bool = walk_speed > C.PLAYER.WalkSpeed + 1 and vel_h > C.PLAYER.WalkSpeed + 1 and not en_moto
 	var dist := 4.6 if aiming else (9.5 if sprinting else 8.5)
+	if en_moto:
+		# más lejos y más campo de visión cuanto más deprisa (sensación de velocidad)
+		dist = 6.0 if aiming else 8.5 + clampf(v_moto / 72.0, 0.0, 1.0) * 2.5
 	if stance == 2:
 		dist = 4.0 if aiming else 6.5
 	if not aiming:
 		dist *= zoom_cam
 	var fov := (62.0 if aiming else (76.0 if sprinting else 70.0)) + (Opciones.fov - 70.0)
+	if en_moto and not aiming:
+		fov += clampf((v_moto - 15.0) / 55.0, 0.0, 1.0) * 14.0
+	# mira telescópica (francotirador): aumento y el personaje no tapa la vista
+	var wcfg: Dictionary = arsenal.cfg()
+	mira_tele = aiming and wcfg.has("Scope") and arsenal.recargando <= 0.0 and arsenal.switching == null \
+		and arsenal.ahora() >= arsenal.draw_until and health > 0
+	if mira_tele:
+		fov = float(wcfg.Scope)
 	var shoulder := (2.1 if aiming else 2.4) * side_cur
 	var height := 0.55 if aiming else 0.4
+	if en_moto:
+		height = 0.95 if aiming else 1.3
+		if aiming:
+			shoulder = 2.7 * side_cur # más hacia el hombro: el cuerpo inclinado tapa menos
 	if absf(lean_cur) > 0.05:
 		shoulder *= 1 - absf(lean_cur) * 0.35
 
 	# seguimiento con peso: el punto que sigue la cámara va un pelín por detrás del personaje
 	if cam_pivot == null or (cam_pivot - pivot).length() > 15:
 		cam_pivot = pivot
-	var kH := 15.0
-	var kV := 9.0
+	var kH := 15.0 if not en_moto else 22.0
+	var kV := 9.0 if not en_moto else 12.0
 	# cayendo rápido: la cámara no se queda atrás (sigue al cuerpo) y mira un poco hacia abajo
 	var fall_v := maxf(0, -vel_real.y)
 	if fall_v > 12:
@@ -1571,6 +1714,12 @@ func update_camera(dt: float) -> void:
 		bob = Rbx.ang(sin(t * 9 * k) * 0.004 * k, 0, sin(t * 4.5 * k) * 0.006 * k)
 	# ladeo: la cámara se inclina un poco con el cuerpo
 	var roll := Rbx.ang(0, 0, -lean_cur * 0.08)
+	if en_moto:
+		# la cámara se inclina un poco con la moto en las curvas
+		_cam_roll_moto = Rbx.damp(_cam_roll_moto, moto.inclinacion * 0.12, 4.0, dt)
+		roll = Rbx.ang(0, 0, _cam_roll_moto)
+	else:
+		_cam_roll_moto = 0.0
 	camara.global_transform = Rbx.cfp(want) * Rbx.rot(rot) * shake_rot * bob * roll
 
 	# si la cámara queda pegada al cuerpo (paredes, rincones), el personaje se vuelve semitransparente
@@ -1586,3 +1735,459 @@ func update_camera(dt: float) -> void:
 	if fade_cur < 0.01:
 		fade_cur = 0
 	rig.set_fade(fade_cur)
+	# con la mira telescópica puesta (ya con aumento) el personaje no se dibuja
+	rig.visible = not (mira_tele and cam_fov < 30.0)
+
+
+## ---------------------------------------------------------------- MOTO (v0.4)
+## F junto a una moto: subir (o levantarla si está tirada). En la moto: W gas, S freno / marcha atrás,
+## A/D girar, Espacio freno de mano (derrape), Shift/Ctrl en el aire echar el cuerpo atrás/adelante,
+## F bajar (en marcha, salta), L luces, ratón para mirar (la cámara vuelve sola detrás de la moto).
+## Armas: solo las de una mano (Armas.en_moto): se dispara/golpea con la derecha, la izquierda
+## sigue en el manillar. Ver scripts/vehiculos/moto.gd.
+var moto: Moto = null
+var _moto_t0 := -9.0
+var _moto_desde := Transform3D.IDENTITY
+var _moto_raton_t := -9.0
+var _moto_v_prev := 0.0
+var _moto_acel := 0.0
+var _cam_roll_moto := 0.0
+var _moto_parada := true
+const MOTO_SUBIR_DUR := 0.55 # s que tarda en pasar la pierna y sentarse
+
+
+## la moto más cercana a la que se puede subir (o levantar), o null
+func moto_cercana() -> Moto:
+	var mejor: Moto = null
+	var dmin := Moto.ALCANCE_SUBIR
+	for m in get_tree().get_nodes_in_group(Moto.GRUPO):
+		var mm := m as Moto
+		if mm == null or mm.piloto != null:
+			continue
+		var d := (mm.global_position + Vector3(0, 2.0, 0) - global_position).length()
+		if d < dmin:
+			dmin = d
+			mejor = mm
+	return mejor
+
+
+func subir_moto(m: Moto) -> void:
+	if moto != null or m == null or not m.se_puede_subir():
+		return
+	if health <= 0 or colgado != null or vaulting != null or L.knocked or L.gettingUp:
+		return
+	if stance == 2 or prone_p > 0.01:
+		notify("Levántate primero")
+		return
+	if arsenal.recogiendo != null:
+		return
+	arsenal.ir_a_recoger = null
+	arsenal.end_rest()
+	# las armas de dos manos se guardan (en la moto una mano va en el manillar)
+	if arsenal.switching != null or (arsenal.armado() and not Armas.en_moto(arsenal.equipado)):
+		arsenal.guardar_ya()
+	if stance == 1:
+		set_stance(0)
+	lean_cur = 0.0
+	_subir_a = null
+	air_vel = null
+	_move_override = null
+	moto = m
+	m.subir(self)
+	collision_layer = 0
+	collision_mask = 0
+	_moto_t0 = reloj
+	_moto_desde = global_transform
+	_moto_v_prev = 0.0
+	_moto_raton_t = -9.0
+	velocity = Vector3.ZERO
+	L.moto = _estado_moto(0.0)
+	notify("MOTO: W gas · S freno · A/D girar · Espacio derrapar · F bajar · L luces")
+
+
+## mandos y cuerpo sobre el asiento (cada fotograma, en lugar de andar)
+func _paso_moto(dt: float) -> void:
+	var m := moto
+	if not is_instance_valid(m):
+		moto = null
+		_fin_moto(null)
+		return
+	var mandos := {}
+	if health > 0 and not free_mouse:
+		var g := 1.0 if Input.is_physical_key_pressed(KEY_W) else 0.0
+		var f := 1.0 if Input.is_physical_key_pressed(KEY_S) else 0.0
+		var giro := 0.0
+		if Input.is_physical_key_pressed(KEY_D): giro += 1.0
+		if Input.is_physical_key_pressed(KEY_A): giro -= 1.0
+		# mientras se sienta todavía no arranca
+		if reloj - _moto_t0 < MOTO_SUBIR_DUR * 0.8:
+			g = 0.0
+		mandos = {"gas": g, "freno": f, "giro": giro, "freno_mano": Input.is_physical_key_pressed(KEY_SPACE)}
+	m.paso(dt, mandos)
+	if moto == null:
+		return # se ha caído en este paso (expulsar_moto ya lo ha colocado)
+	# el cuerpo va sentado (al subir, pasa de donde estaba al asiento)
+	var objetivo := m.asiento_cf()
+	var k := Rbx.smooth((reloj - _moto_t0) / MOTO_SUBIR_DUR)
+	if k < 1.0:
+		var desde := _moto_desde
+		# pasa la pierna por encima: el cuerpo sube un poco a mitad
+		var alto := Transform3D(desde.basis, desde.origin + Vector3(0, sin(PI * k) * 0.6, 0))
+		global_transform = alto.interpolate_with(objetivo, k)
+	else:
+		global_transform = objetivo
+	var v := m.velocidad()
+	_moto_acel = Rbx.damp(_moto_acel, (v - _moto_v_prev) / maxf(dt, 1e-3), 6.0, dt)
+	_moto_v_prev = v
+	vel_real = m.vel_mundo()
+	velocity = Vector3.ZERO
+	en_suelo = true
+	empuje = Vector3.ZERO
+	cur_move = 0.0
+	move_direction = Vector3.ZERO
+	# estamina: sentado se recupera
+	if not estamina_infinita:
+		stamina = minf(C.PLAYER.StaminaMax, stamina + C.PLAYER.StaminaRegen * dt)
+	if stamina > C.PLAYER.StaminaMax * C.PLAYER.ExhaustRecover:
+		exhausted = false
+	# estado para el animador
+	L.pitch = pitch
+	L.aiming = aiming
+	L.firing = firing
+	L.stamina = stamina / C.PLAYER.StaminaMax
+	L.exhausted = false
+	L.fatigue = 0.0
+	L.sprinting = false
+	L.stance = 0
+	L.proneP = 0.0
+	L.yaw = yaw
+	L.lean = 0.0
+	L.moto = _estado_moto(k)
+
+
+## lo que el animador necesita saber de la moto (ver Animador, rama "EN LA MOTO")
+func _estado_moto(k_subir: float) -> Dictionary:
+	var m := moto
+	var cpo := m.cuerpo_cf()
+	var izq := -m.derecha()
+	# pie al suelo: con margen (si no, a ~2 studs/s el pie sube y baja sin parar)
+	var vm := absf(m.velocidad())
+	if m.en_aire or vm > 3.2:
+		_moto_parada = false
+	elif vm < 1.4:
+		_moto_parada = true
+	# donde apoyaría el pie izquierdo parado (en el suelo, junto a la moto)
+	var pie := m.global_position + izq * 1.25 + m.adelante() * 0.35
+	var gs := raycast(pie + Vector3(0, 3.0, 0), Vector3(0, -6.0, 0))
+	if not gs.is_empty():
+		pie = gs.position
+	return {
+		"cuerpo": cpo, "vel": m.velocidad(), "acel": _moto_acel, "incl": m.inclinacion,
+		"aire": m.en_aire, "direccion": m.direccion, "subir": k_subir,
+		"punoL": m.puno("L"), "punoR": m.puno("R"),
+		"estriboL": m.estribo("L"), "estriboR": m.estribo("R"),
+		"pie_suelo": pie, "parada": _moto_parada,
+	}
+
+
+## para la moto en el aire (Moto._cabeceo_aire): Shift = cuerpo atrás (morro arriba), Ctrl = adelante
+func _mando_inclinar() -> float:
+	var v := 0.0
+	if Input.is_physical_key_pressed(KEY_SHIFT): v += 1.0
+	if Input.is_physical_key_pressed(KEY_CTRL): v -= 1.0
+	return v
+
+
+## bajarse con F. Parado: se baja por la izquierda (o la derecha si hay pared). En marcha: salta
+func bajar_moto() -> void:
+	var m := moto
+	if m == null:
+		return
+	var vh := m.vel_h
+	var rapida := vh.length() >= 4.0 or m.en_aire
+	var asiento := m.asiento_cf().origin
+	moto = null
+	m.bajar()
+	_fin_moto(m)
+	var izq := -m.derecha()
+	var base := m.global_position
+	var lado := izq
+	if not raycast(base + Vector3(0, 2.5, 0), izq * 3.0).is_empty():
+		lado = -izq
+	if rapida:
+		# salta en marcha: sale por el lado con la inercia de la moto
+		global_position = asiento + lado * 1.0 + Vector3(0, 0.4, 0)
+		var vel := vh * 0.7 + lado * 6.0 + Vector3(0, 8.0, 0)
+		var vv := vh.length()
+		if vv > 14.0:
+			# demasiado deprisa para caer de pie: rueda por el suelo (los golpes hacen el daño)
+			ragdoll_iniciar(vel, {"comportamiento": "caer", "giro": Vector3.UP.cross(Rbx.flat(vh).normalized()) * 3.0, "duracion": 1.4})
+		else:
+			_lanzar(vel)
+		notify("¡Saltas de la moto!")
+		return
+	var sitio := base + lado * 2.5
+	var gs := raycast(sitio + Vector3(0, 5.0, 0), Vector3(0, -10.0, 0))
+	var y_pies := (gs.position as Vector3).y if not gs.is_empty() else base.y
+	global_position = Vector3(sitio.x, y_pies + center_cur + 0.1, sitio.z)
+	velocity = Vector3.ZERO
+	vel_real = Vector3.ZERO
+
+
+## la moto tira al piloto (choque, mal aterrizaje): sale despedido con "imp" y recibe "danio"
+func expulsar_moto(imp: Vector3, danio: float, motivo := "") -> void:
+	var m := moto
+	if m == null:
+		return
+	var asiento := m.asiento_cf().origin
+	moto = null
+	_fin_moto(m)
+	global_position = asiento + Vector3(0, 0.6, 0)
+	_soltado_t = reloj # sale despedido: no se agarra a ningún borde
+	shake = 1.0
+	# sale despedido con el ragdoll activo: vuela, se protege con los brazos y rueda por el suelo
+	var plano := Rbx.flat(imp)
+	var giro := Vector3.UP.cross(plano.normalized()) * clampf(plano.length() * 0.15, 1.0, 6.0) if plano.length() > 0.5 else Vector3.ZERO
+	ragdoll_iniciar(imp, {"comportamiento": "caer", "giro": giro, "duracion": 1.6})
+	if motivo != "muerte":
+		notify("¡Te has caído de la moto!")
+	if danio > 0.0:
+		recibir_danio(danio, global_position - Rbx.flat(imp))
+
+
+func _lanzar(vel: Vector3) -> void:
+	velocity = vel
+	vel_real = vel
+	en_suelo = false
+	_set_estado("Freefall")
+	air_vel = Rbx.flat(vel)
+	air_cap = maxf(3.0, (air_vel as Vector3).length())
+
+
+## de vuelta a pie: colisiones, cuerpo derecho y los pies vuelven a apoyarse
+func _fin_moto(m: Moto) -> void:
+	collision_layer = 1
+	collision_mask = 1 | 4
+	L.moto = null
+	var giro := m.rumbo if m != null else rotation.y
+	global_transform = Transform3D(Basis(Vector3.UP, giro), global_position)
+	_set_estado("Running")
+	stance = 0
+	var an := get_node_or_null("Animador") as Animador
+	if an:
+		an.replant = true
+		an.rel_aim = 0.0
+
+
+## ---------------------------------------------------------------- levantar una moto tirada (F junto a ella)
+## Se pone al lado del asiento mirando a la moto, se agacha, la agarra del manillar y del asiento y la
+## levanta empujando con las piernas (Animador: "levanta"). La moto acaba en la pata de cabra.
+var levantando_moto = null # {moto, t0, dir, giro}
+const LEVANTAR_AGARRE := 0.35 # s agachándose y agarrándola antes de empezar a subirla
+
+
+func levantar_moto(m: Moto) -> void:
+	if health <= 0 or colgado != null or vaulting != null or L.knocked or arsenal.recogiendo != null:
+		return
+	if stance == 2 or prone_p > 0.01:
+		notify("Levántate primero")
+		return
+	if stance == 1:
+		set_stance(0)
+	arsenal.ir_a_recoger = null
+	if arsenal.armado() or arsenal.switching != null:
+		arsenal.guardar_ya() # hacen falta las dos manos
+	arsenal.end_rest()
+	var dir := m.lado_arriba()
+	if dir.length() < 0.1:
+		dir = -m.derecha()
+	m.empezar_a_levantar()
+	levantando_moto = {"moto": m, "t0": reloj, "dir": dir, "giro": atan2(dir.x, dir.z)}
+	notify("Levantando la moto…")
+
+
+func _paso_levantar(dt: float) -> void:
+	var lm: Dictionary = levantando_moto
+	var m: Moto = lm.moto
+	move_direction = Vector3.ZERO
+	if not is_instance_valid(m) or health <= 0:
+		levantando_moto = null
+		L.levanta = null
+		return
+	var t := reloj - float(lm.t0)
+	var total := LEVANTAR_AGARRE + Moto.LEVANTAR_DUR
+	var k := clampf(t / total, 0.0, 1.0)
+	m.lev_k = clampf((t - LEVANTAR_AGARRE) / Moto.LEVANTAR_DUR, 0.0, 1.0)
+	# junto al asiento, por el lado hacia el que apunta la moto tumbada; se acerca mientras sube
+	var dir: Vector3 = lm.dir
+	var sitio := m.global_position + dir * lerpf(3.3, 2.4, Rbx.smooth(m.lev_k)) + m.adelante() * -0.2
+	var p := global_position
+	var obj := Vector3(sitio.x, p.y, sitio.z)
+	global_position = p.lerp(obj, 1.0 - exp(-8.0 * dt))
+	# manos: una en el puño de arriba del manillar, la otra en la parte de atrás del asiento
+	var puno_alto: Vector3 = m.puno("L").origin
+	if m.puno("R").origin.y > puno_alto.y:
+		puno_alto = m.puno("R").origin
+	var asiento: Vector3 = m.cuerpo_cf() * (ModeloMoto.ASIENTO + Vector3(0, 0.1, 0.55))
+	var der := Basis(Vector3.UP, float(lm.giro)).x
+	var mano_r := puno_alto if puno_alto.dot(der) > asiento.dot(der) else asiento
+	var mano_l := asiento if mano_r == puno_alto else puno_alto
+	L.levanta = {"k": k, "L": mano_l, "R": mano_r}
+	if k >= 1.0:
+		levantando_moto = null
+		L.levanta = null
+		if m.caida:
+			m.levantar()
+		notify("Moto levantada · [F] para subir")
+
+
+## ---------------------------------------------------------------- RAGDOLL (cuerpo con física, estilo GTA IV)
+## Se activa cuando la situación lo pide: salir despedido de la moto (o saltar de ella deprisa), caídas
+## largas (en el aire) o aterrizajes fuertes, golpes fuertes de zombi (a veces) y al morir. Los golpes del
+## cuerpo contra el suelo hacen daño (ZShared.FallDamage de Roblox). Al pararse, se levanta solo: boca
+## abajo se apoya en las manos y se pone de pie; boca arriba primero rueda (Animador.levantarse).
+var ragdoll: Ragdoll = null
+var _ragdoll_t := -99.0
+var _golpe_dir := Vector3.ZERO
+var _aire_t := 0.0
+const DERRIBO_ESPERA := 6.0 # s mínimos entre dos derribos por golpes
+
+
+func ragdoll_iniciar(vel: Vector3, op := {}) -> void:
+	if ragdoll != null:
+		if op.has("impulso"):
+			ragdoll.golpe(op.get("pieza", "UpperTorso"), op.impulso)
+		return
+	if colgado != null:
+		soltar_cornisa()
+	if vaulting != null:
+		vaulting = null
+		L.vault = null
+	if levantando_moto != null:
+		levantando_moto = null
+		L.levanta = null
+	_subir_a = null
+	arsenal.ir_a_recoger = null
+	arsenal.recogiendo = null
+	if arsenal.armado() or arsenal.switching != null:
+		arsenal.guardar_ya()
+	arsenal.end_rest()
+	firing = false
+	aiming = false
+	L.knocked = true
+	collision_layer = 0
+	collision_mask = 0
+	stance = 0
+	prone_p = 0.0
+	getup_p = 0.0
+	supine = false
+	lean_cur = 0.0
+	velocity = Vector3.ZERO
+	_ragdoll_t = reloj
+	var an := get_node_or_null("Animador") as Animador
+	if an:
+		an.levantarse = null
+	ragdoll = Ragdoll.iniciar(self, rig, vel, op)
+	ragdoll.impacto.connect(_ragdoll_impacto)
+	ragdoll.recuperado.connect(_ragdoll_levantarse)
+
+
+func _paso_ragdoll(dt: float) -> void:
+	move_direction = Vector3.ZERO
+	if ragdoll.cuerpos.is_empty():
+		return
+	var pel := ragdoll.pelvis()
+	# el "jugador" (cámara, zombis que lo buscan) va con la pelvis
+	global_position = pel
+	vel_real = ragdoll.torso().linear_velocity
+	en_suelo = false
+	if not estamina_infinita:
+		stamina = minf(C.PLAYER.StaminaMax, stamina + C.PLAYER.StaminaRegen * 0.5 * dt)
+
+
+## daño por velocidad de impacto (curva de Roblox: leve al principio, se dispara en caídas altas)
+static func danio_caida(vel: float) -> float:
+	var F: Dictionary = C.FALL
+	if vel <= F.SafeSpeed:
+		return 0.0
+	return pow((vel - F.SafeSpeed) / (F.LethalSpeed - F.SafeSpeed), 1.5) * 110.0
+
+
+## el cuerpo (en ragdoll) se estrella contra algo
+func _ragdoll_impacto(vel: float) -> void:
+	if ragdoll == null or health <= 0.0:
+		return
+	# caer de cabeza o de espaldas hace más daño que caer de pie
+	var arriba := ragdoll.torso().global_transform.basis.y.y
+	var mult := 1.5 if arriba < -0.25 else (1.15 if arriba < 0.45 else 1.0)
+	var dmg := danio_caida(vel) * mult
+	if dmg > 0.5:
+		recibir_danio(dmg, ragdoll.pelvis() - Vector3(0, 2.5, 0))
+	if health <= 0.0:
+		return
+	var sev := clampf(dmg / 70.0, 0.0, 1.0)
+	if dmg > 0.5 or ragdoll.comportamiento == "caida_libre":
+		ragdoll.gravedad = sev
+		ragdoll.duracion = ragdoll._t + 1.1 + sev * 3.4
+		if ragdoll.comportamiento in ["caer", "caida_libre"]:
+			ragdoll.cambiar("impacto")
+
+
+## caída larga: pierde el equilibrio en el aire y cae como un muñeco (ZClient de Roblox: RagdollSpeed,
+## RagdollMinAir, RagdollGround). Devuelve true si ha empezado el ragdoll
+func _caida_ragdoll(v: Vector3) -> bool:
+	var F: Dictionary = C.FALL
+	if ragdoll != null or moto != null or colgado != null or vaulting != null or health <= 0.0:
+		return false
+	if _aire_t > float(F.RagdollMinAir) and -v.y > float(F.RagdollSpeed):
+		var g := raycast(global_position, Vector3(0, -90, 0))
+		if g.is_empty() or float(g.distance) - center_cur > float(F.RagdollGround):
+			ragdoll_iniciar(Vector3(vel_real.x, v.y, vel_real.z), {"comportamiento": "caida_libre", "duracion": 30.0,
+				"giro": Vector3(randf() - 0.5, (randf() - 0.5) * 0.4, randf() - 0.5) * 1.5})
+			return true
+	return false
+
+
+## aterrizó de pie: si fue muy fuerte hace daño y, pasado un punto, las piernas no aguantan y se desploma
+func _aterrizaje_fuerte(vel: float) -> void:
+	var F: Dictionary = C.FALL
+	if vel <= float(F.SafeSpeed) or health <= 0.0:
+		return
+	var dmg := danio_caida(vel)
+	recibir_danio(dmg, global_position + Vector3(0, -3, 0))
+	if health > 0.0 and vel >= float(F.KnockSpeed) and ragdoll == null:
+		var sev := clampf(dmg / 70.0, 0.0, 1.0)
+		ragdoll_iniciar(Rbx.flat(vel_real) * 0.3 + Vector3(0, -2, 0), {"comportamiento": "impacto", "gravedad": sev,
+			"duracion": 1.1 + sev * 3.4})
+
+
+## el cuerpo se ha parado: se levanta donde quedó, mirando hacia donde apunta la cabeza
+func _ragdoll_levantarse() -> void:
+	if ragdoll == null or health <= 0.0:
+		return
+	var arriba := ragdoll.boca_arriba()
+	var dir := ragdoll.direccion_cabeza()
+	var pel := ragdoll.pelvis()
+	var gs := raycast(pel + Vector3(0, 3.0, 0), Vector3(0, -12.0, 0))
+	var gy: float = (gs.position as Vector3).y if not gs.is_empty() else pel.y - 0.5
+	var giro := atan2(-dir.x, -dir.z)
+	global_transform = Transform3D(Basis(Vector3.UP, giro), Vector3(pel.x, gy + float(C.STANCE[2].Center), pel.z))
+	velocity = Vector3.ZERO
+	vel_real = Vector3.ZERO
+	collision_layer = 1
+	collision_mask = 1 | 4
+	L.knocked = false
+	stance = 0
+	prone_p = 0.0
+	supine = false
+	# levantarse lleva lo que la animación de cuerpo a tierra (y antes, rodar si está boca arriba)
+	getup_p = 1.0 + (0.75 * 1.15 / float(C.PLAYER.ProneTime) if arriba else 0.0)
+	center_cur = float(C.STANCE[2].Center)
+	_set_estado("Running")
+	en_suelo = true
+	var an := get_node_or_null("Animador") as Animador
+	if an:
+		an.levantarse = {"t0": an.ahora(), "arriba": arriba}
+		an.replant = true
+	ragdoll.terminar(0.35)
+	ragdoll = null

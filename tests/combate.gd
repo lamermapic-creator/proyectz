@@ -1,6 +1,7 @@
 extends Node
 ## Prueba de combate: equipar, disparar a un muñeco, recargar, golpear con armas blancas.
 ## --modo=<pistola|rifle|cuchillo|bate|machete|cambiar|apoyar> ; con --video la cámara sigue al jugador.
+## --arma=<Nombre> (cualquier arma de Armas.WEAPONS, p. ej. Escopeta): se la da y la prueba igual.
 var j: Jugador
 var t := 0.0
 var modo := "pistola"
@@ -8,11 +9,16 @@ var cam: Camera3D
 var hecho := {}
 var M := 1.0 / 0.31
 var man: Maniqui
+var arma_x := ""
 
 func _ready() -> void:
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--modo="):
 			modo = a.split("=")[1]
+		if a.begins_with("--arma="):
+			arma_x = a.split("=")[1]
+			var w: Dictionary = Armas.WEAPONS[arma_x]
+			modo = ("rifle" if w.Auto else "pistola") if w.Kind == "Gun" else "cuchillo"
 	j = get_parent().get_node("Jugador")
 	if OS.get_cmdline_user_args().has("--video") and not OS.get_cmdline_user_args().has("--camjuego"):
 		cam = Camera3D.new()
@@ -45,6 +51,12 @@ func _process(dt: float) -> void:
 	t += dt
 	var a := j.arsenal
 	var slot: int = {"pistola": 0, "rifle": 1, "cuchillo": 2, "bate": 3, "machete": 3, "cambiar": 0, "apoyar": 1}[modo]
+	if arma_x != "":
+		if _una("dar", t > 0.2):
+			a.dar_arma(arma_x, false)
+		for k in Armas.SLOTS.size():
+			if Armas.SLOTS[k].Id == Armas.WEAPONS[arma_x].Slot:
+				slot = k
 	if modo == "machete" and _una("coger", t > 0.2):
 		# el machete está en el suelo cerca del inicio: se lleva al jugador
 		var s = a.suelo[0]

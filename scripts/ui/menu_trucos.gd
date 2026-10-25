@@ -20,6 +20,7 @@ const ZONAS := [
 	["Cornisa en L (colgarse)", Vector3(-35, 0, -22.6), 0.0],
 	["Zona de tiro (muñecos)", Vector3(24.2, 0, 0), -90.0],
 	["Tras la pared (zombi)", Vector3(-4, 0, 24), 180.0],
+	["Zona de motos (rampas y muro)", Vector3(6, 0, -27), 0.0],
 ]
 
 var J: Jugador
@@ -84,21 +85,33 @@ func _ready() -> void:
 		_refrescar())
 	_accion(g2, "Estamina al máximo", func():
 		J.stamina = float(ZConfig.PLAYER.StaminaMax))
+	# ragdoll (v0.4): probar las caídas con física
+	_accion(g2, "Derribarme (empujón)", func():
+		cerrar()
+		J.ragdoll_iniciar(J.vel_real, {"comportamiento": "caer", "impulso": -Rbx.look(J.root_cf()) * 12.0 + Vector3(0, 3, 0),
+			"pieza": "UpperTorso", "duracion": 1.4}))
+	_accion(g2, "Caer desde 12 m", func():
+		cerrar()
+		J.global_position += Vector3(0, 12.0 * M, 0))
 
 	_seccion(v, "Armas")
 	var g3 := _rejilla(v)
 	_accion(g3, "Munición al máximo", _municion_max)
 	_accion(g3, "Recargar el arma", func():
 		J.arsenal.reload())
-	_accion(g3, "Machete al suelo", func(): _arma_al_suelo("Machete"))
-	_accion(g3, "Pistola al suelo", func(): _arma_al_suelo("Pistola"))
-	_accion(g3, "Rifle al suelo", func(): _arma_al_suelo("Rifle"))
-	_accion(g3, "Cuchillo al suelo", func(): _arma_al_suelo("Cuchillo"))
+	# todas las armas (v0.4: revólver, subfusil, escopeta, francotirador, hacha y palanca incluidas)
+	for nombre in Armas.todas():
+		var n_arma: String = nombre
+		_accion(g3, "%s al suelo" % n_arma, func(): _arma_al_suelo(n_arma))
 
 	_seccion(v, "Mundo")
 	var g4 := _rejilla(v)
 	_accion(g4, "Revivir los muñecos", _revivir_munecos)
 	_accion(g4, "Zombi delante", _zombi_delante)
+	_accion(g4, "Moto delante", _moto_delante)
+	_accion(g4, "Levantar las motos caídas", func():
+		for m in J.get_tree().get_nodes_in_group(Moto.GRUPO):
+			(m as Moto).levantar())
 
 	_seccion(v, "Ir a…")
 	var g5 := _rejilla(v)
@@ -237,3 +250,25 @@ func _zombi_delante() -> void:
 	# mirando hacia el jugador
 	var giro := rad_to_deg(J.yaw) + 180.0
 	dz.call("crear_zombi", pies, giro)
+
+
+## una moto nueva unos pasos por delante, mirando hacia donde mira el jugador
+func _moto_delante() -> void:
+	if J.moto != null:
+		J.notify("Bájate primero de la moto")
+		return
+	var nivel := J.get_parent()
+	var cont := nivel.get_node_or_null("Motos")
+	if cont == null:
+		cont = Node3D.new()
+		cont.name = "Motos"
+		nivel.add_child(cont)
+	var fwd := Rbx.flat(Rbx.look(J.camara.global_transform)).normalized()
+	var p := J.global_position + fwd * 7.0
+	var g := J.raycast(p + Vector3(0, 6, 0), Vector3(0, -60, 0))
+	var pies: Vector3 = g.position if not g.is_empty() else p - Vector3(0, J.center_cur, 0)
+	var m := Moto.new()
+	m.name = "Moto_%d" % cont.get_child_count()
+	m.position = pies - (cont as Node3D).global_position
+	m.rotation = Vector3(0, J.yaw + PI / 2, 0) # de lado: se ve entera y se sube por la izquierda
+	cont.add_child(m)

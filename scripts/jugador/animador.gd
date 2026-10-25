@@ -103,6 +103,9 @@ var hand_mag: Node3D = null
 var tool_shown := true
 var was_hang := false
 var swing_arma := 0.0
+var levantarse = null     # tras un ragdoll: {t0, arriba} (ver Jugador._ragdoll_levantarse)
+var pie_moto := 0.0      # en la moto, parado: el pie izquierdo baja al suelo (0-1)
+var moto_de_pie := 0.0   # en la moto, en el aire: se levanta sobre los estribos
 var correr_libre := false
 
 
@@ -726,12 +729,12 @@ static func _muestra_golpe(keys: Array, t: float) -> Transform3D:
 
 ## Empuja el arma (sin girarla) lo justo para que ningún punto de la hoja o el mango quede dentro de
 ## las piezas del propio cuerpo. Se prueban puntos a lo largo del arma (-Z del Handle).
-const LARGO_ARMA := {"Bate": 2.28, "Machete": 1.67, "Cuchillo": 0.98}
+const LARGO_ARMA := {"Bate": 2.28, "Machete": 1.67, "Cuchillo": 0.98, "Hacha": 2.0, "Palanca": 1.75}
 
 
 func _arma_fuera_del_cuerpo(h: Transform3D, tool: String, pelvis_cf: Transform3D, chest_cf: Transform3D) -> Transform3D:
 	var largo: float = LARGO_ARMA.get(tool, 1.0)
-	var grosor := 0.16 if tool == "Bate" else 0.1
+	var grosor := 0.16 if tool in ["Bate", "Hacha"] else 0.1
 	var cajas := [
 		[chest_cf, (P.UpperTorso as Node3D).get_meta("size")],
 		[fk(chest_cf, M.Neck), (P.Head as Node3D).get_meta("size")],
@@ -768,18 +771,63 @@ func _arma_fuera_del_cuerpo(h: Transform3D, tool: String, pelvis_cf: Transform3D
 
 ## ---------------------------------------------------------------- eventos de armas (Anim.Fire)
 func on_shot(w: String) -> void:
-	if w == "Rifle":
-		S.kick.impulse(3.2)
-		S.kickRot.impulse(0.9)
-	else:
-		S.kick.impulse(4.5)
-		S.kickRot.impulse(1.8)
+	match w:
+		"Rifle":
+			S.kick.impulse(3.2)
+			S.kickRot.impulse(0.9)
+		"Subfusil":
+			S.kick.impulse(2.4)
+			S.kickRot.impulse(0.7)
+		"Escopeta":
+			S.kick.impulse(7.0)
+			S.kickRot.impulse(2.6)
+		"Francotirador":
+			S.kick.impulse(6.5)
+			S.kickRot.impulse(2.2)
+		"Revolver":
+			S.kick.impulse(6.0)
+			S.kickRot.impulse(2.6)
+		_:
+			S.kick.impulse(4.5)
+			S.kickRot.impulse(1.8)
 	last_shot_t = ahora()
+	# escopeta: corredera atrás y adelante; fusil: cerrojo (los dos, un instante después del disparo)
+	var wc: Dictionary = Armas.WEAPONS.get(w, {})
+	if wc.get("Pump", false) or wc.get("Bolt", false):
+		accion_t = ahora() + 0.12
 
 
-func on_reload(w: String, dur: float) -> void:
-	if not Armas.recarga(w).is_empty():
-		reload_st = {"w": w, "start": ahora(), "dur": dur, "fired": {}}
+## corredera de la escopeta y cerrojo del fusil (se animan moviendo el grupo "Pump" o "Bolt")
+var accion_t := -9.0
+const ACCION_DUR := 0.42
+
+
+func _paso_accion(mdl: Node3D) -> void:
+	if mdl == null:
+		return
+	var u := (ahora() - accion_t) / ACCION_DUR
+	var k := sin(PI * clampf(u, 0.0, 1.0)) if u >= 0.0 and u <= 1.0 else 0.0
+	var pump := mdl.get_node_or_null("Pump") as Node3D
+	if pump:
+		pump.position = Vector3(0, 0, 0.38 * k)
+	var bolt := mdl.get_node_or_null("Bolt") as Node3D
+	if bolt:
+		# el cerrojo gira hacia arriba y luego va hacia atrás
+		var giro := clampf(k * 2.0, 0.0, 1.0)
+		var atras := clampf(k * 2.0 - 1.0, 0.0, 1.0)
+		var piv := Vector3(0, 0.36, 0.12)
+		bolt.transform = Transform3D(Basis.IDENTITY, piv + Vector3(0, 0, 0.32 * atras)) * Transform3D(Basis(Vector3(0, 0, 1), 1.1 * giro), -piv)
+	if u >= 0.0 and u <= 1.0 and not get_meta("accion_snd", false) and u > 0.15:
+		set_meta("accion_snd", true)
+		Efectos.sonido(jugador, "Pump" if pump else "Bolt", jugador.global_position, 0.7, 1.0)
+	elif u > 1.0:
+		set_meta("accion_snd", false)
+
+
+func on_reload(w: String, dur: float, cartuchos := 0) -> void:
+	var R := Armas.recarga(w, cartuchos)
+	if not R.is_empty():
+		reload_st = {"w": w, "start": ahora(), "dur": dur, "fired": {}, "R": R}
 
 
 func on_melee(w: String) -> void:
@@ -802,23 +850,60 @@ func cancelar_recarga() -> void:
 ## el cargador: se suelta (cae al suelo), sale uno nuevo de la bolsa en la mano y se mete
 func _mag_visual(ev: String) -> void:
 	var mdl: Node3D = jugador.arsenal.modelo_mano
+	# escopeta: un cartucho en la mano izquierda y dentro
+	if ev.begins_with("shell_new"):
+		if hand_mag:
+			hand_mag.queue_free()
+		var sh := Node3D.new()
+		var a := MeshInstance3D.new()
+		var cm := CylinderMesh.new()
+		cm.top_radius = 0.033
+		cm.bottom_radius = 0.033
+		cm.height = 0.19
+		a.mesh = cm
+		a.material_override = Armas.material(ModelosArmas.ROJO, "Polymer")
+		sh.add_child(a)
+		var b := MeshInstance3D.new()
+		var cm2 := CylinderMesh.new()
+		cm2.top_radius = 0.035
+		cm2.bottom_radius = 0.035
+		cm2.height = 0.045
+		b.mesh = cm2
+		b.position = Vector3(0, -0.11, 0)
+		b.material_override = Armas.material(ModelosArmas.LATON, "Brass")
+		sh.add_child(b)
+		(P.LeftHand as Node3D).add_child(sh)
+		sh.position = Vector3(0, -0.28, 0)
+		sh.rotation = Vector3(PI / 2, 0, 0)
+		hand_mag = sh
+		return
+	if ev.begins_with("shell_in"):
+		if hand_mag:
+			hand_mag.queue_free()
+			hand_mag = null
+		Efectos.sonido(jugador, "Shell", jugador.global_position, 0.6, 0.9 + randf() * 0.2)
+		jugador.arsenal.cartucho_metido()
+		return
 	if mdl == null or not mdl.has_node("Mag"):
 		return
-	var mag := mdl.get_node("Mag") as MeshInstance3D
+	var mag := mdl.get_node("Mag") as Node3D
 	if ev == "drop":
 		mag.visible = false
+		# el cargador (todas sus piezas) cae al suelo con física
 		var rb := RigidBody3D.new()
 		rb.collision_layer = 0
 		rb.collision_mask = 1
+		var copia := mag.duplicate() as Node3D
+		copia.visible = true
+		copia.transform = Transform3D.IDENTITY
+		rb.add_child(copia)
+		var caja := _caja_de(mag)
 		var cs := CollisionShape3D.new()
 		var bx := BoxShape3D.new()
-		bx.size = (mag.mesh as BoxMesh).size
+		bx.size = caja.size.max(Vector3(0.05, 0.05, 0.05))
 		cs.shape = bx
+		cs.position = caja.get_center()
 		rb.add_child(cs)
-		var mi := MeshInstance3D.new()
-		mi.mesh = mag.mesh
-		mi.material_override = mag.material_override
-		rb.add_child(mi)
 		rb.mass = 0.3
 		jugador.get_parent().add_child(rb)
 		rb.global_transform = mag.global_transform
@@ -827,17 +912,33 @@ func _mag_visual(ev: String) -> void:
 	elif ev == "new":
 		if hand_mag:
 			hand_mag.queue_free()
-		var m2 := MeshInstance3D.new()
-		m2.mesh = mag.mesh
-		m2.material_override = mag.material_override
+		var m2 := mag.duplicate() as Node3D
+		m2.visible = true
 		(P.LeftHand as Node3D).add_child(m2)
-		m2.position = Vector3(0, -0.3, 0)
+		# que el centro del cargador quede en la palma
+		var c2 := _caja_de(mag).get_center()
+		m2.transform = Transform3D(mag.transform.basis, Vector3(0, -0.3, 0) - mag.transform.basis * c2)
 		hand_mag = m2
 	elif ev == "insert":
 		if hand_mag:
 			hand_mag.queue_free()
 			hand_mag = null
 		mag.visible = true
+
+
+## caja que envuelve las mallas de un grupo (en el espacio del grupo)
+static func _caja_de(n: Node3D) -> AABB:
+	var caja := AABB()
+	var primera := true
+	for c in n.get_children():
+		if c is MeshInstance3D:
+			var bb: AABB = (c as MeshInstance3D).transform * (c as MeshInstance3D).get_aabb()
+			if primera:
+				caja = bb
+				primera = false
+			else:
+				caja = caja.merge(bb)
+	return caja
 
 
 ## ---------------------------------------------------------------- actualización por fotograma
@@ -861,6 +962,11 @@ func update_rig(dt: float) -> void:
 	var vel := J.vel_real
 	var lv := Rbx.vec_to_obj(root_cf, vel)
 	var speed := Vector3(vel.x, 0, vel.z).length()
+	# EN LA MOTO (L.moto, ver Jugador._estado_moto): el cuerpo va sentado; la velocidad es de la moto,
+	# no de las piernas (nada de pasos, carrera ni balanceos de andar)
+	var mt = L.get("moto")
+	if mt != null:
+		speed = 0.0
 	acc = acc.lerp((lv - prev_lv) / maxf(dt, 1e-3), minf(1, dt * 6))
 	prev_lv = lv
 	var dyaw := Rbx.wrap_a(yaw - prev_yaw)
@@ -875,6 +981,8 @@ func update_rig(dt: float) -> void:
 		var gy_r: float = ground(root_cf.origin)[0]
 		if root_cf.origin.y - gy_r > J.hip_height + J.root_size.y / 2 + 0.7:
 			grounded = false
+	if mt != null:
+		grounded = false
 
 	var pitch: float = L.pitch
 	var aiming: bool = L.aiming
@@ -891,6 +999,18 @@ func update_rig(dt: float) -> void:
 	# postura: 0 de pie, 1 agachado, 2 cuerpo a tierra (con mezcla suave entre ellas)
 	var stance: int = L.stance
 	prone = L.proneP
+	# LEVANTARSE tras un ragdoll: parte de la postura del suelo. Boca abajo: manos al suelo, una rodilla
+	# debajo y de pie (las fases de cuerpo a tierra al revés). Boca arriba: antes rueda hasta quedar boca abajo
+	var gu_rueda := -1.0
+	if levantarse != null:
+		var gt: float = now - float(levantarse.t0)
+		var rueda_d := 0.75 if levantarse.arriba else 0.0
+		if gt < rueda_d + float(C.PLAYER.ProneTime):
+			var gp := 1.0 if gt < rueda_d else 1.0 - (gt - rueda_d) / float(C.PLAYER.ProneTime)
+			prone = maxf(prone, gp)
+			gu_rueda = (1.0 - gt / rueda_d) if (rueda_d > 0.0 and gt < rueda_d) else 0.0
+		else:
+			levantarse = null
 	crouch_b = Rbx.damp(crouch_b, 1.0 if stance == 1 else 0.0, 4, dt)
 	var pb := prone
 	# ladeo (asomarse): -1 izquierda, 1 derecha
@@ -970,7 +1090,43 @@ func update_rig(dt: float) -> void:
 	var pelvis_cf: Transform3D
 	var Mr: RigPersonaje.Motor = M.Root
 
-	if pb > 0.001:
+	if mt != null:
+		## -------- EN LA MOTO: sentado, el torso inclinado hacia el manillar, los pies en los estribos.
+		## Parado, el pie izquierdo baja al suelo; deprisa, se agacha sobre el depósito; en las curvas se
+		## mete un poco más que la moto con la cabeza recta; en el aire se levanta sobre los estribos.
+		var cpo: Transform3D = mt.cuerpo
+		var v_m: float = mt.vel
+		var tuck := clampf((absf(v_m) - 25.0) / 40.0, 0.0, 1.0)
+		var k_sub: float = mt.subir
+		pie_moto = Rbx.damp(pie_moto, 1.0 if (mt.parada and k_sub >= 1.0) else 0.0, 5.0, dt)
+		moto_de_pie = Rbx.damp(moto_de_pie, 0.35 if mt.aire else 0.0, 6.0, dt)
+		var incl_m: float = mt.incl
+		Mr.transform = Rbx.cf(0, moto_de_pie, 0.05) * Rbx.ang(-0.16 - 0.08 * tuck, 0, incl_m * 0.18 - pie_moto * 0.06)
+		smooth_j(Mr, "Root", 12, dt)
+		pelvis_cf = fk(root_cf, Mr)
+		var acel_m: float = mt.acel
+		waistP -= 0.42 + 0.3 * tuck - clampf(acel_m * 0.006, -0.15, 0.12) - moto_de_pie * 0.4
+		neckP += 0.36 + 0.3 * tuck
+		waistR -= incl_m * 0.12
+		neckR -= incl_m * 0.5
+		neckY += float(mt.direccion) * 0.7
+		for s in ["L", "R"]:
+			var sgn := -1.0 if s == "L" else 1.0
+			var t_m: Vector3 = (mt["estribo" + s] as Vector3) + cpo.basis.y * 0.2
+			if s == "L" and pie_moto > 0.01:
+				t_m = t_m.lerp((mt.pie_suelo as Vector3) + Vector3(0, 0.32, 0), Rbx.smooth(pie_moto))
+			if k_sub < 1.0:
+				# al subir: la pierna derecha pasa por encima del asiento; la izquierda viene del suelo
+				var arco := sin(PI * clampf(k_sub / 0.85, 0.0, 1.0))
+				if s == "R":
+					t_m += cpo.basis.y * (arco * 1.7) + cpo.basis.z * (arco * 1.1) + cpo.basis.x * (arco * 0.4)
+				else:
+					t_m = t_m.lerp((mt.pie_suelo as Vector3) + Vector3(0, 0.32, 0), 1.0 - Rbx.smooth(k_sub))
+			leg_targets[s] = t_m
+			leg_targets["pole" + s] = (pelvis_cf * Rbx.cf(sgn * (hip_x + 0.9), 0.4, -5.0)).origin
+		pelvis_drop = 0.0
+		replant = true
+	elif pb > 0.001:
 		## -------- CUERPO A TIERRA, por fases (como una persona real):
 		##  0.00-0.40  se agacha y apoya una rodilla en el suelo
 		##  0.30-0.70  se inclina hacia delante y pone las manos en el suelo
@@ -997,6 +1153,8 @@ func update_rig(dt: float) -> void:
 		if pb < 0.98:
 			sup = false
 		roll_t = roll_t + clampf((1.0 if sup else 0.0) - roll_t, -dt / 0.75, dt / 0.75)
+		if gu_rueda >= 0.0:
+			roll_t = gu_rueda
 		var rlv := Rbx.smooth(roll_t)
 		if roll_t <= 0.001 or roll_t >= 0.999:
 			roll_side = L.rollSide
@@ -1177,6 +1335,15 @@ func update_rig(dt: float) -> void:
 			pelvis_pitch -= 0.12 * rec_sq
 			neckP -= 0.15 * rec_sq
 		waistP -= 0.22 * prep_k
+		# levantar una moto tirada: se agacha con la espalda recta y sube empujando con las piernas
+		var lev = L.get("levanta")
+		if lev != null:
+			var lk: float = lev.k
+			var sq_l := Rbx.smooth(lk / 0.2) * (1.0 - 0.75 * Rbx.smooth((lk - 0.22) / 0.78))
+			crouch += 1.3 * sq_l
+			waistP -= 0.7 * sq_l + 0.12
+			pelvis_pitch -= 0.18 * sq_l
+			neckP += 0.35 * sq_l
 		if not grounded and va == null:
 			# SALTO por fases: despegue (la pierna de impulso aún estirada), vuelo (carrera: rodilla
 			# delantera arriba y pierna trasera atrás; parado: las dos rodillas recogidas) y
@@ -1398,7 +1565,10 @@ func update_rig(dt: float) -> void:
 					target += Vector3(n.x, 0, n.z).normalized() * maxf(pen, 0.3)
 					res = solve(Lg, pelvis_cf, target, pole)
 			var lower: Transform3D = res[1]
-			if not grounded:
+			if mt != null:
+				# en la moto: pie plano sobre el estribo (o el suelo), en la dirección de la moto
+				set_end(Lg, lower, Transform3D((mt.cuerpo as Transform3D).basis, target) * Rbx.ang(0.15, 0, 0))
+			elif not grounded:
 				set_end(Lg, lower, Rbx.cfp(target) * yaw_cf * Rbx.ang(-0.3, 0, 0))
 			else:
 				set_end(Lg, lower, foot_cf(f, yaw))
@@ -1418,7 +1588,17 @@ func update_rig(dt: float) -> void:
 	var chest_yaw_base := Rbx.cfp(chest_cf.origin) * yaw_cf
 	# tumbado: el torso y la cabeza cubren la diferencia hasta que el cuerpo termina de pivotar
 	var prone_aim := pb > 0.5
-	rel_aim = Rbx.damp(rel_aim, 0, 3.5 if prone_aim else 5.0, dt)
+	# en la moto se apunta (y se golpea) girando el torso hacia la cámara: la moto sigue recta
+	var rel_obj := 0.0
+	if mt != null:
+		var tool_m: String = J.arsenal.equipado
+		var golpeando: bool = melee_st != null and now - float(melee_st.start) < float(melee_st.dur)
+		if tool_m != "" and (aiming or L.firing or now - last_shot_t < 0.8 or golpeando):
+			rel_obj = clampf(Rbx.wrap_a(float(L.yaw) - yaw), -2.7, 2.3)
+	rel_aim = Rbx.damp(rel_aim, rel_obj, 9.0 if mt != null else (3.5 if prone_aim else 5.0), dt)
+	if mt != null:
+		waistY += rel_aim * 0.45
+		neckY += rel_aim * 0.3
 	# (siempre que esté tumbado, no solo al apuntar: si no, al volver a ponerse boca abajo sin apuntar
 	# el arma y los brazos se quedaban mirando hacia los pies, hacia atrás)
 	if prone_aim:
@@ -1435,7 +1615,7 @@ func update_rig(dt: float) -> void:
 	## ------------------------------------------------ brazos
 	# pared o estructura justo delante del pecho: los brazos no se balancean hacia ella
 	var wall_ahead := {}
-	if pb < 0.5:
+	if pb < 0.5 and mt == null:
 		var lk0 := Rbx.look(root_cf)
 		var wh := J.raycast(chest_cf.origin, lk0 * 3.4)
 		if not wh.is_empty() and absf(wh.normal.y) < 0.6:
@@ -1538,6 +1718,7 @@ func update_rig(dt: float) -> void:
 	if tool != "":
 		var mdl: Node3D = J.arsenal.modelo_mano
 		var kind: String = w_cfg.Kind
+		_paso_accion(mdl)
 		var target_rel: Transform3D
 		var speed_pose := 7.0
 		var firing_recent := now - last_shot_t < 0.8
@@ -1553,7 +1734,7 @@ func update_rig(dt: float) -> void:
 		var reloading: bool = reload_st != null and now - float(reload_st.start) < float(reload_st.dur)
 		if kind == "Gun":
 			if reloading:
-				var R := Armas.recarga(reload_st.w)
+				var R: Dictionary = reload_st.R
 				var t: float = (now - float(reload_st.start)) * (float(R.dur) / float(reload_st.dur))
 				target_rel = Armas.pose(tool, "RELOAD") * Rbx.sample(R.gun, t)
 				for e in R.events:
@@ -1641,14 +1822,14 @@ func update_rig(dt: float) -> void:
 		# andando, el brazo del arma también se balancea (desde el hombro) en vez de ir tieso;
 		# las armas largas a dos manos (rifle, bate) mucho menos
 		var libre_k := 0.0 if (aiming or firing_recent or reloading or mel_t >= 0.0 or pb > 0.5) else 1.0
-		var amp := 0.06 if tool == "Rifle" else (0.12 if tool == "Bate" else 0.32)
+		var amp := 0.06 if Armas.base(tool) == "Rifle" and tool != "Subfusil" else (0.12 if Armas.dos_manos(tool) else 0.32)
 		swing_arma = Rbx.damp(swing_arma, float(arm_a.R) * amp * libre_k, 12, dt)
 		var piv := Vector3(0.92, 0.51, 0)
 		var swing_t := Rbx.cfp(piv) * Rbx.ang(swing_arma, 0, 0) * Rbx.cfp(-piv)
 		var handle_cf: Transform3D = aim_base * Rbx.cfp(sway) * swing_t * pose_rel * Rbx.cf(0, 0, kick * 0.06) * Rbx.ang(kick_rot * 0.05, 0, 0)
 		# CORRER con pistola o arma blanca de una mano: el brazo bombea como al correr sin arma
 		# (la muñeca inclina el arma hacia abajo); el bate va al hombro
-		correr_libre = sprinting and grounded and va == null and pb < 0.5 and libre_k > 0.5 and tool in ["Pistola", "Cuchillo", "Machete"] \
+		correr_libre = sprinting and grounded and va == null and pb < 0.5 and libre_k > 0.5 and (Armas.base(tool) == "Pistola" or (kind == "Melee" and not Armas.dos_manos(tool))) \
 			and draw_st == null and L.holster == null
 
 		# SACAR / GUARDAR el arma: la mano va a por ella donde se lleva (muslo, espalda, pecho,
@@ -1733,18 +1914,20 @@ func update_rig(dt: float) -> void:
 
 		# mano izquierda
 		var support: Node3D = null
+		var support_pos := Vector3.ZERO
 		if mdl:
-			support = mdl.get_node_or_null("LeftGrip")
+			support = mdl.find_child("LeftGrip", true, false) as Node3D
 			if support == null:
 				support = mdl.get_node_or_null("SupportGrip")
+			if support:
+				support_pos = Armas.punto_local(mdl, support.name)
 		var pole_l := (aim_base * Rbx.cf(-1.7, -0.7, -0.3)).origin if pb > 0.5 else (chest_yaw_base * Rbx.cf(-1.9, -1.5, 0.3)).origin
 		if reloading and mdl:
-			var R2 := Armas.recarga(reload_st.w)
+			var R2: Dictionary = reload_st.R
 			var t4: float = (now - float(reload_st.start)) * (float(R2.dur) / float(reload_st.dur))
-			var refs := {"grip": support.position if support else Vector3.ZERO}
+			var refs := {"grip": support_pos}
 			for k in [["mag", "MagBottom"], ["charge", "ChargingHandle"], ["slide", "SlideRear"]]:
-				var nd := mdl.get_node_or_null(k[1])
-				refs[k[0]] = (nd as Node3D).position if nd else Vector3.ZERO
+				refs[k[0]] = Armas.punto_local(mdl, k[1])
 			var pouch: Vector3 = (P.LowerTorso as Node3D).global_transform * Vector3(-0.25, 0.1, -0.5)
 			var H: Array = R2.hand
 			var to_w := func(kf: Array) -> Vector3:
@@ -1759,13 +1942,14 @@ func update_rig(dt: float) -> void:
 			hand_ik.L = {"pos": pos, "pole": pole_l, "w": 1.0}
 			left_free = false
 		elif support:
-			var one_handed: bool = (tool == "Pistola" and sprinting and not aiming) or (kind == "Melee" and tool != "Bate")
+			var one_handed: bool = (Armas.base(tool) == "Pistola" and sprinting and not aiming) or (kind == "Melee" and not Armas.dos_manos(tool)) \
+				or mt != null # en la moto la izquierda va en el manillar
 			if not one_handed:
-				hand_ik.L = {"pos": handle_cf * support.position, "pole": pole_l, "w": support_w}
+				hand_ik.L = {"pos": handle_cf * support_pos, "pole": pole_l, "w": support_w}
 				left_free = false
 		waistP += (pc * 0.35 if kind == "Gun" else pc * 0.12)
 		neckP += (pc * 0.35 if kind == "Gun" else pc * 0.2)
-		if tool == "Rifle" and not sprinting:
+		if Armas.base(tool) == "Rifle" and not sprinting:
 			blade = Rbx.damp(blade, 0.4 if aiming else 0.25, 8, dt)
 			if aiming:
 				neckP -= 0.12
@@ -1776,6 +1960,25 @@ func update_rig(dt: float) -> void:
 		neckY += blade * 0.9
 	waistP += melee_lean
 	J.arsenal.mostrar(tool_shown)
+
+	## ------------------------------------------------ en la moto: manos en los puños del manillar
+	if mt != null:
+		var cpo2: Transform3D = mt.cuerpo
+		var r_m := cpo2.basis.x
+		var d_m := (-cpo2.basis.z - cpo2.basis.y * 0.6).normalized()
+		var rot_m := Basis(r_m, -d_m, r_m.cross(-d_m)).orthonormalized()
+		var w_m := clampf((float(mt.subir) - 0.35) / 0.5, 0.0, 1.0)
+		for s in ["L", "R"]:
+			if (s == "L" and not left_free) or (s == "R" and (not right_free or hand_ik.has("R"))):
+				continue
+			var sgn := -1.0 if s == "L" else 1.0
+			var pt: Transform3D = mt["puno" + s]
+			hand_ik[s] = {"pos": pt.origin + cpo2.basis.y * 0.04, "pole": (chest_cf * Rbx.cf(sgn * 1.7, -1.0, 0.9)).origin,
+				"w": w_m, "rot": rot_m, "rot_w": 1.0}
+			if s == "L":
+				left_free = false
+			else:
+				right_free = false
 
 	## ------------------------------------------------ sortear: manos sobre el obstáculo
 	if va != null:
@@ -1917,6 +2120,16 @@ func update_rig(dt: float) -> void:
 			left_free = false
 			waistP -= 0.1
 
+	## ------------------------------------------------ levantar una moto: manos en el manillar y el asiento
+	var lev2 = L.get("levanta")
+	if lev2 != null and mt == null:
+		var w_lev := Rbx.smooth(float(lev2.k) / 0.15)
+		for s in ["L", "R"]:
+			var sgn := -1.0 if s == "L" else 1.0
+			hand_ik[s] = {"pos": lev2[s], "pole": (chest_yaw_base * Rbx.cf(sgn * 1.8, -0.8, 0.5)).origin, "w": w_lev}
+		left_free = false
+		right_free = false
+
 	## ------------------------------------------------ recoger: la mano va al objeto, lo coge y lo guarda
 	if rec != null and rec_p >= 0.0 and va == null:
 		var s_m: String = rec.mano
@@ -1998,7 +2211,7 @@ func update_rig(dt: float) -> void:
 		Lm.fin.transform = Transform3D.IDENTITY
 		if s == "R" and correr_libre:
 			# muñeca: la pistola apunta al suelo por delante; el cuchillo y el machete, hacia abajo
-			var wp := -1.15 if tool == "Pistola" else (-0.6 if tool == "Cuchillo" else -1.25)
+			var wp := -1.15 if Armas.base(tool) == "Pistola" else (-0.6 if tool == "Cuchillo" else -1.25)
 			Lm.fin.transform = Rbx.ang(wp, 0, 0)
 		if hand_ik.has(s):
 			var ik: Dictionary = hand_ik[s]

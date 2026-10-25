@@ -29,6 +29,11 @@ var _caida_dir := Vector3.FORWARD
 var _hasta := 0.0             # cuándo se levanta
 var _stagger_hasta := 0.0
 var _flash := 0.0
+## ragdoll (v0.4): derribado o "muerto" cae con física y se levanta donde quedó
+var _ragdoll: Ragdoll = null
+var _impulso_golpe := Vector3.ZERO
+var _pieza_golpe := "UpperTorso"
+var _sale_ragdoll_t := -1.0
 var S := {
 	"hitPitch": Rbx.Muelle.new(2.4, 0.3), "hitYaw": Rbx.Muelle.new(2.4, 0.3), "hitHead": Rbx.Muelle.new(3.2, 0.3),
 	"hitRoll": Rbx.Muelle.new(2.0, 0.35),
@@ -115,8 +120,12 @@ func _actualizar_etiqueta() -> void:
 
 ## Daño (como ZShared.DamageZombie): devuelve true si lo ha matado
 func recibir_danio(cantidad: float, pieza: String, impulso: Vector3) -> bool:
+	if _ragdoll != null and is_instance_valid(_ragdoll):
+		_ragdoll.golpe(pieza, impulso * 0.15)
 	if not vivo():
 		return false
+	_impulso_golpe = impulso
+	_pieza_golpe = pieza
 	health = maxf(0.0, health - cantidad)
 	_flash = 1.0
 	var killed := health <= 0
@@ -151,6 +160,7 @@ func empujar(vel: Vector3, dur: float) -> void:
 func derribar(impulso: Vector3, dur: float) -> void:
 	if _estado != "pie":
 		return
+	_impulso_golpe = impulso
 	_estado = "caido"
 	_caer(Rbx.flat(impulso).normalized(), dur)
 
@@ -160,11 +170,34 @@ func _caer(dir: Vector3, dur: float) -> void:
 	_hasta = _t + dur
 	cuerpo.process_mode = Node.PROCESS_MODE_DISABLED
 	(cuerpo.get_child(0) as CollisionShape3D).disabled = true
+	if _ragdoll == null or not is_instance_valid(_ragdoll):
+		var imp := _impulso_golpe * 0.3
+		if imp.length() > 16.0:
+			imp = imp.normalized() * 16.0
+		if imp.length() < 2.0:
+			imp = _caida_dir * 4.0 + Vector3(0, 1.0, 0)
+		_ragdoll = Ragdoll.iniciar(self, rig, _vel, {"comportamiento": "caer" if _estado != "muerto" else "morir",
+			"vivo": true, "impulso": imp, "pieza": _pieza_golpe, "duracion": dur})
+		_ragdoll.recuperado.connect(_ragdoll_levantar)
 
 
 func _process(dt: float) -> void:
 	dt = minf(dt, 0.1)
 	_t += dt
+	if _ragdoll != null or _sale_ragdoll_t >= 0.0:
+		# en el suelo con física (o mezclando al levantarse): de pie en su sitio y sin la caída de antes
+		if _sale_ragdoll_t >= 0.0 and _t > _sale_ragdoll_t:
+			_sale_ragdoll_t = -1.0
+			_ragdoll = null
+			_estado = "pie"
+			(cuerpo.get_child(0) as CollisionShape3D).disabled = false
+			cuerpo.process_mode = Node.PROCESS_MODE_INHERIT
+			_actualizar_etiqueta()
+		global_transform = Transform3D(Basis(Vector3.UP, _yaw0), _base)
+		_caida = 0.0
+		_pose(dt, 0.0)
+		etiqueta.visible = _ragdoll == null or _sale_ragdoll_t >= 0.0
+		return
 	# levantarse
 	if _estado != "pie" and _t > _hasta and _caida >= 0.999:
 		if _estado == "muerto":
@@ -225,3 +258,26 @@ static func mult_pieza(pieza: String, w: Dictionary) -> float:
 	if pieza in PARTES_LIMB:
 		return w.get("LimbMult", 1.0)
 	return 1.0
+
+
+## se ha parado: se levanta donde quedó el cuerpo (el "muerto" vuelve con la vida llena)
+func _ragdoll_levantar() -> void:
+	if _ragdoll == null:
+		return
+	if _t < _hasta:
+		_ragdoll._avisado = false
+		_ragdoll.duracion = _ragdoll._t + (_hasta - _t)
+		return
+	var pel := _ragdoll.pelvis()
+	var dir := _ragdoll.direccion_cabeza()
+	var q := PhysicsRayQueryParameters3D.create(pel + Vector3(0, 3, 0), pel + Vector3(0, -12, 0), 1)
+	var r := get_world_3d().direct_space_state.intersect_ray(q)
+	var gy: float = (r.position as Vector3).y if not r.is_empty() else pel.y - 0.5
+	_base = Vector3(pel.x, gy, pel.z)
+	_yaw0 = atan2(-dir.x, -dir.z)
+	_vel = Vector3.ZERO
+	if _estado == "muerto":
+		health = max_health
+	global_transform = Transform3D(Basis(Vector3.UP, _yaw0), _base)
+	_ragdoll.terminar(0.8)
+	_sale_ragdoll_t = _t + 0.8

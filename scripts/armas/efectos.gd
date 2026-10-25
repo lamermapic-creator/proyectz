@@ -211,6 +211,13 @@ static func _generar(tipo: String) -> AudioStreamWAV:
 		"Ricochet": dur = 0.25
 		"Hit": dur = 0.05
 		"Draw": dur = 0.2
+		"Revolver": dur = 0.55
+		"SMG": dur = 0.3
+		"Shotgun": dur = 0.7
+		"Sniper": dur = 0.9
+		"Pump": dur = 0.35
+		"Bolt": dur = 0.4
+		"Shell": dur = 0.12
 	var n := int(dur * RATE)
 	var out := PackedFloat32Array()
 	out.resize(n)
@@ -221,13 +228,34 @@ static func _generar(tipo: String) -> AudioStreamWAV:
 		var ruido := rng.randf_range(-1.0, 1.0)
 		var v := 0.0
 		match tipo:
-			"Pistol", "Rifle":
+			"Pistol", "Rifle", "SMG":
 				# estampido: ruido con caída rápida + golpe grave + cola de eco
-				var k := 38.0 if tipo == "Pistol" else 48.0
-				lp += (ruido - lp) * 0.45
-				v = lp * exp(-t * k) * 1.3 + sin(TAU * 95.0 * t) * exp(-t * 22.0) * 0.9
+				var k := 38.0 if tipo == "Pistol" else (48.0 if tipo == "Rifle" else 60.0)
+				lp += (ruido - lp) * (0.45 if tipo != "SMG" else 0.6)
+				v = lp * exp(-t * k) * 1.3 + sin(TAU * (95.0 if tipo != "SMG" else 120.0) * t) * exp(-t * 22.0) * 0.9
 				lp2 += (ruido - lp2) * 0.08
 				v += lp2 * exp(-t * 7.0) * 0.35
+			"Revolver", "Shotgun", "Sniper":
+				# estampidos más graves y largos (más pólvora): golpe bajo fuerte y eco largo
+				var k2 := {"Revolver": 26.0, "Shotgun": 18.0, "Sniper": 14.0}[tipo] as float
+				var f := {"Revolver": 75.0, "Shotgun": 55.0, "Sniper": 48.0}[tipo] as float
+				lp += (ruido - lp) * 0.35
+				v = lp * exp(-t * k2) * 1.4 + sin(TAU * f * t) * exp(-t * 12.0) * 1.1
+				lp2 += (ruido - lp2) * 0.05
+				v += lp2 * exp(-t * 3.5) * 0.45
+			"Pump":
+				# corredera: dos golpes metálicos (atrás y adelante)
+				for c0 in [0.0, 0.2]:
+					var tc: float = t - c0
+					if tc >= 0:
+						v += (sin(TAU * 900.0 * tc) * 0.4 + ruido * 0.6) * exp(-tc * 60.0) * 0.8
+			"Bolt":
+				for c0 in [0.0, 0.12, 0.26, 0.34]:
+					var tc2: float = t - c0
+					if tc2 >= 0:
+						v += (sin(TAU * 1500.0 * tc2) * 0.5 + ruido * 0.5) * exp(-tc2 * 110.0) * 0.6
+			"Shell":
+				v = (sin(TAU * 1100.0 * t) * 0.4 + ruido * 0.4) * exp(-t * 70.0)
 			"Empty", "Hit":
 				v = sin(TAU * 2400.0 * t) * exp(-t * 160.0) * 0.6
 			"Reload":

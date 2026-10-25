@@ -13,6 +13,132 @@ en el mismo commit que el cambio. Formato:
 
 ---
 
+## 2026-10-25 (3) · KangooG · Claude — moto: cuestas empinadas, gravedad y cabeceo de verdad
+**Qué:**
+- **Rampas empinadas a toda velocidad:** antes la moto tomaba una cuesta de más de ~49° por una pared, se estrellaba y el
+  piloto salía hacia atrás. Ahora cada rueda es un cilindro que tantea el suelo donde va a estar: ve la cuesta antes de
+  llegar y la sube (hasta ~60°), rueda por encima de un bordillo bajo y se para contra lo que es más alto (bloque,
+  pared), igual a 30 que a 144 FPS.
+- **Se frenaba sola:** al rozar una cuesta con el cuerpo, el choque le quitaba velocidad. Ahora las cuestas no son
+  choques y la velocidad va a lo largo de la cuesta: al empezar una rampa no se pierde nada; la gravedad frena cuesta
+  arriba y acelera cuesta abajo.
+- **Cabeceo y gravedad:** la moto es un cuerpo rígido (altura + cabeceo) apoyado en las dos ruedas. El morro sigue la
+  cuesta exactamente (sin bailar en las de 50°); una cresta la lanza si va deprisa; con una sola rueda pivota sobre ella
+  (el peso baja la otra). En el aire el morro sigue la trayectoria (sube al despegar, baja al caer) y Shift/Ctrl lo
+  mueven. Al tocar el suelo, lo que va contra él es el golpe y lo que va a lo largo, la velocidad que sigue. La
+  suspensión se come los golpes de un canto (no sale disparada por un bordillo).
+- **El piloto sale hacia delante** (por encima del manillar), nunca hacia atrás.
+**Archivos:** `scripts/vehiculos/moto.gd` (`_mover`, `_apoyo_rueda`, `_tantear`, `_cabeceo_aire`, `_aterrizar`; fuera
+`_paso_vertical`/`_suelo_en`), `scripts/jugador/jugador.gd` (`vel_real` = `Moto.vel_mundo()`), `tests/moto.gd` (pruebas
+nuevas `empinada --angulo=15|30|50` y `bajada`; `choque` comprueba que sale hacia delante), `tests/ejecutar_pruebas.sh`.
+**Cómo probarlo:** F1 → "Zona de motos" o ir a las rampas de 15/30/50° junto a los bloques, y subirlas a fondo; bajar la
+de 30° desde la plataforma.
+
+## 2026-10-25 (2) · KangooG · Claude — ragdoll "tipo GTA 4" y caída física de la moto
+**Qué:**
+- **Ragdoll activo** (`scripts/fisica/ragdoll.gd`, clase `Ragdoll`): al activarse, cada pieza del rig R15 pasa a ser
+  un cuerpo rígido unido por articulaciones con límites de un cuerpo real (rodillas y codos solo doblan hacia un lado).
+  Además tiene "músculos" (fuerzas que llevan cada articulación a una pose) que cambian según la situación, como el
+  Euphoria de GTA 4: **caer** (brazos por delante para frenar la caída, cabeza protegida), **caída libre** (agita
+  brazos y piernas), **impacto** (se encoge y queda tirado), **retorcerse** (en el suelo, se agarra la parte herida),
+  **morir** (espasmos y se apaga) e **inerte**. Golpes y disparos mientras está en el suelo lo sacuden.
+- **Cuándo salta (jugador):** al salir despedido de la moto (choque o al bajarse a más de ~50 km/h), caídas desde
+  altura (en el aire con velocidad de caída alta; el daño se calcula al golpear el suelo, más en cabeza/espalda),
+  aterrizajes muy fuertes, golpes fuertes de zombi (probabilidad según el daño y la vida que te queda, como mucho
+  1 vez cada 6 s) y al morir. Se levanta solo con animación (rueda si quedó boca arriba).
+- **Zombis y muñecos:** derribos, atropellos y golpes de bate/hacha los tiran en ragdoll con el impulso del golpe;
+  se levantan solos al acabar; al morir se quedan en ragdoll y se congelan quietos para no gastar CPU (máx. 12 activos).
+- **Moto que cae de verdad:** al caer pasa a ser un cuerpo rígido (masa, centro de masas alto, ruedas, manillar y
+  estribos con forma propia): vuelca, rebota, se arrastra con chispas y ruido de chapa y se para tumbada. Levantarla
+  la lleva de esa pose a la pata.
+**Archivos:** `scripts/fisica/ragdoll.gd` (nuevo), `scripts/jugador/jugador.gd`, `scripts/jugador/animador.gd`,
+`scripts/jugador/arsenal.gd`, `scripts/zombis/zombi.gd` (ganchos, ver mensaje a Juan en CLAUDE.md),
+`scripts/nivel/maniqui.gd`, `scripts/vehiculos/moto.gd`, `scripts/ui/menu_trucos.gd`, `tests/ragdoll.gd` +
+`tests/escena_ragdoll.tscn` (nuevos), `tests/moto.gd`, `tests/ejecutar_pruebas.sh`.
+**Cómo probarlo:** F1 → "Derribarme (empujón)" o "Caer desde 12 m"; en la zona de motos, chocar contra un bloque o
+bajarse en marcha; atropellar zombis o golpear al muñeco con el bate.
+**Pendiente / avisos:** capa de colisión 16 = ragdolls (no la uséis para otra cosa). Mientras el jugador está en
+ragdoll no puede disparar ni golpear.
+
+## 2026-10-25 · KangooG · Claude — moto: caer de morro y más par
+**Qué:**
+- **Caer de morro:** la moto se quedaba sobre la rueda de delante rodando y, de repente, el piloto salía disparado
+  y moría. Causa: al venir inclinada, la rueda de delante tomaba el suelo por un "muro", la moto se quedaba colgada
+  de sus formas de choque acumulando velocidad de caída y al final aterrizaba con un golpe enorme. Ahora: cada rueda
+  busca el suelo bajo su posición real y recuerda su último apoyo (cuesta ≠ escalón); en el aire aterriza en cuanto
+  toca cualquier rueda; con una sola rueda apoyada el centro va a su altura y el peso baja la otra; apoyada en algo
+  que los rayos no ven no sigue "cayendo"; el golpe del aterrizaje está limitado. En el aire el morro se mueve menos
+  solo (Shift/Ctrl siguen inclinándola).
+- **Más par:** aceleración 19 con curva de par fuerte abajo (0→~40 km/h en ~2 s, sube bien las cuestas) y menos
+  rozamiento arriba (llega cerca de la punta de ~56 km/h).
+**Archivos:** `scripts/vehiculos/moto.gd`, `tests/moto.gd` (prueba nueva `morro`, también `--fuerte`),
+`tests/ejecutar_pruebas.sh`.
+**Cómo probarlo:** F1 → "Zona de motos", rampa de 20° a fondo y Ctrl en el aire para caer de morro.
+
+## 2026-10-24 (11) · KangooG · Claude — moto: arreglos tras probarla
+**Qué:**
+- **Cuestas con gravedad:** cuesta arriba frena (y sin gas se va hacia atrás), cuesta abajo empuja; parada con
+  piloto se queda sujeta.
+- **Rampas sin "disparos":** la velocidad vertical ya no sale de la diferencia de alturas entre fotogramas (un
+  bordillo o el borde de la rampa la lanzaban, y peor con muchos FPS); ahora es la del terreno, filtrada, así que
+  al final de la rampa sale con la velocidad de la rampa y nada más. Cada rueda busca el suelo donde debe estar
+  según la inclinación (antes, en una rampa, la rueda de delante "no veía" el suelo y la moto se quedaba frenada).
+- **Choques sin atascos:** colisión del cuerpo + una esfera en cada rueda que se inclinan con la moto; escalones de
+  más de ~14 cm son obstáculos (antes se metía dentro de los bloques de 30-40 cm); contra una pared la velocidad es
+  la real (no acumula velocidad), el golpe cuenta una vez (no "rebota" cada fotograma) y rozando una pared la moto
+  se endereza a lo largo de ella.
+- **Neumáticos nuevos:** perfil redondeado de goma "inflada" (malla de revolución), se aplastan contra el suelo con
+  el peso y el flanco se abomba (shader `NEUMATICO_SHADER` en `modelo_moto.gd`), dibujo de la banda que gira, flanco
+  con letras; llanta con perfil, radios dobles, pinzas de freno.
+- **Disparo libre en la moto:** sin ángulos bloqueados; el torso gira más (`rel_aim` -2.7..2.3).
+- **Interfaz:** el velocímetro pasa abajo a la izquierda (se tapaba con la munición).
+- **Girar despacio:** sin tirones: la cámara vuelve detrás de forma progresiva con la velocidad, el pie al suelo
+  tiene margen (no sube y baja a ~2 studs/s), marchas con más margen y el motor suena más grave.
+- **Levantar la moto con animación** (F junto a una moto tirada): se coloca junto al asiento, se agacha, la agarra
+  del manillar y del asiento y la levanta con las piernas (`Jugador.levantar_moto`, `Animador` "levanta").
+- **Más lenta:** velocidad máxima 50 studs/s (~56 km/h, antes 72), aceleración 13.5, choque fuerte desde 30.
+**Archivos:** `scripts/vehiculos/moto.gd`, `scripts/vehiculos/modelo_moto.gd`, `scripts/jugador/jugador.gd`,
+`scripts/jugador/animador.gd`, `scripts/jugador/arsenal.gd`, `tests/moto.gd` (nuevas pruebas `cuesta`, `bloque`,
+`lento`, `levantar`), `tests/ejecutar_pruebas.sh`.
+**Cómo probarlo:** F1 → "Rampas 15°/30°/50°" y sube en moto sin gas; contra los bloques naranjas; F1 → "Moto delante",
+tírala contra el muro de la zona de motos y levántala con F.
+
+## 2026-10-24 (10) · KangooG · Claude — v0.4: MOTO y armas nuevas
+**Qué (moto):** moto conducible hecha por código (`Moto`, ~110 piezas: chasis, motor con aletas, escape, horquilla
+inclinada, manillar que gira, ruedas con radios y discos, faro con luz, pata de cabra).
+- Física de bicicleta: aceleración por marchas (5 + atrás), dirección que se cierra con la velocidad, inclinación en
+  las curvas (hasta 48°, la que equilibra la curva), freno de mano para derrapar, saltos en rampas (sale despedida),
+  bordillos de hasta ~28 cm, aterrizajes (mal alineado = caída), choques (≥ 40 studs/s contra una pared = sales
+  despedido y te haces daño; la moto se queda tumbada, F para levantarla).
+- Piloto: sube pasando la pierna, sentado con las manos en los puños y los pies en los estribos; parado baja el pie
+  izquierdo; deprisa se agacha sobre el depósito; en las curvas se mete con la moto y la cabeza recta; en el aire se
+  levanta. F para bajarse (en marcha salta, con daño si va muy rápido).
+- Armas en la moto: solo las de una mano (pistola, revólver, subfusil, cuchillo, machete, palanca). Se dispara con la
+  derecha girando el torso hacia la cámara (delante, a la derecha y bastante hacia atrás por ese lado; a la izquierda
+  poco); la izquierda sigue en el manillar (al recargar la suelta). Golpes cuerpo a cuerpo de lado al pasar (la
+  velocidad suma daño). Las de dos manos se guardan al subir.
+- Atropellos: usa el contrato de objetivo (`recibir_danio`, `derribar`, `empujar`) — no toca el código de los zombis.
+  Por encima de ~9 studs/s derriba o mata; a un caído le pasa por encima.
+- Motor que suena (sintetizado, sube de tono con las revoluciones y los cambios de marcha), chirrido al derrapar,
+  ruido para los zombis (`Ruido.emitir(..., "motor")`, radio 26-95 studs según las vueltas).
+- Cámara: detrás de la moto, vuelve sola si no tocas el ratón, se aleja y abre el campo de visión con la velocidad y
+  se inclina un poco en las curvas; al apuntar va al hombro. Velocímetro (km/h y marcha) en el HUD.
+- Nivel: una moto junto al inicio y dos en la nueva "Zona de motos" (rampas de 12° y 20° y un muro para chocar).
+  Trucos (F1): "Moto delante", "Levantar las motos caídas", ir a la zona de motos y todas las armas al suelo.
+**Qué (armas):** modelos 3 veces más detallados (`ModelosArmas`) y 6 armas nuevas: revólver, subfusil, escopeta
+(cartucho a cartucho, corredera), francotirador (cerrojo, mira telescópica), hacha y palanca. Ver la entrada de
+armas en `CLAUDE.md`.
+**Archivos:** nuevos `scripts/vehiculos/moto.gd`, `scripts/vehiculos/modelo_moto.gd`, `scripts/armas/modelos_armas.gd`,
+`tests/moto.gd` + `tests/escena_moto.tscn`, `tests/vitrina.gd` + `tests/escena_vitrina.tscn`. Cambiados `jugador.gd`
+(subir/bajar, cámara, HUD), `animador.gd` (pose en la moto), `arsenal.gd` (armas en la moto, armas nuevas),
+`armas.gd`, `efectos.gd`, `nivel_pruebas.gd` (`_crear_motos`, `_rampa_salto`, meta `sin_motos`), `menu_trucos.gd`,
+`tests/combate.gd` (`--arma=`), `tests/ejecutar_pruebas.sh` (9 pruebas de moto).
+**Cómo probarlo:** F junto a la moto del inicio (a la izquierda). W/S/A/D, Espacio derrapar, F bajarse, L luces.
+F1 → "Zona de motos" para las rampas y el muro. Saca la pistola (1) en marcha y apunta a un muñeco.
+**Pendiente / avisos:** sin ragdoll al caerse (el cuerpo sale volando y aterriza de pie); el coche sigue pendiente.
+Juan: los zombis oyen la moto con el tipo de ruido `"motor"` (peso 0.5 por defecto en `Ruido.peso`); si queréis que
+alarme más, añadid `"motor"` a `Ruido.PESO`. La moto está en la capa 1 (para vuestros rayos es una pared más).
+
 ## 2026-10-24 (9) · KangooG · Claude
 **Qué:** `CLAUDE.md`: nueva sección **"Mensajes entre los Claude"** con una pregunta para el Claude de Juan (¿trabaja
 con el editor de Godot o directamente sobre GitHub?) y "Reparto" rellenado (KangooG: jugabilidad; Juan: zombis).

@@ -51,6 +51,28 @@ for m in "${MODOS[@]}"; do
 done
 
 if [ ${#SOLO[@]} -eq 0 ]; then
+	# moto (v0.4, tests/moto.gd): conducir, saltar, cuestas, bloques, girar despacio, levantarla, atropellar,
+	# chocar, armas, derrapar, bajarse
+	# (empinada_N: a fondo contra las rampas de 15/30/50°; bajada: cuesta abajo por la de 30°; 30fps: lo mismo a 30 FPS)
+	for m in conducir salto morro cuesta bloque lento levantar atropello zombi choque disparar golpear derrape bajar \
+			empinada_15 empinada_30 empinada_50 bajada morro_30fps empinada_50_30fps; do
+		modo="${m%%_*}"; extra=(); fps=60
+		[[ "$m" == empinada_* ]] && { a="${m#empinada_}"; extra=(--angulo="${a%%_*}"); }
+		[[ "$m" == *_30fps ]] && fps=30
+		salida="$("$GODOT" --headless --path "$RAIZ" --fixed-fps $fps res://tests/escena_moto.tscn -- --modo=$modo "${extra[@]}" 2>&1)"
+		errores="$(hay_errores "$salida")"
+		grep -E "^(OK|MAL) moto_" <<<"$salida"
+		if grep -q "^OK moto_$modo" <<<"$salida" && [ -z "$errores" ]; then resumen+=("OK    moto_$m")
+		else [ -n "$errores" ] && echo "$errores" | head -10; fallos=$((fallos + 1)); resumen+=("FALLO moto_$m"); fi
+	done
+	# ragdoll (tests/ragdoll.gd): muñeco suelto y jugador (derribo, caída larga, aterrizaje fuerte, muerte)
+	for m in empuje alto morir limites j_derribo j_caida j_aterriza j_morir; do
+		salida="$("$GODOT" --headless --path "$RAIZ" --fixed-fps 60 res://tests/escena_ragdoll.tscn -- --modo=$m 2>&1)"
+		errores="$(hay_errores "$salida")"
+		grep -E "^(OK|MAL) ragdoll_" <<<"$salida"
+		if grep -q "^OK ragdoll_$m" <<<"$salida" && [ -z "$errores" ]; then resumen+=("OK    ragdoll_$m")
+		else [ -n "$errores" ] && echo "$errores" | head -10; fallos=$((fallos + 1)); resumen+=("FALLO ragdoll_$m"); fi
+	done
 	for escena in "" "res://escenas/pruebas_movimiento.tscn"; do
 		nombre="${escena:-menú principal}"
 		salida="$("$GODOT" --headless --path "$RAIZ" --fixed-fps 60 --quit-after 600 $escena 2>&1)"
