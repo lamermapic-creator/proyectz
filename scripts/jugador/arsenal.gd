@@ -385,7 +385,9 @@ func reload() -> void:
 	recargando = ahora() + w.Reload
 	anim.on_reload(equipado, w.Reload)
 	Ruido.emitir(J, J.global_position, C.RUIDO.Recarga, Ruido.ARMA, J)
-	Efectos.sonido(J, "Reload", J.global_position, 0.9, 1.5 / w.Reload * 1.1)
+	# grabaciones reales: la del rifle dura ~3 s y la de la pistola ~2 s (se aceleran un poco si la recarga es más rápida)
+	var larga := str(w.get("Slot", "")) == "Larga"
+	Efectos.sonido(J, "ReloadRifle" if larga else "ReloadPistol", J.global_position, 0.9, (3.0 if larga else 1.9) / float(w.Reload))
 
 
 func _terminar_recarga() -> void:
@@ -409,6 +411,14 @@ func _terminar_recarga() -> void:
 	d.reserve -= take
 
 
+## casquillo por la ventana de expulsión (a la derecha del arma, algo por detrás de la boca)
+func expulsar_casquillo(mz_t: Transform3D, escopeta: bool) -> void:
+	var atras := 0.45 if not cfg().get("Slot", "") == "Larga" else 1.0
+	var p := mz_t * Vector3(0.08, 0.05, atras)
+	var d := mz_t.basis * Vector3(1.0, 0.7, 0.25)
+	Efectos.casquillo(J, p, d, escopeta, J.vel_real * 0.8)
+
+
 ## escopeta: la animación avisa cada vez que mete un cartucho (uno a uno, como de verdad)
 var _cartuchos := {}
 
@@ -422,6 +432,7 @@ func cartucho_metido() -> void:
 		return
 	_cartuchos.metidos = int(_cartuchos.metidos) + 1
 	d.mag += 1
+	Efectos.sonido(J, "Empty", J.global_position, 0.35, 0.8)
 	if not balas_infinitas:
 		d.reserve = maxi(0, int(d.reserve) - 1)
 
@@ -725,7 +736,11 @@ func shoot() -> void:
 
 	# efectos
 	Efectos.sonido(J, w.Sound, J.global_position, 1.3, 0.95 + randf() * 0.1)
-	Efectos.muzzle_flash(J, mz_t)
+	var fuerza := {"Pistola": 0.8, "Revolver": 1.1, "Subfusil": 0.75, "Escopeta": 1.5, "Francotirador": 1.4}.get(equipado, 1.0) as float
+	Efectos.muzzle_flash(J, mz_t, fuerza)
+	# casquillo (las de corredera y cerrojo lo sueltan al accionarlas; el revólver no expulsa)
+	if not w.get("Pump", false) and not w.get("Bolt", false) and equipado != "Revolver":
+		expulsar_casquillo(mz_t, false)
 	var tipo := "surface" if impacto_superficie != Vector3.INF else "none"
 	var hit_pos := impacto_superficie
 	# la bala que golpea una superficie también suena allí (sin "fuente": los zombis van a mirar ese
@@ -1079,22 +1094,26 @@ func _crear_hud() -> void:
 	var nom := Label.new()
 	nom.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	nom.add_theme_font_size_override("font_size", 16)
-	nom.modulate = Color(1, 1, 1, 0.8)
+	nom.modulate = Color(1, 1, 1, 0.9)
+	Jugador._contorno(nom, 5)
 	panel.add_child(nom)
 	var fila := HBoxContainer.new()
 	fila.alignment = BoxContainer.ALIGNMENT_END
 	panel.add_child(fila)
 	var mag := Label.new()
 	mag.add_theme_font_size_override("font_size", 40)
+	Jugador._contorno(mag, 8)
 	fila.add_child(mag)
 	var res := Label.new()
 	res.add_theme_font_size_override("font_size", 22)
-	res.modulate = Color(1, 1, 1, 0.75)
+	res.modulate = Color(1, 1, 1, 0.9)
+	Jugador._contorno(res, 6)
 	fila.add_child(res)
 	var rec := Label.new()
 	rec.text = "RECARGANDO…"
 	rec.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	rec.add_theme_color_override("font_color", Color8(240, 200, 90))
+	Jugador._contorno(rec, 5)
 	panel.add_child(rec)
 	_hud.panel = panel
 	_hud.nombre = nom
@@ -1111,25 +1130,28 @@ func _crear_hud() -> void:
 	rh.offset_top = 40
 	rh.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	rh.add_theme_font_size_override("font_size", 15)
+	Jugador._contorno(rh, 5)
 	capa.add_child(rh)
 	_hud.rest = rh
-	# huecos de arma (abajo, centrados)
+	# huecos de arma (abajo a la derecha, encima del panel del arma). Solo se ven un momento al cambiar o coger
+	# un arma (antes estaban siempre en el centro, tapando los pies del personaje)
 	var barra := HBoxContainer.new()
-	barra.anchor_left = 0.5
-	barra.anchor_right = 0.5
+	barra.anchor_left = 1.0
+	barra.anchor_right = 1.0
 	barra.anchor_top = 1.0
 	barra.anchor_bottom = 1.0
-	barra.offset_left = -330
-	barra.offset_right = 330
-	barra.offset_top = -92
-	barra.offset_bottom = -50
-	barra.alignment = BoxContainer.ALIGNMENT_CENTER
-	barra.add_theme_constant_override("separation", 8)
+	barra.offset_left = -560
+	barra.offset_right = -28
+	barra.offset_top = -190
+	barra.offset_bottom = -160
+	barra.alignment = BoxContainer.ALIGNMENT_END
+	barra.add_theme_constant_override("separation", 6)
 	capa.add_child(barra)
+	_hud.barra = barra
 	_hud.huecos = []
 	for i in Armas.SLOTS.size():
 		var caja := PanelContainer.new()
-		caja.custom_minimum_size = Vector2(150, 40)
+		caja.custom_minimum_size = Vector2(124, 30)
 		var sb := StyleBoxFlat.new()
 		sb.bg_color = Color(0, 0, 0, 0.45)
 		sb.set_corner_radius_all(4)
@@ -1138,16 +1160,31 @@ func _crear_hud() -> void:
 		var lab := Label.new()
 		lab.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		lab.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		lab.add_theme_font_size_override("font_size", 13)
+		lab.add_theme_font_size_override("font_size", 12)
+		Jugador._contorno(lab, 3)
 		caja.add_child(lab)
 		barra.add_child(caja)
 		_hud.huecos.append({"caja": caja, "sb": sb, "lab": lab})
 	_ignorar_raton(capa)
 
 
+var _barra_t := -99.0      # última vez que cambió el arma o el inventario (la barra de huecos se ve un rato)
+var _barra_firma := ""
+
+
 func _actualizar_hud() -> void:
 	var w := cfg()
 	var vivo := J.health > 0
+	# barra de huecos: visible 3 s después de cualquier cambio (o mientras se cambia de arma), luego se desvanece
+	var firma := equipado + str(inventario.keys()) + str(switching != null)
+	for k in inventario:
+		firma += str(inventario[k].name)
+	if firma != _barra_firma:
+		_barra_firma = firma
+		_barra_t = ahora()
+	var vis_b := clampf(1.0 - (ahora() - _barra_t - 3.0) / 0.6, 0.0, 1.0)
+	(_hud.barra as Control).modulate.a = vis_b
+	(_hud.barra as Control).visible = vis_b > 0.01
 	_hud.panel.visible = not w.is_empty()
 	_hud.rec.visible = recargando > 0.0
 	if not w.is_empty():

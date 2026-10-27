@@ -60,8 +60,12 @@ const CENTRO := {
 	"LeftKnee": Vector3(-1.24, 0.0, 0.0), "RightKnee": Vector3(-1.24, 0.0, 0.0),
 	"Waist": Vector3(0.05, 0.0, 0.0),
 }
-const KP := 520.0               # rigidez de los músculos (rad/s² por radian) a fuerza 1
-const ACEL_MAX := 260.0         # tope de aceleración angular de un músculo (estabilidad)
+const KP := 680.0               # rigidez de los músculos (rad/s² por radian) a fuerza 1
+const ACEL_MAX := 480.0         # tope de aceleración angular de un músculo (estabilidad)
+## (2026-10-27, a pedido de KangooG: movimientos MUCHO más exagerados) cuánto se amplían los gestos (EXAGERA)
+## y la velocidad de los movimientos "nerviosos" (NERVIO) de todos los comportamientos
+const EXAGERA := 2.0
+const NERVIO := 2.0
 
 var dueno: Node3D
 var rig: RigPersonaje
@@ -344,7 +348,7 @@ func _physics_process(dt: float) -> void:
 	if choque > 9.0 and _t > 0.08 and _t - _golpe_t > 0.25:
 		_golpe_t = _t
 		var k := clampf((choque - 7.0) / 22.0, 0.12, 1.0)
-		Efectos.sonido(dueno, "Blunt", bt.global_position, 0.35 + 0.8 * k, 0.55 + randf() * 0.15)
+		Efectos.sonido(dueno, "BodyFall", bt.global_position, 0.35 + 0.8 * k, 0.9 + randf() * 0.15)
 	# (un golpe mayor que el anterior siempre cuenta, aunque haya sido hace nada)
 	if choque > 12.0 and _t > 0.25 and (_t - _ultimo_impacto > 0.6 or choque > _ultimo_valor * 1.3):
 		_ultimo_impacto = _t
@@ -393,9 +397,11 @@ func _physics_process(dt: float) -> void:
 		hi.apply_torque(tq)
 		pa.apply_torque(-tq)
 	# espasmos (muriendo)
-	if comportamiento == "morir" and _t_comp > 1.2 and _t_comp < 4.0 and randf() < 0.012:
-		var bp: RigidBody3D = cuerpos.UpperTorso if randf() < 0.5 else cuerpos.Head
-		bp.apply_central_impulse(Vector3(randf() - 0.5, randf() * 0.5, randf() - 0.5) * bp.mass * 5.0)
+	if comportamiento in ["morir", "retorcerse"] and _t_comp > 0.8 and _t_comp < (6.0 if comportamiento == "morir" else 99.0) \
+			and randf() < (0.07 if comportamiento == "morir" else 0.025) * dt * 60.0:
+		var piezas := ["UpperTorso", "Head", "LeftUpperLeg", "RightUpperLeg", "LeftUpperArm", "RightUpperArm"]
+		var bp: RigidBody3D = cuerpos[piezas[randi() % piezas.size()]]
+		bp.apply_central_impulse(Vector3(randf() - 0.5, randf() * 0.7, randf() - 0.5) * bp.mass * 12.0)
 	# ¿se ha parado? (tumbado, sentado o de rodillas: lo que cuenta es que el cuerpo ya no se mueve)
 	if v.length() < 1.2 and bt.angular_velocity.length() < 1.5:
 		_quieto_t += dt
@@ -550,66 +556,80 @@ func _b_caer(t: float) -> Array:
 	var d := v.normalized() if v.length() > 2.0 else -bt.global_transform.basis.y
 	var dl := bt.global_transform.basis.inverse() * (d + Vector3(0, -0.8, 0)).normalized()
 	var espalda := dl.z > 0.0 # cayendo de espaldas
-	var brazo_l := _apuntar(dl + Vector3(-0.35, 0, 0))
-	var brazo_r := _apuntar(dl + Vector3(0.35, 0, 0))
+	# los brazos buscan el suelo (o se echan atrás de espaldas) agitándose: manotazos de pánico
+	var ag := t * 9.0 * NERVIO + _semilla
+	var tembl := Vector3(sin(ag) * 0.45, cos(ag * 1.3) * 0.35, sin(ag * 0.7) * 0.4) * EXAGERA
+	var brazo_l := _apuntar(dl + Vector3(-0.55, 0, 0) + tembl)
+	var brazo_r := _apuntar(dl + Vector3(0.55, 0, 0) - tembl)
 	if espalda:
-		brazo_l = _apuntar(Vector3(-0.5, -1, 0.9))
-		brazo_r = _apuntar(Vector3(0.5, -1, 0.9))
+		brazo_l = _apuntar(Vector3(-0.9, -0.7, 1.0) + tembl)
+		brazo_r = _apuntar(Vector3(0.9, -0.7, 1.0) - tembl)
+	# las piernas patalean buscando apoyo
+	var pt := t * 7.0 * NERVIO + _semilla * 2.0
 	return [{
 		"LeftShoulder": brazo_l, "RightShoulder": brazo_r,
-		"LeftElbow": _ang(0.35), "RightElbow": _ang(0.35),
-		"LeftWrist": _ang(-0.5), "RightWrist": _ang(-0.5),
-		"Neck": _ang(0.55) if espalda else _ang(-0.45),
-		"Waist": _ang(0.25) if espalda else _ang(-0.15),
-		"LeftHip": _ang(0.35, 0, -0.08), "RightHip": _ang(0.25, 0, 0.08),
-		"LeftKnee": _ang(-0.6), "RightKnee": _ang(-0.4),
-	}, {"core": 0.7, "neck": 0.9, "arm": 0.85, "leg": 0.06 if t < 0.7 else 0.35}]
+		"LeftElbow": _ang(0.35 + 0.5 * maxf(0.0, sin(ag))), "RightElbow": _ang(0.35 + 0.5 * maxf(0.0, -sin(ag))),
+		"LeftWrist": _ang(-0.7), "RightWrist": _ang(-0.7),
+		"Neck": _ang(0.75, 0.3 * sin(ag * 0.8), 0) if espalda else _ang(-0.6, 0.3 * sin(ag * 0.8), 0),
+		"Waist": _ang(0.45, 0.25 * sin(pt * 0.5), 0) if espalda else _ang(-0.35, 0.25 * sin(pt * 0.5), 0),
+		"LeftHip": _ang(0.55 + 0.55 * sin(pt), 0, -0.15), "RightHip": _ang(0.45 - 0.55 * sin(pt), 0, 0.15),
+		"LeftKnee": _ang(-0.8 - 0.6 * maxf(0.0, cos(pt))), "RightKnee": _ang(-0.6 - 0.6 * maxf(0.0, -cos(pt))),
+	}, {"core": 0.85, "neck": 1.0, "arm": 1.0, "leg": 0.35 if t < 0.7 else 0.6}]
 
 
 func _b_retorcerse(t: float) -> Array:
 	var s := _semilla
 	var lado := lado_herida
-	var k := 0.6 + 0.4 * _ruido(t * 0.4, s)
-	var agarra_sh := _ang(0.7, 0, -0.55 * lado)
-	var agarra_el := _ang(2.0)
-	var libre := _apuntar(Vector3(-lado * (0.6 + 0.3 * _ruido(t * 0.7, s + 3.0)), -0.6, -0.5 + _ruido(t * 0.5, s + 4.0)))
+	var tn := t * NERVIO
+	var E := EXAGERA
+	var k := 0.85 + 0.25 * _ruido(tn * 0.5, s)
+	# convulsiones: cada poco el cuerpo se encoge de golpe (dolor) y vuelve a estirarse
+	var encoge := pow(maxf(0.0, sin(tn * 2.2 + s)), 6.0)
+	var agarra_sh := _ang(0.9, 0, -0.75 * lado)
+	var agarra_el := _ang(2.2)
+	var libre := _apuntar(Vector3(-lado * (0.7 + 0.5 * E * _ruido(tn * 1.1, s + 3.0)), -0.4 + 0.5 * _ruido(tn * 0.9, s + 11.0),
+		-0.5 + 0.9 * _ruido(tn * 0.8, s + 4.0)))
 	var pose := {
-		"Neck": _ang(-0.3 + 0.35 * _ruido(t * 0.8, s + 1.0), 0.5 * _ruido(t * 0.3, s + 2.0), 0),
-		"Waist": _ang(0.25 * _ruido(t * 0.6, s + 5.0), 0.3 * _ruido(t * 0.4, s + 6.0), 0),
-		"LeftHip": _ang(0.5 + 0.5 * _ruido(t * 0.5, s + 7.0)), "RightHip": _ang(0.5 + 0.5 * _ruido(t * 0.45, s + 8.0)),
-		"LeftKnee": _ang(-0.9 - 0.6 * _ruido(t * 0.5, s + 9.0)), "RightKnee": _ang(-0.9 - 0.6 * _ruido(t * 0.5, s + 10.0)),
+		"Neck": _ang(-0.35 + 0.45 * E * _ruido(tn * 1.2, s + 1.0) - 0.4 * encoge, 0.6 * E * _ruido(tn * 0.6, s + 2.0), 0),
+		"Waist": _ang(0.35 * E * _ruido(tn * 0.9, s + 5.0) - 0.6 * encoge, 0.45 * E * _ruido(tn * 0.7, s + 6.0), 0),
+		"LeftHip": _ang(0.6 + 0.6 * E * _ruido(tn * 0.8, s + 7.0) + 0.7 * encoge),
+		"RightHip": _ang(0.6 + 0.6 * E * _ruido(tn * 0.75, s + 8.0) + 0.7 * encoge),
+		"LeftKnee": _ang(-1.0 - 0.7 * E * absf(_ruido(tn * 0.9, s + 9.0)) - 0.6 * encoge),
+		"RightKnee": _ang(-1.0 - 0.7 * E * absf(_ruido(tn * 0.9, s + 10.0)) - 0.6 * encoge),
+		"LeftAnkle": _ang(0.4 * _ruido(tn * 1.3, s + 12.0)), "RightAnkle": _ang(0.4 * _ruido(tn * 1.3, s + 13.0)),
 	}
 	if lado > 0.0:
 		pose.RightShoulder = agarra_sh
 		pose.RightElbow = agarra_el
 		pose.LeftShoulder = libre
-		pose.LeftElbow = _ang(0.6)
+		pose.LeftElbow = _ang(0.5 + 0.8 * absf(_ruido(tn, s + 14.0)))
 	else:
 		pose.LeftShoulder = agarra_sh
 		pose.LeftElbow = agarra_el
 		pose.RightShoulder = libre
-		pose.RightElbow = _ang(0.6)
-	return [pose, {"core": 0.35 * k, "neck": 0.45 * k, "arm": 0.45 * k, "leg": 0.3 * k}]
+		pose.RightElbow = _ang(0.5 + 0.8 * absf(_ruido(tn, s + 14.0)))
+	var f := 1.0 + 0.6 * encoge
+	return [pose, {"core": 0.6 * k * f, "neck": 0.75 * k * f, "arm": 0.8 * k, "leg": 0.6 * k * f}]
 
 
 ## caída larga: molinillo con los brazos y pedaleo; cerca del suelo, se prepara para el golpe
 func _b_caida_libre(t: float) -> Array:
-	var ph := t * 8.0 + _semilla
+	var ph := t * 8.0 * NERVIO + _semilla
 	var vy := torso().linear_velocity.y
 	var tti := _dist_suelo / -vy if vy < -1.0 else 9.0
 	var prepara := clampf((0.5 - tti) / 0.35, 0.0, 1.0)
 	var viento := {
-		"LeftShoulder": _apuntar(Vector3(-0.75, -cos(ph) * 0.9, -sin(ph) * 0.9)),
-		"RightShoulder": _apuntar(Vector3(0.75, -cos(ph + 2.3) * 0.9, -sin(ph + 2.3) * 0.9)),
-		"LeftElbow": _ang(0.5 + 0.35 * sin(ph)), "RightElbow": _ang(0.5 + 0.35 * sin(ph + 2.3)),
+		"LeftShoulder": _apuntar(Vector3(-0.75, -cos(ph) * 0.9 * EXAGERA, -sin(ph) * 0.9 * EXAGERA)),
+		"RightShoulder": _apuntar(Vector3(0.75, -cos(ph + 2.3) * 0.9 * EXAGERA, -sin(ph + 2.3) * 0.9 * EXAGERA)),
+		"LeftElbow": _ang(0.5 + 0.6 * sin(ph)), "RightElbow": _ang(0.5 + 0.6 * sin(ph + 2.3)),
 		"LeftWrist": _ang(-0.3), "RightWrist": _ang(-0.3),
-		"Neck": _ang(-0.3, 0.3 * sin(t * 3.1 + _semilla), 0),
-		"Waist": _ang(0.12 * sin(ph * 0.5), 0.18 * sin(t * 2.3), 0),
-		"LeftHip": _ang(0.45 + 0.6 * sin(ph * 0.7), 0, -0.12), "RightHip": _ang(0.45 - 0.6 * sin(ph * 0.7), 0, 0.12),
-		"LeftKnee": _ang(-0.7 - 0.6 * maxf(0.0, cos(ph * 0.7))), "RightKnee": _ang(-0.7 - 0.6 * maxf(0.0, -cos(ph * 0.7))),
+		"Neck": _ang(-0.3, 0.55 * sin(t * 4.5 + _semilla), 0),
+		"Waist": _ang(0.3 * sin(ph * 0.5), 0.35 * sin(t * 3.4), 0),
+		"LeftHip": _ang(0.5 + 1.0 * sin(ph * 0.7), 0, -0.15), "RightHip": _ang(0.5 - 1.0 * sin(ph * 0.7), 0, 0.15),
+		"LeftKnee": _ang(-0.7 - 1.0 * maxf(0.0, cos(ph * 0.7))), "RightKnee": _ang(-0.7 - 1.0 * maxf(0.0, -cos(ph * 0.7))),
 	}
 	if prepara <= 0.0:
-		return [viento, {"core": 0.5, "neck": 0.8, "arm": 0.55, "leg": 0.35}]
+		return [viento, {"core": 0.7, "neck": 0.9, "arm": 1.0, "leg": 0.8}]
 	var bp: Dictionary = _b_caer(1.0)[0]
 	bp.LeftHip = _ang(0.4, 0, -0.1)
 	bp.RightHip = _ang(0.3, 0, 0.1)
@@ -626,10 +646,10 @@ func _b_caida_libre(t: float) -> Array:
 
 ## impacto contra el suelo: un instante sin fuerza; después, aturdido, se retuerce (más débil si fue grave)
 func _b_impacto(t: float) -> Array:
-	if t < 0.35:
+	if t < 0.22:
 		return [{}, {"core": 0.03, "neck": 0.04, "arm": 0.03, "leg": 0.03}]
 	var r := _b_retorcerse(t)
-	var k := (0.2 + 0.65 * (1.0 - gravedad)) * minf(1.0, (t - 0.35) / 0.8)
+	var k := (0.35 + 0.75 * (1.0 - gravedad)) * minf(1.0, (t - 0.22) / 0.5)
 	var f: Dictionary = r[1]
 	for g in f:
 		f[g] = float(f[g]) * k
@@ -654,11 +674,11 @@ func _b_morir(t: float) -> Array:
 			f[g] = float(f[g]) * m
 		f.leg = float(f.leg) * 0.5
 		return r
-	elif t < 4.0:
-		var r2 := _b_retorcerse(t)
-		var m2 := maxf(0.05, 1.0 - (t - 1.2) / 2.8)
+	elif t < 6.0:
+		var r2 := _b_retorcerse(t * 1.3)
+		var m2 := maxf(0.08, 1.0 - pow((t - 1.2) / 4.8, 2.5))
 		var f2: Dictionary = r2[1]
 		for g in f2:
-			f2[g] = float(f2[g]) * m2 * 0.8
+			f2[g] = float(f2[g]) * m2
 		return r2
 	return [{}, {"core": 0.02, "neck": 0.03, "arm": 0.02, "leg": 0.02}]

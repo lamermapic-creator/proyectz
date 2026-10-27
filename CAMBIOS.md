@@ -13,6 +13,47 @@ en el mismo commit que el cambio. Formato:
 
 ---
 
+## 2026-10-27 (2) · KangooG · Claude — pulido de la jugabilidad: sonido, efectos, cámara, inercia, HUD y ragdoll
+Antes se hizo una revisión jugando escenarios con la cámara del juego y midiendo (`docs/REVISION_JUGABILIDAD.md`,
+19 puntos). KangooG eligió: armas y sonido, interfaz, movimiento, cámara y un ragdoll mucho más exagerado.
+**Qué:**
+- **Sonidos reales** (46 archivos `.ogg`, Freesound CC0, créditos en `docs/SONIDOS.md`): disparos de cada arma,
+  corredera/cerrojo, recargas, recámara vacía, sacar arma, casquillos cayendo, golpes, rebotes, impactos, **pasos**
+  (12 variantes, volumen según andar/correr/agachado), aterrizaje y cuerpo que cae. Carpeta `sonidos/`, nombres
+  `Tipo_n.ogg`: para añadir una variante basta con soltar `Tipo_<n+1>.ogg` ahí. Sin archivo se usa el sintetizado de
+  antes (y sin ventana, en las pruebas `--headless`, siempre el sintetizado). Se precargan al empezar (adiós al tirón
+  del primer disparo).
+- **Disparo:** fogonazo con destello en estrella, luz y humo (fuerza según el arma); **casquillos** que salen
+  despedidos, rebotan y suenan (escopeta: cartucho rojo al bombear; francotirador: al abrir el cerrojo). Agujeros de
+  bala con material compartido (menos coste).
+- **Movimiento:** **inercia** al correr/andar: ya no se para en seco (frena en ~0,5 s corriendo, ~0,2 s andando;
+  `ZConfig.PLAYER.Frenada`) y contra una pared se corta. `InfiniteStamina` ahora es `false` también en el editor
+  (F4 sigue activándola para probar).
+- **Cámara:** acercarse al apuntar, tumbarse o dejar de correr es suave (`dist_suave`); de espaldas a una pared ya no
+  se mete en la cabeza (se acerca al instante y el personaje se difumina); al apuntar, un poco más lejos y más al hombro;
+  tumbado, más alta y adelantada para ver por encima de las piernas.
+- **Interfaz:** textos con contorno y sombra (munición, avisos, huecos); barras con rótulo "VIDA n" / "ESTAMINA";
+  barra de armas abajo a la derecha, se oculta sola a los 3 s (vuelve al cambiar de arma o recoger); la ayuda de
+  controles se muestra/oculta con **H** (al empezar sale "H: ver los controles"). **Daño** (`scripts/ui/hud_danio.gd`,
+  `HudDanio`): viñeta roja al recibir golpes, latido con poca vida, arcos que señalan de dónde viene el golpe y
+  pantalla de muerte con cuenta atrás.
+- **Ragdoll mucho más exagerado** (a pedido de KangooG): constantes `EXAGERA` (2.0) y `NERVIO` (2.0) en `ragdoll.gd`
+  que agrandan y aceleran todos los gestos; músculos más fuertes (`KP` 680, `ACEL_MAX` 480); al caer manotea y patalea;
+  en el suelo se retuerce con convulsiones (se encoge de golpe y se estira); muriendo, espasmos frecuentes en tronco,
+  cabeza, brazos y piernas durante ~6 s; la caída larga hace un molinillo enorme. Medido: el cuerpo se mueve 10-30 veces
+  más que antes en el suelo (`tests/ragdoll.gd` imprime ahora `mov=`).
+**Archivos:** `scripts/armas/efectos.gd`, `scripts/jugador/{jugador,arsenal,animador}.gd`, `scripts/config/zconfig.gd`,
+`scripts/fisica/ragdoll.gd`, `scripts/ui/hud_danio.gd` (nuevo), `sonidos/` (nuevo), `docs/SONIDOS.md`,
+`docs/REVISION_JUGABILIDAD.md`, `tests/recorrido.gd` + `tests/escena_recorrido.tscn` (nuevos: recorridos con la cámara
+del juego que miden tirones de cámara, pies que patinan, etc.), `tests/ragdoll.gd`.
+**Cómo probarlo:** F5 y: disparar cada arma (sonido, fogonazo, casquillos); correr y soltar W (frena en un paso);
+apuntar y tumbarse (cámara suave); pegarse de espaldas a una pared y girar la cámara; H (ayuda); dejar que un zombi
+te pegue (viñeta y flecha) y morir; F1 → tirarse desde alto o recibir un golpe fuerte para ver el ragdoll.
+**Pendiente / avisos:** Juan: los zombis usan el mismo ragdoll, así que también se mueven mucho más al caer/morir (si
+os parece demasiado, bajad `EXAGERA`/`NERVIO`). `Efectos.sonido` sirve para vuestros gruñidos: soltad
+`sonidos/Growl_1.ogg`… y llamad `Efectos.sonido(self, "Growl", pos)`. Quedan de la revisión: teclas configurables y
+mando (5), munición/botiquines en el mapa (13), simulación del jugador en `_physics_process` (18).
+
 ## 2026-10-27 · KangooG · Claude — plugin Godot AI actualizado a 4.3.1 (a mano)
 **Qué:** el botón "Actualizar" del plugin 4.3.0 dejaba Godot congelado (fallo del propio actualizador, corregido en
 4.3.1: "fix(update): type the activation runner's loop variables"). Se instaló 4.3.1 a mano con Godot cerrado: zip
@@ -20,7 +61,12 @@ oficial `godot-ai-v4-plugin.zip`, cada archivo comprobado con el manifiesto de l
 antes; cambian 6).
 **Archivos:** `addons/godot_ai/` (plugin.cfg, update_activation_runner.gd, filesystem_handler.gd,
 filesystem_mutation.gd, game_helper.gd, path_validator.gd).
-**Pendiente / avisos:** Juan: al hacer pull tendrás también 4.3.1 (no pulses "Actualizar" si te sale en 4.3.0).
+**Pendiente / avisos:** Juan: al hacer pull tendrás también 4.3.1 (no pulses "Actualizar" si te sale en 4.3.0). El
+servidor tiene que ser de la MISMA versión que el plugin: en la config de Claude Desktop, `godot-ai==4.3.1` (si sigue en
+4.3.0, el dock se queda en "Restarting server...").
+Si el dock dice "Incompatible server on port 8001" (un servidor viejo suelto, p. ej. un `pythonw -m godot_ai` del Python
+del sistema), abrir `herramientas/liberar_puerto_mcp.gd` y Archivo → Ejecutar (Ctrl+Shift+X): cierra solo ese servidor y
+deja el resultado en `herramientas/liberar_puerto_mcp.log`; después Proyecto → Recargar proyecto actual.
 
 ## 2026-10-25 (3) · KangooG · Claude — moto: cuestas empinadas, gravedad y cabeceo de verdad
 **Qué:**

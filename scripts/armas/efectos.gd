@@ -1,10 +1,39 @@
 class_name Efectos
-## Efectos de combate (port de las funciones de ZClient: burst, splat, bloodAt, tracer, muzzleFlash)
-## y sonidos sintetizados (no hay archivos de audio todavía: se generan al vuelo, gratis).
+## Efectos de combate (port de las funciones de ZClient: burst, splat, bloodAt, tracer, muzzleFlash), fogonazo con
+## humo, casquillos y sonidos: grabaciones CC0 en `res://sonidos/` (ver `sonido`) o, si falta el archivo, sintetizados.
 
 static var _decals := 0
 static var _sonidos := {}
 static var _mat_cache := {}
+static var _vigilando := false
+
+
+## las cachés estáticas (materiales, texturas, sonidos) se vacían al cerrar el juego; si no, Godot avisa de
+## "resources still in use at exit"
+static func _vigilar() -> void:
+	if _vigilando:
+		return
+	var arbol := Engine.get_main_loop() as SceneTree
+	if arbol == null or arbol.root == null:
+		return
+	_vigilando = true
+	arbol.root.tree_exiting.connect(limpiar)
+
+
+static func limpiar() -> void:
+	var arbol := Engine.get_main_loop() as SceneTree
+	if arbol:
+		for n in arbol.get_nodes_in_group("efectos_audio"):
+			n.stop()
+			n.stream = null
+	_sonidos.clear()
+	_mat_cache.clear()
+	_variantes.clear()
+	_ultima.clear()
+	_tex_destello = null
+	_tex_humo = null
+	_casquillos.clear()
+	_vigilando = false
 
 
 static func _raiz(nodo: Node) -> Node:
@@ -29,6 +58,7 @@ static func _mat_unshaded(c: Color, emit := false) -> StandardMaterial3D:
 	if emit:
 		m.emission_enabled = true
 		m.emission = c
+	_vigilar()
 	_mat_cache[k] = m
 	return m
 
@@ -78,7 +108,8 @@ static func splat(ctx: Node, pos: Vector3, normal: Vector3, color: Color, size: 
 		return
 	_decals += 1
 	var mi := MeshInstance3D.new()
-	# mancha redonda (disco muy fino) pegada a la superficie
+	# mancha redonda (disco muy fino) pegada a la superficie. Material OPACO y compartido por color (antes era uno
+	# transparente por mancha: hasta 70 materiales distintos que dibujar); al final se encoge en vez de desvanecerse
 	var q := CylinderMesh.new()
 	q.top_radius = size * 0.5
 	q.bottom_radius = size * 0.5
@@ -87,11 +118,14 @@ static func splat(ctx: Node, pos: Vector3, normal: Vector3, color: Color, size: 
 	q.rings = 1
 	mi.mesh = q
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = color
-	mat.roughness = 0.6
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mi.material_override = mat
+	var k := "splat" + color.to_html()
+	if not _mat_cache.has(k):
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color(color.r, color.g, color.b, 1.0)
+		mat.roughness = 0.6
+		_vigilar()
+		_mat_cache[k] = mat
+	mi.material_override = _mat_cache[k]
 	_raiz(ctx).add_child(mi)
 	var n := normal.normalized()
 	var ref := Vector3.FORWARD if absf(n.dot(Vector3.FORWARD)) < 0.9 else Vector3.RIGHT
@@ -103,7 +137,7 @@ static func splat(ctx: Node, pos: Vector3, normal: Vector3, color: Color, size: 
 	mi.global_transform = Transform3D(b, pos + n * 0.02)
 	var tw := mi.create_tween()
 	tw.tween_interval(life)
-	tw.tween_property(mi.material_override, "albedo_color:a", 0.0, 1.5)
+	tw.tween_property(mi, "scale", Vector3(0.01, 1.0, 0.01), 1.5)
 	tw.tween_callback(func():
 		_decals -= 1
 		mi.queue_free())
@@ -145,26 +179,199 @@ static func tracer(ctx: Node, from: Vector3, to: Vector3) -> void:
 	tw.tween_callback(mi.queue_free)
 
 
-static func muzzle_flash(ctx: Node, mz: Transform3D) -> void:
+## fogonazo: destello en estrella con brillo (dos planos: uno de frente y otro a lo largo del cañón), luz muy breve
+## y una bocanada de humo que sale por la boca y se queda flotando
+static var _tex_destello: Texture2D
+static var _tex_humo: Texture2D
+
+
+static func _textura_destello() -> Texture2D:
+	if _tex_destello == null:
+		var n := 64
+		var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+		for y in n:
+			for x in n:
+				var d := Vector2(x - n * 0.5 + 0.5, y - n * 0.5 + 0.5) / (n * 0.5)
+				var r := d.length()
+				var ang := atan2(d.y, d.x)
+				# núcleo redondo + 5 puntas irregulares
+				var puntas := pow(absf(cos(ang * 2.5 + 0.3)), 6.0) * 0.75 + pow(absf(cos(ang * 4.0)), 10.0) * 0.35
+				var a := clampf(1.0 - r / (0.28 + puntas), 0.0, 1.0)
+				a = a * a * (3.0 - 2.0 * a)
+				img.set_pixel(x, y, Color(1.0, 0.85 + 0.15 * (1.0 - r), 0.55 + 0.45 * maxf(0.0, 1.0 - r * 2.5), a))
+		_vigilar()
+		_tex_destello = ImageTexture.create_from_image(img)
+	return _tex_destello
+
+
+static func _textura_humo() -> Texture2D:
+	if _tex_humo == null:
+		var n := 48
+		var img := Image.create(n, n, false, Image.FORMAT_RGBA8)
+		var ruido := FastNoiseLite.new()
+		ruido.frequency = 0.09
+		for y in n:
+			for x in n:
+				var r := Vector2(x - n * 0.5, y - n * 0.5).length() / (n * 0.5)
+				var a := clampf(1.0 - r, 0.0, 1.0)
+				a = a * a * (0.6 + 0.4 * (ruido.get_noise_2d(x, y) * 0.5 + 0.5))
+				img.set_pixel(x, y, Color(1, 1, 1, a))
+		_vigilar()
+		_tex_humo = ImageTexture.create_from_image(img)
+	return _tex_humo
+
+
+static func _mat_destello() -> StandardMaterial3D:
+	if not _mat_cache.has("destello"):
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		m.albedo_texture = _textura_destello()
+		m.albedo_color = Color(1.0, 0.8, 0.5)
+		m.cull_mode = BaseMaterial3D.CULL_DISABLED
+		m.no_depth_test = false
+		_vigilar()
+		_mat_cache["destello"] = m
+	return _mat_cache["destello"]
+
+
+static func muzzle_flash(ctx: Node, mz: Transform3D, fuerza := 1.0) -> void:
 	var raiz := _raiz(ctx)
 	var luz := OmniLight3D.new()
-	luz.light_color = Color8(255, 190, 110)
-	luz.omni_range = 16
-	luz.light_energy = 6
+	luz.light_color = Color8(255, 185, 105)
+	luz.omni_range = 11
+	luz.light_energy = 4.5 * fuerza
 	raiz.add_child(luz)
-	luz.global_position = mz.origin
+	luz.global_position = (mz * Rbx.cf(0, 0, -0.3)).origin
+	var t := 0.25 * fuerza * (0.85 + randf() * 0.4)
+	# de frente (siempre mirando a la cámara)
 	var f := MeshInstance3D.new()
-	var s := SphereMesh.new()
-	var r := 0.25 * (0.8 + randf() * 0.5)
-	s.radius = r
-	s.height = r * 2
-	f.mesh = s
-	f.material_override = _mat_unshaded(Color8(255, 200, 120), true)
+	var qm := QuadMesh.new()
+	qm.size = Vector2(t * 4.0, t * 4.0)
+	f.mesh = qm
 	f.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	if not _mat_cache.has("destello_bb"):
+		var mf := _mat_destello().duplicate() as StandardMaterial3D
+		mf.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+		_vigilar()
+		_mat_cache["destello_bb"] = mf
+	f.material_override = _mat_cache["destello_bb"]
 	raiz.add_child(f)
-	f.global_position = (mz * Rbx.cf(0, 0, -0.2)).origin
-	_borrar_en(luz, 0.05)
+	f.global_position = (mz * Rbx.cf(0, 0, -0.35 * fuerza)).origin
+	f.rotation.z = randf() * TAU
+	# a lo largo del cañón (se ve bien de lado): dos planos cruzados alargados
+	for k in 2:
+		var l := MeshInstance3D.new()
+		var ql := QuadMesh.new()
+		ql.size = Vector2(t * 2.4, t * 6.0)
+		l.mesh = ql
+		l.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		l.material_override = _mat_destello()
+		raiz.add_child(l)
+		var base := mz * Transform3D(Basis(Vector3.BACK, k * PI * 0.5) * Basis(Vector3.RIGHT, -PI * 0.5), Vector3(0, 0, -t * 3.0))
+		l.global_transform = base
+		_borrar_en(l, 0.035)
+	_borrar_en(luz, 0.045)
 	_borrar_en(f, 0.04)
+	humo(ctx, mz, fuerza)
+
+
+static func humo(ctx: Node, mz: Transform3D, fuerza := 1.0) -> void:
+	# unas bocanadas (planos que miran a la cámara) que salen por la boca, crecen, suben y se desvanecen
+	if not _mat_cache.has("humo"):
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.albedo_texture = _textura_humo()
+		m.albedo_color = Color(0.93, 0.92, 0.9, 0.55)
+		m.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+		m.cull_mode = BaseMaterial3D.CULL_DISABLED
+		_vigilar()
+		_mat_cache["humo"] = m
+	var raiz := _raiz(ctx)
+	var adelante := -mz.basis.z.normalized()
+	for k in int(2 + 2 * fuerza):
+		var mi := MeshInstance3D.new()
+		var q := QuadMesh.new()
+		q.size = Vector2(0.7, 0.7)
+		mi.mesh = q
+		mi.material_override = _mat_cache["humo"]
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		raiz.add_child(mi)
+		var p0 := mz.origin + adelante * (0.2 + k * 0.35)
+		mi.global_position = p0
+		mi.transparency = 0.35
+		var dur := 0.8 + randf() * 0.5
+		var deriva := adelante * (0.6 + randf() * 0.8) * fuerza + Vector3((randf() - 0.5) * 0.4, 0.5 + randf() * 0.5, (randf() - 0.5) * 0.4)
+		var tw := mi.create_tween().set_parallel(true)
+		tw.tween_property(mi, "global_position", p0 + deriva, dur).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+		tw.tween_property(mi, "scale", Vector3.ONE * (2.2 + randf()) * fuerza, dur).set_ease(Tween.EASE_OUT)
+		tw.tween_property(mi, "transparency", 1.0, dur).set_ease(Tween.EASE_IN)
+		tw.chain().tween_callback(mi.queue_free)
+
+
+## casquillo que sale despedido por la ventana de expulsión, rebota en el suelo (sonando) y se queda un rato
+static var _casquillos: Array = []
+const MAX_CASQUILLOS := 30
+
+
+static func casquillo(ctx: Node, pos: Vector3, dir: Vector3, escopeta := false, vel_base := Vector3.ZERO) -> void:
+	var b := RigidBody3D.new()
+	b.collision_layer = 0
+	b.collision_mask = 1
+	b.mass = 0.05
+	b.continuous_cd = true
+	b.contact_monitor = true
+	b.max_contacts_reported = 1
+	b.angular_damp = 0.8
+	var pm := PhysicsMaterial.new()
+	pm.bounce = 0.35
+	pm.friction = 0.6
+	b.physics_material_override = pm
+	var largo := 0.3 if escopeta else 0.16
+	var radio := 0.065 if escopeta else 0.035
+	var cs := CollisionShape3D.new()
+	var bx := BoxShape3D.new()
+	bx.size = Vector3(radio * 2.0, radio * 2.0, largo)
+	cs.shape = bx
+	b.add_child(cs)
+	var mi := MeshInstance3D.new()
+	var cm := CylinderMesh.new()
+	cm.top_radius = radio
+	cm.bottom_radius = radio
+	cm.height = largo
+	cm.radial_segments = 8
+	cm.rings = 1
+	mi.mesh = cm
+	mi.rotation.x = PI * 0.5
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var k := "casq" + str(escopeta)
+	if not _mat_cache.has(k):
+		var m := StandardMaterial3D.new()
+		m.albedo_color = Color8(170, 35, 30) if escopeta else Color8(205, 160, 70)
+		m.metallic = 0.0 if escopeta else 0.85
+		m.roughness = 0.5 if escopeta else 0.3
+		_vigilar()
+		_mat_cache[k] = m
+	mi.material_override = _mat_cache[k]
+	b.add_child(mi)
+	_raiz(ctx).add_child(b)
+	b.global_position = pos
+	b.rotation = Vector3(randf() * TAU, randf() * TAU, 0)
+	b.linear_velocity = vel_base + dir.normalized() * (7.0 + randf() * 3.0) + Vector3(0, 3.0, 0)
+	b.angular_velocity = Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * 30.0
+	var sonado := [false]
+	b.body_entered.connect(func(_o):
+		if not sonado[0] and is_instance_valid(b):
+			sonado[0] = true
+			sonido(b, "Shell", b.global_position, 0.5, 1.0))
+	_casquillos.append(b)
+	while _casquillos.size() > MAX_CASQUILLOS:
+		var v = _casquillos.pop_front()
+		if is_instance_valid(v):
+			v.queue_free()
+	_borrar_en(b, 9.0)
 
 
 ## impacto de bala según lo que se golpea
@@ -176,7 +383,7 @@ static func impacto(ctx: Node, pos: Vector3, normal: Vector3, tipo: String) -> v
 		burst(ctx, pos, normal, Color8(150, 140, 125), 8, 14, 0.3, 0.6, 30)
 		burst(ctx, pos, normal, Color8(255, 200, 120), 3, 30, 0.08, 0.15, 0)
 		splat(ctx, pos, normal, Color8(20, 20, 20), 0.28, 20)
-		sonido(ctx, "Ricochet", pos, 0.35, 0.8 + randf() * 0.4)
+		sonido(ctx, "Ricochet" if randf() < 0.35 else "Impact", pos, 0.45, 0.9 + randf() * 0.2)
 
 
 ## ---------------------------------------------------------------- sonidos sintetizados
@@ -283,13 +490,63 @@ static func _generar(tipo: String) -> AudioStreamWAV:
 	return _wav(out)
 
 
-static func sonido(ctx: Node, tipo: String, pos, vol := 1.0, tono := 1.0) -> void:
+## Sonidos GRABADOS (2026-10-27): `res://sonidos/<tipo>_<n>.ogg` (CC0 de Freesound, ver docs/SONIDOS.md). Si hay
+## varias variantes se elige una al azar sin repetir la anterior; si no hay archivo, se sintetiza como antes.
+## Con un sonido grabado, el tono pedido (pensado para los sintetizados) se suaviza: un tono muy cambiado suena falso.
+static var _variantes := {}       # tipo -> Array[AudioStream] (vacío = no hay grabación)
+static var _ultima := {}          # tipo -> índice de la última variante usada
+const CARPETA_SONIDOS := "res://sonidos/"
+
+
+static func _grabados(tipo: String) -> Array:
+	if not _variantes.has(tipo):
+		var lista := []
+		var n := 1
+		while ResourceLoader.exists(CARPETA_SONIDOS + "%s_%d.ogg" % [tipo, n]):
+			lista.append(load(CARPETA_SONIDOS + "%s_%d.ogg" % [tipo, n]))
+			n += 1
+		_vigilar()
+		_variantes[tipo] = lista
+	return _variantes[tipo]
+
+
+## carga (o genera) de antemano todos los sonidos: el primer disparo ya no da un tirón
+static func precargar() -> void:
+	for tipo in ["Pistol", "Revolver", "Rifle", "SMG", "Shotgun", "Sniper", "Pump", "Bolt", "ReloadRifle", "ReloadPistol",
+			"Reload", "Empty", "Draw", "Shell", "Swing", "Flesh", "Blunt", "Ricochet", "Impact", "Step", "Land", "BodyFall", "Hit"]:
+		if _grabados(tipo).is_empty() and not _sonidos.has(tipo):
+			_vigilar()
+			_sonidos[tipo] = _generar(tipo)
+	# y las texturas del fogonazo y del humo (se generan por código)
+	_textura_destello()
+	_textura_humo()
+
+
+static func _stream(tipo: String) -> Array:
+	# sin ventana (pruebas --headless) no se oye nada: se usa el sintetizado, que no deja archivos .ogg
+	# reproduciéndose al salir (el servidor de audio "dummy" no los suelta → "resources still in use at exit")
+	var g: Array = [] if DisplayServer.get_name() == "headless" else _grabados(tipo)
+	if not g.is_empty():
+		var i := randi() % g.size()
+		if g.size() > 1 and i == int(_ultima.get(tipo, -1)):
+			i = (i + 1) % g.size()
+		_ultima[tipo] = i
+		return [g[i], true]
 	if not _sonidos.has(tipo):
+		_vigilar()
 		_sonidos[tipo] = _generar(tipo)
+	return [_sonidos[tipo], false]
+
+
+static func sonido(ctx: Node, tipo: String, pos, vol := 1.0, tono := 1.0) -> void:
+	var sel := _stream(tipo)
+	if sel[1]:
+		tono = clampf(lerpf(1.0, tono, 0.35), 0.82, 1.22) * (0.96 + randf() * 0.08)
 	var raiz := _raiz(ctx)
 	if pos == null:
 		var p2 := AudioStreamPlayer.new()
-		p2.stream = _sonidos[tipo]
+		p2.add_to_group("efectos_audio")
+		p2.stream = sel[0]
 		p2.volume_db = linear_to_db(vol)
 		p2.pitch_scale = tono
 		raiz.add_child(p2)
@@ -297,11 +554,16 @@ static func sonido(ctx: Node, tipo: String, pos, vol := 1.0, tono := 1.0) -> voi
 		p2.finished.connect(p2.queue_free)
 		return
 	var p := AudioStreamPlayer3D.new()
-	p.stream = _sonidos[tipo]
+	p.add_to_group("efectos_audio")
+	p.stream = sel[0]
 	p.volume_db = linear_to_db(vol) + 6.0
 	p.pitch_scale = tono
 	p.unit_size = 12.0 # escala en studs
 	p.max_distance = 600.0
+	# los disparos se oyen de lejos (y no se cortan en seco al alejarse)
+	if tipo in ["Pistol", "Revolver", "Rifle", "SMG", "Shotgun", "Sniper"]:
+		p.unit_size = 40.0
+		p.max_distance = 1400.0
 	raiz.add_child(p)
 	p.global_position = pos
 	p.play()

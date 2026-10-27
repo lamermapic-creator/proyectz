@@ -48,6 +48,10 @@ var exhausted := false
 var fatiga := 0.0                  # 0..1: cansancio (poca estamina) -> andar con fatiga
 var estamina_infinita: bool = C.PLAYER.get("InfiniteStamina", false) # F4 la activa/desactiva
 var cam_dist := 9.0
+var hud_danio: HudDanio
+var _notif_inicio := false
+var _vel_inercia := Vector3.ZERO # velocidad horizontal con inercia (ver humanoid_step)
+var dist_suave := -1.0  # distancia deseada de la cámara, suavizada (ver update_camera)
 # zoom de la cámara con la rueda del ratón (multiplica la distancia normal; apuntando no cambia)
 const ZOOM_MIN := 0.45
 const ZOOM_MAX := 1.6
@@ -140,6 +144,8 @@ func _ready() -> void:
 	medidor.name = "MedidorRuido"
 	add_child(medidor)
 	Opciones.aplicar(get_tree())
+	# los sonidos se cargan ya (si no, el primer disparo/golpe daba un tirón al prepararlos)
+	Efectos.precargar()
 	# en el ejecutable final no hay trucos de pruebas
 	if not OS.is_debug_build():
 		estamina_infinita = false
@@ -206,33 +212,57 @@ func _crear_hud() -> void:
 	caja.position = Vector2(24, 24)
 	capa.add_child(caja)
 	for k in ["vida", "estamina"]:
+		var fila := HBoxContainer.new()
+		fila.add_theme_constant_override("separation", 8)
+		caja.add_child(fila)
 		var fondo := ColorRect.new()
 		fondo.custom_minimum_size = Vector2(260, 14)
 		fondo.color = Color(0, 0, 0, 0.45)
-		caja.add_child(fondo)
+		fila.add_child(fondo)
 		var barra := ColorRect.new()
 		barra.size = Vector2(260, 14)
 		barra.color = Color8(170, 30, 30) if k == "vida" else Color8(220, 190, 80)
 		fondo.add_child(barra)
 		_hud[k] = barra
+		# rótulo (y la vida en número)
+		var rot := Label.new()
+		rot.text = "VIDA" if k == "vida" else "ESTAMINA"
+		rot.add_theme_font_size_override("font_size", 12)
+		rot.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		rot.custom_minimum_size = Vector2(0, 14)
+		_contorno(rot, 4)
+		rot.modulate = Color(1, 1, 1, 0.85)
+		fila.add_child(rot)
+		_hud[k + "_txt"] = rot
 	var aviso := Label.new()
 	aviso.add_theme_font_size_override("font_size", 22)
 	aviso.anchor_left = 0.5
 	aviso.anchor_right = 0.5
-	aviso.anchor_top = 0.72
+	aviso.anchor_top = 0.63  # (2026-10-27) más arriba: no pisa la barra de armas (abajo a la derecha)
 	aviso.offset_left = -300
 	aviso.offset_right = 300
 	aviso.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_contorno(aviso, 6)
 	capa.add_child(aviso)
 	_hud["aviso"] = aviso
 	var ayuda := Label.new()
-	ayuda.text = "1-4: armas · Clic der: apuntar · Clic izq: disparar/golpear · R: recargar · X: apoyar arma · F: recoger / subir a la moto · Shift: correr · C: agacharse · Z: cuerpo a tierra · Espacio: saltar/sortear · Q/E: asomarse · V: hombro · Rueda: acercar/alejar cámara · Colgado: A/D moverse (Shift: rápido), Espacio subir, S soltarse · Esc: pausa" + (" · F1: trucos · F4: estamina infinita · F5: balas infinitas · F6: ver ruido · F7: zombis sordos" if OS.is_debug_build() else "")
-	ayuda.add_theme_font_size_override("font_size", 14)
-	ayuda.modulate = Color(1, 1, 1, 0.7)
+	ayuda.text = "1-4: armas · Clic der: apuntar · Clic izq: disparar/golpear · R: recargar · X: apoyar arma · F: recoger / subir a la moto · Shift: correr · C: agacharse · Z: cuerpo a tierra · Espacio: saltar/sortear · Q/E: asomarse · V: hombro · H: esta ayuda · Rueda: acercar/alejar cámara · Colgado: A/D moverse (Shift: rápido), Espacio subir, S soltarse · Esc: pausa" + (" · F1: trucos · F4: estamina infinita · F5: balas infinitas · F6: ver ruido · F7: zombis sordos" if OS.is_debug_build() else "")
+	# ayuda de controles: oculta (H la muestra/oculta), en un recuadro que no se sale de la pantalla
+	ayuda.add_theme_font_size_override("font_size", 15)
+	ayuda.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	ayuda.anchor_top = 1.0
 	ayuda.anchor_bottom = 1.0
-	ayuda.offset_top = -32
+	ayuda.anchor_right = 0.62
+	ayuda.offset_top = -170
+	ayuda.offset_bottom = -24
 	ayuda.offset_left = 24
+	ayuda.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	var sb_ay := StyleBoxFlat.new()
+	sb_ay.bg_color = Color(0, 0, 0, 0.55)
+	sb_ay.set_corner_radius_all(6)
+	sb_ay.set_content_margin_all(10)
+	ayuda.add_theme_stylebox_override("normal", sb_ay)
+	ayuda.visible = false
 	capa.add_child(ayuda)
 	_hud["ayuda"] = ayuda
 	_hud["ayuda_pie"] = ayuda.text
@@ -254,7 +284,21 @@ func _crear_hud() -> void:
 	velo.visible = false
 	capa.add_child(velo)
 	_hud["velo"] = velo
+	# daño (viñeta, de dónde te pegan) y pantalla de muerte
+	hud_danio = HudDanio.new()
+	add_child(hud_danio)
 	Arsenal._ignorar_raton(capa)
+	Arsenal._ignorar_raton(hud_danio)
+	_notif_inicio = true
+
+
+## contorno negro para que un texto se lea sobre cualquier fondo (suelo claro, cielo, paredes blancas)
+static func _contorno(l: Label, px := 5) -> void:
+	l.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	l.add_theme_constant_override("outline_size", px)
+	l.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.35))
+	l.add_theme_constant_override("shadow_offset_x", 1)
+	l.add_theme_constant_override("shadow_offset_y", 2)
 
 
 func notify(txt: String) -> void:
@@ -263,7 +307,14 @@ func notify(txt: String) -> void:
 
 
 func _update_hud() -> void:
+	if _notif_inicio and reloj > 0.5:
+		_notif_inicio = false
+		notify("H: ver los controles")
 	_hud["vida"].size.x = 260.0 * clampf(health / max_health, 0, 1)
+	_hud["vida_txt"].text = "VIDA %d" % ceili(health)
+	if hud_danio and camara.is_inside_tree():
+		hud_danio.actualizar(get_process_delta_time(), health / max_health, camara.global_rotation.y, health <= 0.0,
+			MUERTE_REINICIO - (reloj - _muerte_t))
 	_hud["estamina"].size.x = 260.0 * stamina / C.PLAYER.StaminaMax
 	_hud["estamina"].color = Color8(150, 90, 40) if exhausted else Color8(220, 190, 80)
 	if ahora() > _notif_hasta:
@@ -275,7 +326,7 @@ func _update_hud() -> void:
 		var kmh := absf(moto.velocidad()) * C.STUD * 3.6
 		var m_txt := "R" if moto.velocidad() < -0.5 else str(moto.marcha)
 		velo.text = "%d km/h\n%sª%s" % [roundi(kmh), m_txt, " · luces" if moto.luces else ""]
-		_hud["ayuda"].text = "W: gas · S: freno / marcha atrás · A/D: girar · Espacio: freno de mano (derrapar) · En el aire: Shift/Ctrl inclinarse · Clic der: apuntar · Clic izq: disparar/golpear · 1-4: armas de una mano · F: bajarse (en marcha, saltar) · L: luces · V: hombro · Esc: pausa"
+		_hud["ayuda"].text = "W: gas · S: freno / marcha atrás · A/D: girar · Espacio: freno de mano (derrapar) · En el aire: Shift/Ctrl inclinarse · Clic der: apuntar · Clic izq: disparar/golpear · 1-4: armas de una mano · F: bajarse (en marcha, saltar) · L: luces · V: hombro · H: esta ayuda · Esc: pausa"
 	else:
 		_hud["ayuda"].text = _hud["ayuda_pie"]
 
@@ -314,6 +365,8 @@ func _unhandled_input(e: InputEvent) -> void:
 					bajar_moto()
 				KEY_L:
 					moto.luces = not moto.luces
+				KEY_H:
+					_hud["ayuda"].visible = not _hud["ayuda"].visible
 				KEY_V:
 					side = -side
 				KEY_ALT:
@@ -348,6 +401,8 @@ func _unhandled_input(e: InputEvent) -> void:
 						jump_or_vault()
 				KEY_V:
 					side = -side
+				KEY_H:
+					_hud["ayuda"].visible = not _hud["ayuda"].visible
 				KEY_F4:
 					# pruebas: estamina infinita sí/no (para probar el cansancio). Solo en desarrollo
 					if not OS.is_debug_build():
@@ -1059,6 +1114,9 @@ func recibir_danio(cantidad: float, desde: Vector3 = Vector3.ZERO) -> void:
 	health = maxf(0.0, health - cantidad)
 	_danio_t = reloj
 	shake = minf(1.0, shake + 0.45)
+	if hud_danio:
+		var origen = desde if (desde != Vector3.ZERO and Rbx.flat(desde - global_position).length() > 0.6) else null
+		hud_danio.golpe(cantidad, global_position, origen)
 	var dir := Rbx.flat(global_position - desde)
 	if dir.length() > 0.01:
 		empuje += dir.normalized() * 6.0
@@ -1108,8 +1166,7 @@ func _morir() -> void:
 	else:
 		ragdoll_iniciar(vel_real, {"comportamiento": "morir", "vivo": false, "duracion": -1.0,
 			"impulso": _golpe_dir * 9.0 + Vector3(0, 2, 0), "pieza": "UpperTorso"})
-	notify("HAS MUERTO")
-	_notif_hasta = reloj + MUERTE_REINICIO + 1.0
+	# (la pantalla de muerte la pone HudDanio)
 
 
 ## regenera vida si lleva un rato sin recibir daño (ZConfig.PLAYER.RegenDelay / RegenRate); muerto,
@@ -1454,6 +1511,20 @@ func humanoid_step(dt: float) -> void:
 	var v := velocity
 	var mov: Vector3 = move_direction if _move_override == null else _move_override
 	var horiz := mov * walk_speed
+	# INERCIA en el suelo (2026-10-27): al soltar las teclas se frena en uno o dos pasos (antes se paraba en seco,
+	# también corriendo) y al cambiar de sentido se pasa por cero en vez de girar al instante
+	if estado == "Running" and _move_override == null and vaulting == null and colgado == null:
+		var obj := Vector3(horiz.x, 0, horiz.z)
+		var a: float = 60.0
+		if obj.length() < 0.05:
+			a = C.PLAYER.Frenada
+		elif obj.dot(_vel_inercia) < 0.0 or obj.length() < _vel_inercia.length() - 0.5:
+			a = C.PLAYER.Frenada * 1.4
+		_vel_inercia = _vel_inercia.move_toward(obj, a * dt)
+		horiz = Vector3(_vel_inercia.x, horiz.y, _vel_inercia.z)
+	else:
+		_vel_inercia = Rbx.flat(vel_real)
+	var horiz_pedido := Rbx.flat(horiz)
 	# empujón propio (acometida de un golpe): se suma y se apaga enseguida
 	if en_suelo:
 		horiz += empuje
@@ -1507,6 +1578,8 @@ func humanoid_step(dt: float) -> void:
 				# aterrizaje: cuanto más fuerte el golpe, más lejos se oye
 				Ruido.emitir(self, gnd2.position, Ruido.radio_aterrizaje(-v.y), Ruido.ATERRIZAJE, self)
 				var golpe_pies := -v.y
+				if golpe_pies > 9.0:
+					Efectos.sonido(self, "Land", gnd2.position, clampf(golpe_pies / 30.0, 0.3, 1.2), 1.0)
 				_set_estado("Landed")
 				_set_estado("Running")
 				en_suelo = true
@@ -1531,6 +1604,12 @@ func humanoid_step(dt: float) -> void:
 			_set_estado("Jumping")
 	velocity = Vector3(horiz.x, v.y, horiz.z)
 	move_and_slide()
+	# contra una pared la inercia no se acumula (no sale disparado al dejar de tocarla)
+	if estado == "Running" and horiz_pedido.length() > 0.5:
+		var real_h := Rbx.flat(get_real_velocity())
+		var k_real := real_h.length() / horiz_pedido.length()
+		if k_real < 0.85:
+			_vel_inercia *= maxf(k_real, 0.0)
 	# techo: deja de subir
 	for i in get_slide_collision_count():
 		var col := get_slide_collision(i)
@@ -1600,12 +1679,12 @@ func update_camera(dt: float) -> void:
 	# contra una pared con Shift pulsado el personaje se para y la cámara también
 	var vel_h := Vector2(vel_real.x, vel_real.z).length()
 	var sprinting: bool = walk_speed > C.PLAYER.WalkSpeed + 1 and vel_h > C.PLAYER.WalkSpeed + 1 and not en_moto
-	var dist := 4.6 if aiming else (9.5 if sprinting else 8.5)
+	var dist := 5.2 if aiming else (9.5 if sprinting else 8.5)
 	if en_moto:
 		# más lejos y más campo de visión cuanto más deprisa (sensación de velocidad)
 		dist = 6.0 if aiming else 8.5 + clampf(v_moto / 72.0, 0.0, 1.0) * 2.5
 	if stance == 2:
-		dist = 4.0 if aiming else 6.5
+		dist = 4.4 if aiming else 7.5
 	if not aiming:
 		dist *= zoom_cam
 	var fov := (62.0 if aiming else (76.0 if sprinting else 70.0)) + (Opciones.fov - 70.0)
@@ -1617,8 +1696,15 @@ func update_camera(dt: float) -> void:
 		and arsenal.ahora() >= arsenal.draw_until and health > 0
 	if mira_tele:
 		fov = float(wcfg.Scope)
-	var shoulder := (2.1 if aiming else 2.4) * side_cur
+	# apuntando, la cámara va más al hombro: el personaje tapa menos pantalla
+	var shoulder := (2.6 if aiming else 2.4) * side_cur
 	var height := 0.55 if aiming else 0.4
+	# cuerpo a tierra: la cámara se pone más alta y hacia la cabeza, para ver por encima del cuerpo (antes las
+	# piernas, estiradas hacia la cámara, tapaban media pantalla)
+	var k_tumb := smooth01(prone_p) if not supine else 0.0
+	if k_tumb > 0.0 and not en_moto:
+		height = lerpf(height, 0.75 if aiming else 1.7, k_tumb)
+		pivot += Rbx.look(Rbx.ang(0, yaw, 0)) * (1.2 if not aiming else 0.6) * k_tumb
 	if en_moto:
 		height = 0.95 if aiming else 1.3
 		if aiming:
@@ -1677,7 +1763,11 @@ func update_camera(dt: float) -> void:
 	# poco sitio detrás (de espaldas a una pared): la cámara sube por encima de la cabeza para ver por
 	# encima de ella en vez de pegarse a la nuca (sin pasar del techo)
 	var apretado := clampf((4.5 - cam_dist) / 3.0, 0.0, 1.0) if stance != 2 else 0.0
-	apretado_cur += (apretado - apretado_cur) * minf(1, dt * (10.0 if apretado > apretado_cur else 3.0))
+	# (sube al momento: girando de espaldas a una pared la cámara no puede pasar por dentro de la cabeza)
+	if apretado > apretado_cur:
+		apretado_cur = apretado
+	else:
+		apretado_cur += (apretado - apretado_cur) * minf(1, dt * 3.0)
 	var sube := apretado_cur * 1.4
 	if not up_hit.is_empty():
 		sube = minf(sube, maxf(0.0, up_hit.distance - 0.7 - height_cur))
@@ -1691,9 +1781,14 @@ func update_camera(dt: float) -> void:
 			shoulder_pt = p2
 			if not _esfera_choca(p2, 0.42):
 				break
-	var back := -Rbx.look(rot) * dist
+	# la distancia deseada cambia con suavidad (apuntar, tumbarse, dejar de correr): antes saltaba de golpe
+	# hasta 4 studs en un fotograma. Las paredes siguen acercándola al instante (abajo)
+	if dist_suave < 0.0:
+		dist_suave = dist
+	dist_suave += (dist - dist_suave) * minf(1, dt * (13.0 if dist < dist_suave else 6.0))
+	var back := -Rbx.look(rot) * dist_suave
 	var c_hit := spherecast(shoulder_pt, 0.4, back)
-	var allowed := maxf(0.5, c_hit - 0.1) if c_hit >= 0 else dist
+	var allowed := maxf(0.5, c_hit - 0.1) if c_hit >= 0 else dist_suave
 	if allowed < cam_dist:
 		cam_dist = allowed
 	else:
@@ -1731,7 +1826,15 @@ func update_camera(dt: float) -> void:
 		if comp_cur < 0.5 and cam_dist < 5:
 			fade_t = maxf(fade_t, (0.5 - comp_cur) * 1.1)
 		fade_t = maxf(fade_t, apretado_cur * 0.9)
-	fade_cur += (fade_t - fade_cur) * minf(1, dt * 10)
+		# cámara metida en la cabeza (o casi): el personaje no se dibuja
+		if d < 1.0:
+			fade_t = 1.0
+	# se vuelve transparente AL MOMENTO (si no, durante unos fotogramas se veía el interior de la cabeza);
+	# vuelve a verse poco a poco
+	if fade_t > fade_cur:
+		fade_cur = fade_t
+	else:
+		fade_cur += (fade_t - fade_cur) * minf(1, dt * 10)
 	if fade_cur < 0.01:
 		fade_cur = 0
 	rig.set_fade(fade_cur)

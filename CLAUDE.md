@@ -75,7 +75,7 @@ Responder SIEMPRE en español. Presupuesto 0 $: solo recursos gratuitos.
   - (Claude de Juan: escribe aquí)
 
 ## Problemas conocidos
-- Al caerse de la moto no hay ragdoll: el cuerpo sale despedido y aterriza de pie (pendiente con el sistema Euphoria).
+- (Ninguno abierto ahora. El de "sin ragdoll al caerse de la moto" se arregló el 2026-10-25.)
 
 ---
 
@@ -99,9 +99,9 @@ Juego de zombis en tercera persona, realista. Empezó en Roblox Studio, pasó po
 
 ## Conexión Claude ↔ Godot (resuelta 2026-10-20)
 - Godot 4.7.2 portable: `C:\Users\ferna\Desktop\Godot_v4.7.2-stable_win64.exe` (para computer use hay que resolverlo por su ruta completa).
-- Plugin **Godot AI v4.3.0** (hi-godot/godot-ai) en `addons/godot_ai`; puertos HTTP 8001 / WS 8002. uv en `C:\Users\ferna\.local\bin`.
+- Plugin **Godot AI v4.3.1** (hi-godot/godot-ai) en `addons/godot_ai`; puertos HTTP 8001 / WS 8002. uv en `C:\Users\ferna\.local\bin`.
 - La migración v3→v4 se quedaba trabada → `"clients_migrated": true` en `addons/.godot_ai_update/pending.json`. El botón Configure se cuelga → la config de Claude Desktop se pega a mano (Claude Desktop es MSIX y Claude no puede escribir su propia config).
-- `mcpServers` que funciona: `"godot-ai": {"command": "C:\\Users\\ferna\\.local\\bin\\uvx.exe", "args": ["--system-certs", "--from", "godot-ai==4.3.0", "godot-ai", "attach", "--port", "8001", "--ws-port", "8002"], "env": {"UV_CACHE_DIR": "C:\\Users\\ferna\\AppData\\Local\\uv\\cache", "UV_PYTHON_INSTALL_DIR": "C:\\Users\\ferna\\AppData\\Roaming\\uv\\python"}}, "Roblox_Studio": {"command": "cmd.exe", "args": ["/c", "C:\\Users\\ferna\\AppData\\Local\\Roblox\\mcp.bat"]}`
+- `mcpServers` que funciona: `"godot-ai": {"command": "C:\\Users\\ferna\\.local\\bin\\uvx.exe", "args": ["--system-certs", "--from", "godot-ai==4.3.1", "godot-ai", "attach", "--port", "8001", "--ws-port", "8002"], "env": {"UV_CACHE_DIR": "C:\\Users\\ferna\\AppData\\Local\\uv\\cache", "UV_PYTHON_INSTALL_DIR": "C:\\Users\\ferna\\AppData\\Roaming\\uv\\python"}}, "Roblox_Studio": {"command": "cmd.exe", "args": ["/c", "C:\\Users\\ferna\\AppData\\Local\\Roblox\\mcp.bat"]}`
 - Roblox Studio: Assistant → … → Manage MCP Servers → "Enable Studio as MCP server".
 - Herramientas: `mcp__remote-devices__godot-ai__*` y `mcp__remote-devices__Roblox_Studio__*` (tardan ~1 min tras abrir Claude; usar RefreshMcpTools).
 
@@ -213,6 +213,24 @@ Freesound (sonidos), Poly Haven y ambientCG (texturas/HDRI), Quaternius y Kenney
 - Moto caída: `Moto.caer()` → `_crear_fisica()` (RigidBody3D masa 25, centro de masas alto, formas de ruedas, manillar
   y estribos); `_paso_fisica` sigue al cuerpo; `empezar_a_levantar`/`levantar` la vuelven a la pata.
 - Pruebas: `tests/ragdoll.gd --modo=empuje|alto|morir|limites|j_derribo|j_caida|j_aterriza|j_morir`.
+
+## Pulido de jugabilidad (2026-10-27, KangooG) — revisión en `docs/REVISION_JUGABILIDAD.md`
+- **Sonido:** `sonidos/Tipo_n.ogg` (Freesound CC0, créditos en `docs/SONIDOS.md`). `Efectos.sonido(ctx, tipo, pos, vol,
+  tono)` elige una variante al azar (sin repetir la anterior); sin archivo, sintetizado; en `--headless` siempre
+  sintetizado. `Efectos.precargar()` en `Jugador._ready`. Para sonidos nuevos: procesar a mono 44,1 kHz Vorbis y
+  volumen normalizado como los demás.
+- **Efectos:** `Efectos.muzzle_flash(ctx, muzzle, fuerza)`, `humo`, `casquillo` (RigidBody3D capa 0, máx. 30);
+  `Arsenal.expulsar_casquillo`. Cachés estáticas que se vacían al salir (`Efectos.limpiar`).
+- **Inercia:** `Jugador._vel_inercia` en `humanoid_step` (solo en "Running" sin vallar/colgarse/mover forzado);
+  `ZConfig.PLAYER.Frenada`. Si se añade un movimiento forzado nuevo, ponerlo en `_move_override` o la inercia lo frenará.
+- **Cámara:** `dist_suave` (la distancia se acerca suave y al instante si choca), `apretado_cur` sube al instante.
+- **HUD:** `Jugador._contorno(label, px)`, ayuda con H (`_hud.ayuda`), barra de armas auto-oculta (`Arsenal._barra_t`),
+  `HudDanio` (`hud_danio.golpe(cantidad, pos, desde)` desde `recibir_danio`; `desde` = null si no se sabe de dónde).
+- **Ragdoll:** `Ragdoll.EXAGERA` / `NERVIO` escalan todos los gestos (pedido: "muchísimo más exagerado").
+- **Pruebas de recorrido:** `tests/recorrido.gd` + `tests/escena_recorrido.tscn` `--escenario=<andar|correr_giro|saltos|
+  agacharse|vallar|trepar|cornisa|escalera|pared_cam|rifle|giro_disparo|danio|pistola_bate>` (`--detalle`,
+  `--velocidades`): imprime `RECORRIDO … cam_tiron cam_dentro pie_resbala vmax`. Con `--write-movie` se ve como en el juego.
+- `InfiniteStamina` ahora es `false` (F4 la activa para probar).
 
 ## Ruido y zombis v0 (2026-10-23, a pedido de Juan) — guía completa: `docs/RUIDO_Y_ZOMBIS.md`
 - **Sistema de ruido** (`scripts/ruido/ruido.gd`, clase estática `Ruido`, sin autoload): quien hace ruido llama a

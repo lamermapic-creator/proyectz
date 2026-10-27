@@ -412,6 +412,9 @@ func update_feet(root_cf: Transform3D, vel: Vector3, speed: float, dt: float, gr
 				# el pie toca el suelo: pisada (ruido que oyen los zombis)
 				if grounded:
 					Ruido.emitir(jugador, to, Ruido.radio_paso(step_k, bool(sw.get("idle", false))), Ruido.PASO, jugador)
+					# pisada que se oye (más fuerte corriendo, casi nada agachado o recolocando los pies)
+					var v_paso := clampf(step_k, 0.12, 1.0) * (0.35 if bool(sw.get("idle", false)) else 1.0)
+					Efectos.sonido(jugador, "Step", to, 0.25 + 0.75 * v_paso, 0.92 + step_k * 0.12)
 				f.pos = to
 				f.normal = idl[1]
 				f.swing = null
@@ -820,6 +823,9 @@ func _paso_accion(mdl: Node3D) -> void:
 	if u >= 0.0 and u <= 1.0 and not get_meta("accion_snd", false) and u > 0.15:
 		set_meta("accion_snd", true)
 		Efectos.sonido(jugador, "Pump" if pump else "Bolt", jugador.global_position, 0.7, 1.0)
+		var mdl2 = jugador.arsenal.modelo_mano
+		if mdl2 and mdl2.has_node("Muzzle"):
+			jugador.arsenal.expulsar_casquillo((mdl2.get_node("Muzzle") as Node3D).global_transform, pump != null)
 	elif u > 1.0:
 		set_meta("accion_snd", false)
 
@@ -881,7 +887,6 @@ func _mag_visual(ev: String) -> void:
 		if hand_mag:
 			hand_mag.queue_free()
 			hand_mag = null
-		Efectos.sonido(jugador, "Shell", jugador.global_position, 0.6, 0.9 + randf() * 0.2)
 		jugador.arsenal.cartucho_metido()
 		return
 	if mdl == null or not mdl.has_node("Mag"):

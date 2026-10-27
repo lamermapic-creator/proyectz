@@ -107,6 +107,7 @@ func _proceso_jugador(dt: float) -> void:
 		get_tree().quit()
 
 var notas_j := {}
+var _mov_acc := 0.0
 
 func _process(dt: float) -> void:
 	t += dt
@@ -123,8 +124,16 @@ func _process(dt: float) -> void:
 		var hi: RigidBody3D = rd.cuerpos[m.part1]
 		var e := ((pa.global_transform * m.c0).origin - (hi.global_transform * m.c1).origin).length()
 		max_estiramiento = maxf(max_estiramiento, e)
+	# movimiento de los miembros respecto al torso (rad/s medio): mide lo "vivo" que se mueve el cuerpo
+	var wt: Vector3 = rd.torso().angular_velocity
+	var wsum := 0.0
+	for n in rd.cuerpos:
+		wsum += ((rd.cuerpos[n] as RigidBody3D).angular_velocity - wt).length()
+	_mov_acc += wsum / rd.cuerpos.size() * dt
 	if fmod(t, 0.5) < dt:
-		print("RAG t=%.2f comp=%s pelvis_y=%.2f v=%.1f estira=%.2f arriba=%s" % [t, rd.comportamiento, p.y, rd.velocidad(), max_estiramiento, str(rd.boca_arriba())])
+		print("RAG t=%.2f comp=%s pelvis_y=%.2f v=%.1f estira=%.2f arriba=%s mov=%.2f" % [t, rd.comportamiento, p.y,
+			rd.velocidad(), max_estiramiento, str(rd.boca_arriba()), _mov_acc / 0.5])
+		_mov_acc = 0.0
 	cam.current = true
 	var foco := p + Vector3(0, 0.5, 0)
 	cam.global_position = foco + Vector3(14, 6, 6)

@@ -16,12 +16,13 @@ const PLAYER := {
 	"ExhaustRecover": 0.25,    # agotado: no puedes volver a correr hasta recuperar este % de estamina
 	"AimSpeed": 3.6,           # caminar apuntando
 	"Accel": 3.2,              # inercia al arrancar/frenar (más bajo = más peso)
+	"Frenada": 26.0,           # deceleración al soltar las teclas (studs/s²): andando ~0,2 s, corriendo ~0,5 s
 	"JumpHeight": 2.1,
 	"JumpDistance": 8.0,       # distancia fija del salto en movimiento (~2.5 m), andando o corriendo
 	"ProneTime": 1.35,         # segundos que tarda en tirarse al suelo / levantarse (por fases)
 	"ProneRootHeight": 0.6,    # tumbado, la cápsula de colisión es baja
 	"StaminaMax": 100.0,
-	"InfiniteStamina": true,   # SOLO PARA PRUEBAS: poner en false para volver a la estamina normal
+	"InfiniteStamina": false,   # SOLO PARA PRUEBAS: poner en false para volver a la estamina normal
 	"SprintDrain": 11.0,       # por segundo (~9 s de carrera con la estamina llena)
 	"StaminaRegen": 15.0,
 	"JumpCost": 12.0,
