@@ -4,7 +4,7 @@ extends Node3D
 
 const JUEGO := "res://escenas/pruebas_movimiento.tscn"
 const NIVEL := preload("res://scripts/nivel/nivel_pruebas.gd")
-const VERSION := "v0.2 · prototipo"
+const VERSION := "V0.3 · prototipo"
 
 var cam: Camera3D
 var rig: RigPersonaje

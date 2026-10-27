@@ -13,6 +13,11 @@ en el mismo commit que el cambio. Formato:
 
 ---
 
+## 2026-10-27 (3) · KangooG · Claude — versión V0.3 en el menú
+**Qué:** el menú principal muestra "V0.3 · prototipo" (abajo a la derecha) en vez de "v0.2".
+**Archivos:** `scripts/ui/menu_principal.gd` (`VERSION`).
+**Cómo probarlo:** abrir el juego y mirar la esquina inferior derecha del menú.
+
 ## 2026-10-27 (2) · KangooG · Claude — pulido de la jugabilidad: sonido, efectos, cámara, inercia, HUD y ragdoll
 Antes se hizo una revisión jugando escenarios con la cámara del juego y midiendo (`docs/REVISION_JUGABILIDAD.md`,
 19 puntos). KangooG eligió: armas y sonido, interfaz, movimiento, cámara y un ragdoll mucho más exagerado.
