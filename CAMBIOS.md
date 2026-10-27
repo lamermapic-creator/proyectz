@@ -13,6 +13,15 @@ en el mismo commit que el cambio. Formato:
 
 ---
 
+## 2026-10-27 · KangooG · Claude — plugin Godot AI actualizado a 4.3.1 (a mano)
+**Qué:** el botón "Actualizar" del plugin 4.3.0 dejaba Godot congelado (fallo del propio actualizador, corregido en
+4.3.1: "fix(update): type the activation runner's loop variables"). Se instaló 4.3.1 a mano con Godot cerrado: zip
+oficial `godot-ai-v4-plugin.zip`, cada archivo comprobado con el manifiesto de la versión (313 archivos, mismos que
+antes; cambian 6).
+**Archivos:** `addons/godot_ai/` (plugin.cfg, update_activation_runner.gd, filesystem_handler.gd,
+filesystem_mutation.gd, game_helper.gd, path_validator.gd).
+**Pendiente / avisos:** Juan: al hacer pull tendrás también 4.3.1 (no pulses "Actualizar" si te sale en 4.3.0).
+
 ## 2026-10-25 (3) · KangooG · Claude — moto: cuestas empinadas, gravedad y cabeceo de verdad
 **Qué:**
 - **Rampas empinadas a toda velocidad:** antes la moto tomaba una cuesta de más de ~49° por una pared, se estrellaba y el
