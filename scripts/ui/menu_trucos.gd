@@ -13,6 +13,7 @@ const ZONAS := [
 	["Inicio", Vector3(0, 0, 0), 0.0],
 	["Bloques (saltar / trepar)", Vector3(-3, 0, -5.5), 0.0],
 	["Rampas 15° / 30° / 50°", Vector3(16, 0, -8.5), 0.0],
+	["Cuesta de 50° (trepar con las manos)", Vector3(22, 0, -10.5), 0.0],
 	["Escalera", Vector3(-20, 0, 1.5), 180.0],
 	["Túneles (1.4 m y 0.8 m)", Vector3(8, 0, 15.5), 0.0],
 	["Muros bajos y mesa (apoyar)", Vector3(-2, 0, 12.3), 180.0],

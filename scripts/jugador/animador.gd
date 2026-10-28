@@ -67,6 +67,22 @@ var roll_t := 0.0
 var roll_side := 1.0
 var rl := 0.0
 var last_prone_t := -9.0
+## cuesta (2026-10-28): los puntos de apoyo de pies y manos se mueven suaves (al entrar, al cambiar de postura y al
+## trepar no saltan de un sitio a otro)
+var cu_suave := {}
+var cu_pasos := {}
+var cu_pie := {}     # orientación de cada pie en la cuesta (suavizada)
+var cu_mano_v := {}  # (velocidad de cada mano en la cuesta)
+var cu_mano := {}    # en la cuesta: dónde va de verdad cada mano (sigue a su sitio sin saltos: arma <-> cuesta)   # apoyos de pies y manos en la cuesta: {anc, vuela, desde, t, ult}
+var cu_post := ""
+var cu_cambio_t := -9.0
+var ultima_cuesta_t := -9.0
+var pies_ant := {}   # fuera de la cuesta: dónde estaba cada pie el fotograma anterior y a qué velocidad iba
+var pies_vel := {}
+var muelle_q := {}   # estado del muelle de cada articulación (giro), aparte de lo que se muestra
+var vel_j := {}
+var muelle_p := {}   # (posición, para la cadera)
+var vel_p := {}      # velocidad de giro de cada articulación (para el suavizado de muelle)
 var get_up = null
 var air_start := 0.0
 var jump_lead := "R"
@@ -637,8 +653,64 @@ func update_roll(f: Dictionary, s: String, hip: Vector3, yaw: float, yaw_only: T
 
 ## suavizado de articulaciones: da peso e inercia al cuerpo (evita movimientos bruscos)
 func smooth_j(m: RigPersonaje.Motor, key: String, rate: float, dt: float) -> void:
+	if muelle_p.has(key):
+		vel_p[key] = Vector3.ZERO
+	muelle_q.erase(key)
+	muelle_p.erase(key)
 	if prev_t.has(key):
 		m.transform = (prev_t[key] as Transform3D).interpolate_with(m.transform, 1 - exp(-rate * dt))
+		_anota_vel_j(key, prev_t[key], m.transform, dt)
+	prev_t[key] = m.transform
+
+
+## Solo registra la pose de la articulación (y a qué velocidad gira), sin suavizar.
+func anota_j(m: RigPersonaje.Motor, key: String, dt: float) -> void:
+	muelle_q.erase(key)
+	muelle_p.erase(key)
+	if prev_t.has(key):
+		_anota_vel_j(key, prev_t[key], m.transform, dt)
+	prev_t[key] = m.transform
+
+
+func _anota_vel_j(key: String, ant: Transform3D, nuevo: Transform3D, dt: float) -> void:
+	var dq := Quaternion(nuevo.basis.orthonormalized()) * Quaternion(ant.basis.orthonormalized()).inverse()
+	if dq.w < 0.0:
+		dq = -dq
+	vel_j[key] = (dq.get_axis() * dq.get_angle() / maxf(dt, 1e-3)) if dq.get_angle() > 1e-5 else Vector3.ZERO
+
+
+## Suavizado "de muelle" (amortiguado crítico): la articulación acelera y frena hacia su pose sin tirones,
+## aunque la pose objetivo salte (cambio de postura, entrar o salir de la cuesta). Conserva el giro que llevaba.
+func smooth_j2(m: RigPersonaje.Motor, key: String, omega: float, dt: float, a_directo := 0.0) -> void:
+	var qt := Quaternion(m.transform.basis.orthonormalized())
+	var orig := m.transform.origin
+	if not muelle_q.has(key):
+		# (empieza desde donde estaba la articulación, con el giro que llevaba)
+		muelle_q[key] = Quaternion((prev_t.get(key, m.transform) as Transform3D).basis.orthonormalized())
+	var q: Quaternion = muelle_q[key]
+	var e := qt * q.inverse()
+	if e.w < 0.0:
+		e = -e
+	var ev := e.get_axis() * e.get_angle() if e.get_angle() > 1e-5 else Vector3.ZERO
+	var w: Vector3 = vel_j.get(key, Vector3.ZERO)
+	# (paso implícito: estable aunque el fotograma sea largo)
+	w = (w + ev * (omega * omega * dt)) / (1.0 + 2.0 * omega * dt + omega * omega * dt * dt)
+	var giro := w * dt
+	var q2 := ((Quaternion(giro.normalized(), giro.length()) * q) if giro.length() > 1e-6 else q).normalized()
+	vel_j[key] = w
+	muelle_q[key] = q2
+	# la posición (solo la cadera se desplaza) va con el mismo muelle
+	if not muelle_p.has(key):
+		muelle_p[key] = (prev_t.get(key, m.transform) as Transform3D).origin
+	var p: Vector3 = muelle_p[key]
+	var vp: Vector3 = vel_p.get(key, Vector3.ZERO)
+	vp = (vp + (orig - p) * (omega * omega * dt)) / (1.0 + 2.0 * omega * dt + omega * omega * dt * dt)
+	p += vp * dt
+	vel_p[key] = vp
+	muelle_p[key] = p
+	# (a_directo: al final de una transición se va pasando, sin salto, a la pose tal cual)
+	var ad := clampf(a_directo, 0.0, 1.0)
+	m.transform = Transform3D(Basis(q2.slerp(qt, ad)), p.lerp(orig, ad))
 	prev_t[key] = m.transform
 
 
@@ -972,6 +1044,20 @@ func update_rig(dt: float) -> void:
 	var mt = L.get("moto")
 	if mt != null:
 		speed = 0.0
+	# EN UNA CUESTA EMPINADA (L.cuesta, ver Jugador._paso_cuesta): postura propia, sin pasos de andar
+	var cu = L.get("cuesta")
+	if cu != null:
+		speed = 0.0
+	elif not cu_suave.is_empty() or not cu_pasos.is_empty():
+		cu_suave.clear()
+		cu_pasos.clear()
+		cu_pie.clear()
+		cu_post = ""
+	if cu == null:
+		for s in ["L", "R"]:
+			var pf: Vector3 = ((P.LeftFoot if s == "L" else P.RightFoot) as Node3D).global_transform.origin
+			pies_vel[s] = (pf - (pies_ant.get(s, pf) as Vector3)) / maxf(dt, 1e-3)
+			pies_ant[s] = pf
 	acc = acc.lerp((lv - prev_lv) / maxf(dt, 1e-3), minf(1, dt * 6))
 	prev_lv = lv
 	var dyaw := Rbx.wrap_a(yaw - prev_yaw)
@@ -986,7 +1072,7 @@ func update_rig(dt: float) -> void:
 		var gy_r: float = ground(root_cf.origin)[0]
 		if root_cf.origin.y - gy_r > J.hip_height + J.root_size.y / 2 + 0.7:
 			grounded = false
-	if mt != null:
+	if mt != null or cu != null:
 		grounded = false
 
 	var pitch: float = L.pitch
@@ -1008,7 +1094,7 @@ func update_rig(dt: float) -> void:
 	# debajo y de pie (las fases de cuerpo a tierra al revés). Boca arriba: antes rueda hasta quedar boca abajo
 	var gu_rueda := -1.0
 	if levantarse != null:
-		var gt: float = now - float(levantarse.t0)
+		var gt: float = (now - float(levantarse.t0)) * float(levantarse.get("vel", 1.0))
 		var rueda_d := 0.75 if levantarse.arriba else 0.0
 		if gt < rueda_d + float(C.PLAYER.ProneTime):
 			var gp := 1.0 if gt < rueda_d else 1.0 - (gt - rueda_d) / float(C.PLAYER.ProneTime)
@@ -1092,6 +1178,7 @@ func update_rig(dt: float) -> void:
 	breath_t += dt * (1.5 + exertion * 3)
 	var breath := sin(breath_t) * (0.012 + exertion * 0.045)
 	var leg_targets := {}
+	var cu_manos := {}   # en la cuesta: dónde apoya cada mano (si la tiene libre)
 	var pelvis_cf: Transform3D
 	var Mr: RigPersonaje.Motor = M.Root
 
@@ -1129,6 +1216,188 @@ func update_rig(dt: float) -> void:
 					t_m = t_m.lerp((mt.pie_suelo as Vector3) + Vector3(0, 0.32, 0), 1.0 - Rbx.smooth(k_sub))
 			leg_targets[s] = t_m
 			leg_targets["pole" + s] = (pelvis_cf * Rbx.cf(sgn * (hip_x + 0.9), 0.4, -5.0)).origin
+		pelvis_drop = 0.0
+		replant = true
+	elif cu != null:
+		## -------- CUESTA EMPINADA (2026-10-28): trepa con las manos, o quieto en una postura
+		var post: String = cu.postura
+		var n_c: Vector3 = cu.n
+		var a_c: float = cu.ang
+		var fz: float = cu.fase
+		var mk: float = cu.mov
+		var g_c := Vector3(root_cf.origin.x, ground(root_cf.origin)[0], root_cf.origin.z)
+		var fw := Rbx.look(root_cf)
+		fw = Vector3(fw.x, 0, fw.z).normalized()
+		var rr := Rbx.right(root_cf)
+		rr = Vector3(rr.x, 0, rr.z).normalized()
+		var arriba_c: Vector3 = cu.arriba
+		var en_c := func(o: Vector3, alto: float) -> Vector3:
+			# punto de la cuesta a un desplazamiento horizontal "o" del pie del cuerpo, "alto" por encima
+			return g_c + o + Vector3(0, -(n_c.x * o.x + n_c.z * o.z) / maxf(n_c.y, 0.3), 0) + n_c * alto
+		var p_pitch := 0.0
+		var p_roll := 0.0
+		var lado_alto := signf(rr.dot(arriba_c)) # 1 = la cuesta sube hacia la derecha del cuerpo
+		# sitio de reposo de cada apoyo según la postura: [desplazamiento horizontal, altura sobre la cuesta, cuánto se
+		# levanta al dar el paso, desfase en el ciclo]. Pies "L"/"R", manos "mL"/"mR". Mano izquierda con pie derecho.
+		var apoyos := {}
+		var vuelo := 0.35 # parte del ciclo que cada apoyo va por el aire (siempre hay dos apoyados)
+		var fijo := false # sentado/resbalando: no da pasos, los apoyos van con el cuerpo
+		var poles := {}
+		match post:
+			"trepa":
+				# inclinado hacia la cuesta, el pie sube hasta debajo del cuerpo y la mano se planta arriba
+				p_pitch = -0.35 - 0.1 * clampf(a_c / 1.05, 0.0, 1.0)
+				waistP -= 0.3 + 0.1 * mk
+				neckP += 0.85
+				apoyos = {"L": [rr * -0.6 + fw * 0.3, 0.3, 0.6, 0.0], "R": [rr * 0.6 + fw * 0.3, 0.3, 0.6, PI],
+					"mL": [rr * -0.85 + fw * 1.75, 0.15, 0.45, PI], "mR": [rr * 0.85 + fw * 1.75, 0.15, 0.45, 0.0]}
+				poles = {"L": en_c.call(fw * 3.0 + rr * -1.2, 2.2), "R": en_c.call(fw * 3.0 + rr * 1.2, 2.2)}
+			"tumbado":
+				# tumbado a lo largo de la cuesta, la cabeza arriba; repta (codo y rodilla contraria); se asoma arriba
+				var asm: float = cu.asoma
+				p_pitch = -(PI * 0.5 - a_c) * (1.0 - 0.45 * asm) - 0.12
+				waistP += 0.08 + 0.35 * asm
+				neckP += 1.0 - 0.4 * asm
+				vuelo = 0.45
+				apoyos = {"L": [fw * -2.5 + rr * -0.55, 0.3, 0.35, PI], "R": [fw * -2.5 + rr * 0.55, 0.3, 0.35, 0.0],
+					"mL": [fw * 1.45 + rr * -0.75, 0.18, 0.25, 0.0], "mR": [fw * 1.45 + rr * 0.75, 0.18, 0.25, PI]}
+				poles = {"L": en_c.call(fw * -1.2 + rr * -2.6, 1.4), "R": en_c.call(fw * -1.2 + rr * 2.6, 1.4)}
+			"sentado", "resbala":
+				# sentado de espaldas a la cuesta, los pies clavados cuesta abajo y las manos atrás apoyadas
+				var desl := mk if post == "sentado" else 1.0
+				p_pitch = 0.25 + (PI * 0.5 - a_c) * 0.2
+				waistP += (PI * 0.5 - a_c) * 0.3 - 0.1
+				neckP -= 0.2
+				fijo = true
+				var vib := sin(now * 31.0) * 0.05 * desl
+				apoyos = {"L": [fw * (2.0 + 0.4 * desl) + rr * -0.65, 0.3 + 0.25 * desl + vib, 0.0, 0.0],
+					"R": [fw * (2.0 + 0.4 * desl) + rr * 0.65, 0.3 + 0.25 * desl - vib, 0.0, 0.0],
+					"mL": [fw * -0.35 + rr * -1.05, 0.15, 0.0, 0.0], "mR": [fw * -0.35 + rr * 1.05, 0.15, 0.0, 0.0]}
+				poles = {"L": en_c.call(fw * 1.6 + rr * -0.9, 3.0), "R": en_c.call(fw * 1.6 + rr * 0.9, 3.0)}
+			"lado":
+				# de costado: el hombro y la mano del lado alto contra la cuesta, la cadera hacia ella
+				p_roll = -lado_alto * 0.25
+				waistR -= lado_alto * 0.25
+				neckR += lado_alto * 0.15
+				apoyos = {"L": [rr * -0.6, 0.3, 0.4, 0.0], "R": [rr * 0.6, 0.3, 0.4, PI]}
+				apoyos["mR" if lado_alto > 0.0 else "mL"] = [rr * (lado_alto * 1.05) + fw * 0.3, 0.2, 0.3, PI * 0.5]
+				poles = {"L": en_c.call(fw * 3.0 + rr * -0.8, 2.0), "R": en_c.call(fw * 3.0 + rr * 0.8, 2.0)}
+		if post != cu_post:
+			cu_post = post
+			cu_cambio_t = now
+		var en_cambio := now - cu_cambio_t < 0.5
+		ultima_cuesta_t = now
+		# PASOS: cada apoyo se queda CLAVADO en la cuesta mientras el cuerpo avanza y, en su parte del ciclo, vuela en
+		# arco hasta su sitio nuevo un poco por delante (hacia donde se mueve): nada patina. Quieto, si un apoyo quedó
+		# lejos de su sitio (al pararse o cambiar de postura), va hasta él con un pasito.
+		var dir_m: Vector3 = cu.get("dir", Vector3.ZERO)
+		var adel := 0.75 * mk
+		var actuales := {"L": ((P.LeftFoot as Node3D).global_transform * Rbx.cfp(ankle_in_foot.L)).origin,
+			"R": ((P.RightFoot as Node3D).global_transform * Rbx.cfp(ankle_in_foot.R)).origin,
+			"mL": (P.LeftHand as Node3D).global_position, "mR": (P.RightHand as Node3D).global_position}
+		for k in ["L", "R", "mL", "mR"]:
+			if not apoyos.has(k):
+				cu_pasos.erase(k)
+				continue
+			var ap: Array = apoyos[k]
+			var ideal: Vector3 = en_c.call((ap[0] as Vector3) + dir_m * adel, float(ap[1]))
+			var st: Dictionary = cu_pasos.get(k, {})
+			if st.is_empty():
+				st = {"anc": actuales[k], "vuela": false, "desde": actuales[k], "t": 0.0}
+				if k == "L" or k == "R":
+					cu_pie[k] = ((P.LeftFoot if k == "L" else P.RightFoot) as Node3D).global_transform.basis.orthonormalized()
+					# (al entrar andando, el pie que iba por el aire no se para en seco: termina su paso hasta la cuesta)
+					var v0: Vector3 = pies_vel.get(k, Vector3.ZERO)
+					if v0.length() * dt > 0.12 or (ideal - (actuales[k] as Vector3)).length() > 1.2:
+						st.entra = true
+						st.t = 0.0
+						st.v0 = v0.limit_length(30.0)
+						st.dur = clampf(0.25 + (ideal - (actuales[k] as Vector3)).length() * 0.08, 0.25, 0.5)
+			var pos_k: Vector3
+			if st.get("entra", false):
+				# paso de entrada: curva que sale con la velocidad que llevaba el pie y llega parada a su sitio
+				st.t = float(st.t) + dt / float(st.dur)
+				var x := minf(1.0, float(st.t))
+				var h00 := 2.0 * x * x * x - 3.0 * x * x + 1.0
+				var h10 := x * x * x - 2.0 * x * x + x
+				var h01 := -2.0 * x * x * x + 3.0 * x * x
+				pos_k = (st.desde as Vector3) * h00 + (st.v0 as Vector3) * (float(st.dur) * h10) + ideal * h01
+				if x >= 1.0:
+					st.entra = false
+					st.anc = ideal
+					st.modo = ""
+					pos_k = ideal
+			elif fijo:
+				# (sentado los apoyos van con el cuerpo; al cambiar de postura llegan sin saltar)
+				var hacia_f: Vector3 = st.anc
+				pos_k = hacia_f + (ideal - hacia_f).limit_length((5.0 if en_cambio else 40.0) * dt)
+				st.anc = pos_k
+				st.vuela = false
+			elif mk > 0.05:
+				if st.get("modo", "") != "anda":
+					# (empieza a moverse: el que estaba a medio pasito lo termina desde donde está)
+					st.modo = "anda"
+					st.anc = st.get("ult", st.anc)
+					st.vuela = false
+				var u := fposmod(fz + float(ap[3]), TAU) / TAU
+				# (un paso solo empieza al principio de su parte del ciclo: si no, el pie "saltaba" al sitio nuevo)
+				if u < vuelo and (st.vuela or u < vuelo * 0.4):
+					if not st.vuela:
+						st.vuela = true
+						st.desde = st.anc
+						st.u0 = u
+					var u0: float = st.get("u0", 0.0)
+					var kv := Rbx.smooth((u - u0) / maxf(vuelo - u0, 0.05))
+					pos_k = (st.desde as Vector3).lerp(ideal, kv) + n_c * (float(ap[2]) * sin(PI * kv))
+				else:
+					if st.vuela:
+						st.vuela = false
+						st.anc = st.get("ult", st.anc)
+					pos_k = st.anc
+			else:
+				# quieto: un pasito si quedó lejos de su sitio (como quien se recoloca); más largo, más lento
+				if st.get("modo", "") != "quieto":
+					st.modo = "quieto"
+					st.anc = st.get("ult", st.anc)
+					st.vuela = false
+				var lejos := (ideal - (st.anc as Vector3)).length()
+				if st.vuela or lejos > 0.3:
+					if not st.vuela:
+						st.vuela = true
+						st.desde = st.anc
+						st.t = 0.0
+						st.dur = clampf(0.3 + lejos * 0.16, 0.3, 0.85)
+					st.t = float(st.t) + dt / float(st.get("dur", 0.4))
+					var kq := Rbx.smooth(minf(1.0, float(st.t)))
+					pos_k = (st.desde as Vector3).lerp(ideal, kq) + n_c * (0.25 * sin(PI * kq) * minf(1.0, lejos + 0.3))
+					if float(st.t) >= 1.0:
+						st.vuela = false
+						st.anc = ideal
+						pos_k = ideal
+				else:
+					st.anc = (st.anc as Vector3).lerp(ideal, 1.0 - exp(-4.0 * dt))
+					pos_k = st.anc
+			st["ult"] = pos_k
+			cu_pasos[k] = st
+			if k == "L" or k == "R":
+				leg_targets[k] = pos_k
+			else:
+				cu_manos[k.substr(1)] = pos_k
+		# rodillas: el punto de referencia cambia suave entre posturas
+		var k_pole := 1.0 - exp(-6.0 * dt)
+		for s in ["L", "R"]:
+			var obj_pole: Vector3 = poles[s]
+			var clave: String = "pole" + s
+			cu_suave[clave] = (cu_suave.get(clave, obj_pole) as Vector3).lerp(obj_pole, k_pole)
+			leg_targets[clave] = cu_suave[clave]
+		# el cuerpo sube un poco con cada empujón de las piernas
+		var empuje := (absf(sin(fz)) - 0.5) * 0.18 * mk if not fijo else 0.0
+		last_prone_t = now # (al salir de la cuesta, las piernas se mezclan suave con la animación normal)
+		Mr.transform = Rbx.cf(0, empuje, 0) * Rbx.ang(p_pitch, 0, p_roll)
+		# (al cambiar de postura la cadera gira despacio: con las piernas estiradas, un giro rápido de la pelvis
+		# hace barrer los pies)
+		smooth_j2(Mr, "Root", 5.0 if en_cambio else 9.0, dt)
+		pelvis_cf = fk(root_cf, Mr)
 		pelvis_drop = 0.0
 		replant = true
 	elif pb > 0.001:
@@ -1416,7 +1685,11 @@ func update_rig(dt: float) -> void:
 		neckR += ln * 0.24
 		# acometida del golpe: la cadera avanza, baja un poco y gira con los hombros
 		Mr.transform = Rbx.cf(-ln * 0.14, -pelvis_drop + bob - crouch - absf(ln) * 0.06 - mel_lunge * 0.22, -mel_lunge * 0.35) * Rbx.ang(pelvis_pitch, pelvis_yaw + mel_twist * 0.35, pelvis_roll + leanR * 0.3)
-		smooth_j(Mr, "Root", 16, dt)
+		if now - ultima_cuesta_t < 0.8:
+			# (al salir de la cuesta la cadera se endereza con muelle y pasa poco a poco a la de andar)
+			smooth_j2(Mr, "Root", 9.0, dt, Rbx.smooth(clampf((now - ultima_cuesta_t - 0.3) / 0.5, 0.0, 1.0)))
+		else:
+			smooth_j(Mr, "Root", 16, dt)
 		pelvis_cf = fk(root_cf, Mr)
 		# con la pelvis ya colocada (con su inercia), el pie apoyado rueda lo justo para que la
 		# pierna llegue casi recta desde la cadera real
@@ -1573,6 +1846,22 @@ func update_rig(dt: float) -> void:
 			if mt != null:
 				# en la moto: pie plano sobre el estribo (o el suelo), en la dirección de la moto
 				set_end(Lg, lower, Transform3D((mt.cuerpo as Transform3D).basis, target) * Rbx.ang(0.15, 0, 0))
+			elif cu != null:
+				# en la cuesta: el pie apoyado en ella (tumbado, de puntillas contra la cuesta)
+				var nn: Vector3 = cu.n
+				var fwp := Rbx.look(root_cf)
+				fwp = (fwp - nn * fwp.dot(nn)).normalized()
+				var bz := -fwp
+				var by := nn
+				if cu.postura == "tumbado":
+					by = fwp
+					bz = nn
+				# (el pie gira suave al cambiar de postura: si no, la punta da un salto)
+				var b_obj := Basis(by.cross(bz).normalized(), by, bz).orthonormalized()
+				var b_prev: Basis = cu_pie.get(s, b_obj)
+				var b_pie := b_prev.slerp(b_obj, 1.0 - exp(-7.0 * dt)).orthonormalized()
+				cu_pie[s] = b_pie
+				set_end(Lg, lower, Transform3D(b_pie, target))
 			elif not grounded:
 				set_end(Lg, lower, Rbx.cfp(target) * yaw_cf * Rbx.ang(-0.3, 0, 0))
 			else:
@@ -1580,11 +1869,22 @@ func update_rig(dt: float) -> void:
 			# justo después de levantarse: mezclar desde la pose de tumbado (sin saltos);
 			# el resto del tiempo solo se registra la pose para que el paso a tumbado parta de ella
 			var recent := now - last_prone_t < 0.6
+			# (al salir de la cuesta la mezcla es más lenta: las piernas vienen de una postura muy distinta)
+			# en la cuesta (y al salir) las piernas van con muelle: aceleran y frenan sin tirones
+			var t_fuera := now - ultima_cuesta_t
+			var muelle := cu != null or t_fuera < 0.8
 			for pair in [[Lg.top, "Hip"], [Lg.mid, "Knee"], [Lg.fin, "Ankle"]]:
-				if recent:
-					smooth_j(pair[0], s + pair[1], 12, dt)
+				if muelle:
+					smooth_j2(pair[0], s + pair[1], 13.0 if cu != null else 10.0, dt,
+						0.0 if cu != null else Rbx.smooth(clampf((t_fuera - 0.3) / 0.5, 0.0, 1.0)))
+				elif recent:
+					smooth_j(pair[0], s + pair[1], 12.0, dt)
 				else:
-					prev_t[s + pair[1]] = (pair[0] as RigPersonaje.Motor).transform
+					anota_j(pair[0], s + pair[1], dt)
+
+	# en la cuesta los brazos no están "en el aire" (el resto de la animación la trata como en el suelo)
+	if cu != null:
+		grounded = true
 
 	## ------------------------------------------------ torso provisional (para calcular el pecho)
 	var Mw: RigPersonaje.Motor = M.Waist
@@ -1985,6 +2285,66 @@ func update_rig(dt: float) -> void:
 			else:
 				right_free = false
 
+	## ------------------------------------------------ en la cuesta: manos apoyadas (la que esté libre)
+	if cu != null and not cu_manos.is_empty():
+		var nn2: Vector3 = cu.n
+		var apunta: bool = aiming or L.firing or now - last_shot_t < 0.6
+		var fw2 := Rbx.look(root_cf)
+		fw2 = (fw2 - nn2 * fw2.dot(nn2)).normalized()
+		var rot_c := Basis(fw2.cross(nn2).normalized(), nn2, -fw2).orthonormalized()
+		for s in ["L", "R"]:
+			if not cu_manos.has(s):
+				continue
+			var sgn := -1.0 if s == "L" else 1.0
+			var pole_c := (chest_yaw_base * Rbx.cf(sgn * 1.8, -0.4, 0.6)).origin
+			var ik_c := {"pos": cu_manos[s], "pole": pole_c, "w": 1.0, "rot": rot_c, "rot_w": 0.8}
+			if (s == "L" and left_free) or (s == "R" and right_free):
+				hand_ik[s] = ik_c
+			elif s == "L" and hand_ik.has("L") and not apunta:
+				# con la pistola: la mano de apoyo la suelta y se agarra a la cuesta (al apuntar vuelve al arma)
+				hand_ik.L = ik_c
+			else:
+				continue
+			if s == "L":
+				left_free = false
+			else:
+				right_free = false
+		# de costado, la mano de fuera (sin apoyo ni arma) descansa sobre el muslo en vez de colgar contra la cuesta
+		if str(cu.postura) == "lado":
+			for s in ["L", "R"]:
+				if cu_manos.has(s) or hand_ik.has(s):
+					continue
+				var sgn_l := -1.0 if s == "L" else 1.0
+				hand_ik[s] = {"pos": (chest_cf * Rbx.cf(sgn_l * 1.15, -1.7, -0.35)).origin,
+					"pole": (chest_cf * Rbx.cf(sgn_l * 1.8, -0.6, 0.6)).origin, "w": 1.0}
+
+	# en la cuesta las manos pasan del arma a la cuesta (y al revés) sin saltar: van con muelle (aceleran y frenan)
+	if cu != null:
+		for s in ["L", "R"]:
+			if not hand_ik.has(s):
+				cu_mano.erase(s)
+				cu_mano_v.erase(s)
+				continue
+			var ik_h: Dictionary = hand_ik[s]
+			var obj_h: Vector3 = (ik_h.cf as Transform3D).origin if ik_h.has("cf") else (ik_h.wrist if ik_h.has("wrist") else ik_h.pos)
+			var ant_h: Vector3 = cu_mano.get(s, (P.LeftHand if s == "L" else P.RightHand).global_position)
+			var v_h: Vector3 = cu_mano_v.get(s, Vector3.ZERO)
+			var om_h := 12.0
+			v_h = (v_h + (obj_h - ant_h) * (om_h * om_h * dt)) / (1.0 + 2.0 * om_h * dt + om_h * om_h * dt * dt)
+			v_h = v_h.limit_length(14.0)
+			var nuevo_h := ant_h + v_h * dt
+			cu_mano[s] = nuevo_h
+			cu_mano_v[s] = v_h
+			if (nuevo_h - obj_h).length() > 0.05:
+				var ik_n := {"pos": nuevo_h, "pole": ik_h.pole, "w": ik_h.w}
+				if ik_h.has("rot"):
+					ik_n.rot = ik_h.rot
+					ik_n.rot_w = ik_h.get("rot_w", 1.0)
+				hand_ik[s] = ik_n
+	elif not cu_mano.is_empty():
+		cu_mano.clear()
+		cu_mano_v.clear()
+
 	## ------------------------------------------------ sortear: manos sobre el obstáculo
 	if va != null:
 		var d: Vector3 = va.dir
@@ -2253,9 +2613,18 @@ func update_rig(dt: float) -> void:
 				arm_rate = 60.0
 			elif draw_st != null or L.holster != null:
 				arm_rate = 30.0
-		smooth_j(Lm.top, s + "Sh", arm_rate, dt)
-		smooth_j(Lm.mid, s + "El", arm_rate, dt)
-		smooth_j(Lm.fin, s + "Wr", arm_rate if tool != "" else 9.0, dt)
+		var t_fuera_b := now - ultima_cuesta_t
+		if cu != null or t_fuera_b < 0.8:
+			# en la cuesta (y al salir) los brazos van con muelle: las manos cambian de apoyo sin tirones
+			var om := 16.0 if (tool != "" and hand_ik.has(s) and hand_ik[s].has("cf")) else 11.0
+			var dir_b := 0.0 if cu != null else Rbx.smooth(clampf((t_fuera_b - 0.3) / 0.5, 0.0, 1.0))
+			smooth_j2(Lm.top, s + "Sh", om, dt, dir_b)
+			smooth_j2(Lm.mid, s + "El", om, dt, dir_b)
+			smooth_j2(Lm.fin, s + "Wr", om, dt, dir_b)
+		else:
+			smooth_j(Lm.top, s + "Sh", arm_rate, dt)
+			smooth_j(Lm.mid, s + "El", arm_rate, dt)
+			smooth_j(Lm.fin, s + "Wr", arm_rate if tool != "" else 9.0, dt)
 		# las manos y antebrazos nunca atraviesan paredes ni estructuras
 		if pb < 0.5 and not (hand_ik.has(s) and w_side[s] > 0.3):
 			_brazo_sin_choque(Lm, s, chest_cf)

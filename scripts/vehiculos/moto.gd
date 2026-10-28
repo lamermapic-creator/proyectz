@@ -22,6 +22,11 @@ const ACEL := 19.0             # par: arranca con fuerza en las marchas cortas (
 const FRENO := 40.0
 const INCL_MAX := 48.0 * PI / 180.0
 const CHOQUE := 30.0           # velocidad de impacto (studs/s) contra una pared que tira al piloto
+## (2026-10-28) contra algo BAJO (bloque, bordillo alto, el canto de una rampa: más bajo que OBST_BAJO) hace falta
+## bastante más: por debajo de CHOQUE_BAJO la moto rebota y frena, pero el piloto aguanta
+const CHOQUE_BAJO := 40.0
+const OBST_BAJO := 1.4          # (studs, ~43 cm) más bajo que esto, el piloto sale por encima del obstáculo
+const ESCALON_RAPIDO := 0.6     # deprisa, la rueda sube escalones algo más altos (~19 cm; con el paso, hasta ~30 cm) de un golpe
 const ATRAS := 5.0             # marcha atrás (empujando con los pies)
 const BATALLA := 4.6           # distancia entre ejes
 const GRAV := 35.0
@@ -262,26 +267,68 @@ func lado_arriba() -> Vector3:
 	return Rbx.flat(cuerpo_cf().basis.y).normalized()
 
 
-## el piloto sale despedido (choque fuerte, aterrizaje imposible)
+## el piloto sale despedido (choque fuerte, aterrizaje imposible). Cómo sale y cómo cae la moto dependen del golpe
+## (2026-10-28): contra algo bajo sale por encima del manillar con casi toda su velocidad (y la moto da una vuelta de
+## campana sobre la rueda delantera); contra una pared alta se estrella contra ella y la moto rebota y cae de lado.
 func _tirar_piloto(motivo: String, impacto: float, normal := Vector3.ZERO) -> void:
 	ultimo_choque = impacto
 	var j := piloto
+	var v := _vel_antes if _vel_antes != Vector3.ZERO else vel_mundo()
+	_golpe_caida = {"tipo": motivo, "v": v, "normal": normal, "impacto": impacto}
 	if j == null:
 		caer()
 		return
-	var v := _vel_antes if _vel_antes != Vector3.ZERO else vel_mundo()
 	piloto = null
 	motor_on = false
-	# sigue hacia donde iba, por encima del manillar (la moto se para, él no). Contra una pared, lo que iba hacia
-	# ella se frena algo (choca con ella y cae), pero nunca sale despedido hacia atrás
-	var imp := v * 0.75 + Vector3(0, 7.0 + impacto * 0.12, 0)
-	if normal != Vector3.ZERO:
-		var hacia := minf(0.0, imp.dot(normal))
-		imp -= normal * hacia * 0.5
+	var vh := Rbx.flat(v)
+	var imp: Vector3
+	match motivo:
+		"choque_bajo":
+			# por encima del manillar y del obstáculo: casi toda la velocidad que llevaba, y hacia arriba
+			imp = vh * 0.9 + Vector3(0, 6.0 + vh.length() * 0.16, 0)
+		"choque":
+			# contra una pared alta: lo que iba hacia ella se frena (se estrella y cae al pie); lo de lado sigue
+			imp = vh * 0.85 + Vector3(0, 4.0 + impacto * 0.08, 0)
+			if normal != Vector3.ZERO:
+				var hacia := minf(0.0, imp.dot(normal))
+				imp -= normal * hacia * 0.85
+		_:
+			# aterrizaje imposible: sigue hacia donde iba
+			imp = v * 0.8 + Vector3(0, 5.0 + impacto * 0.1, 0)
 	var danio := maxf(0.0, impacto - 22.0) * 1.3
+	caer()
 	if j.has_method("expulsar_moto"):
 		j.expulsar_moto(imp, danio, motivo)
-	caer()
+
+
+## cómo empieza a caer el cuerpo físico de la moto según el golpe (si lo hubo hace nada)
+func _caida_segun_golpe(b: RigidBody3D) -> void:
+	if _golpe_caida.is_empty():
+		return
+	var g := _golpe_caida
+	_golpe_caida = {}
+	var vh := Rbx.flat(g.v as Vector3)
+	var der := derecha()
+	var adel := adelante()
+	var azar := func(a: float, b2: float) -> float: return lerpf(a, b2, randf())
+	match g.tipo:
+		"choque_bajo":
+			# vuelta de campana sobre la rueda delantera: el morro se clava y la cola sube
+			b.linear_velocity = vh * azar.call(0.35, 0.55) + Vector3(0, azar.call(3.0, 6.0), 0)
+			b.angular_velocity = -der * (vh.length() / BATALLA * azar.call(0.7, 1.15)) \
+				+ adel * azar.call(-1.6, 1.6) + Vector3(0, azar.call(-1.2, 1.2), 0)
+		"choque":
+			# rebota contra la pared y cae de lado, girando
+			var n: Vector3 = g.normal if (g.normal as Vector3) != Vector3.ZERO else -adel
+			var rebote: Vector3 = vh - n * vh.dot(n) * float(azar.call(1.15, 1.35))
+			b.linear_velocity = rebote * azar.call(0.25, 0.45) + Vector3(0, azar.call(1.0, 3.0), 0)
+			b.angular_velocity = adel * (-caida_lado * azar.call(1.5, 3.5)) + der * azar.call(-2.0, 2.0) \
+				+ Vector3(0, azar.call(-2.5, 2.5) * clampf(vh.length() / 30.0, 0.3, 1.0), 0)
+		_:
+			# mal aterrizaje: sigue rodando/deslizando con lo que llevaba y vuelca hacia un lado al azar
+			b.linear_velocity = (g.v as Vector3) * azar.call(0.6, 0.85)
+			b.angular_velocity = adel * (-caida_lado * azar.call(1.5, 4.0)) + der * azar.call(-2.5, 1.0) \
+				+ Vector3(0, azar.call(-2.0, 2.0), 0)
 
 
 ## ---------------------------------------------------------------- cada fotograma
@@ -591,7 +638,12 @@ func _mover(dt: float) -> void:
 			# un bache: el suelo empuja la moto hacia arriba (la suspensión lo encaja)
 			var subida := (float(h_del.y) - fin_d.y + float(h_tras.y) - fin_t.y) * 0.5
 			if subida > 0.05:
-				susp_v -= minf(subida, ESCALON_MAX) * 9.0
+				susp_v -= minf(subida, ESCALON_RAPIDO) * 9.0
+			if subida > 0.3 and (h_del.normal as Vector3).y > 0.95 and (h_tras.normal as Vector3).y > 0.95:
+				# un escalón alto subido de golpe: frena y sacude
+				vf *= 1.0 - minf(0.3, (subida - 0.3) * 0.6)
+				if piloto != null and "shake" in piloto:
+					piloto.shake = minf(1.0, piloto.shake + subida * 0.5)
 		_pend_del = sdn
 		_pend_tras = stn
 		# velocidad vertical de cada rueda: la de su cuesta. Si el suelo la empuja hacia arriba de golpe (el canto
@@ -700,8 +752,9 @@ func _mover(dt: float) -> void:
 	if impacto > 3.0:
 		_contacto_t = _reloj
 	if golpe_nuevo:
-		if impacto >= CHOQUE and piloto != null:
-			_tirar_piloto("choque", impacto, n_choque)
+		var bajo := impacto >= CHOQUE and _altura_obstaculo(-n_choque if n_choque != Vector3.ZERO else adelante()) < OBST_BAJO
+		if impacto >= (CHOQUE_BAJO if bajo else CHOQUE) and piloto != null:
+			_tirar_piloto("choque_bajo" if bajo else "choque", impacto, n_choque)
 		else:
 			vel_h *= clampf(1.0 - impacto / 70.0, 0.4, 0.95)
 			Efectos.sonido(self, "Blunt", global_position + adelante() * 2.5 + Vector3(0, 1.5, 0), clampf(impacto / 25.0, 0.3, 1.4), 0.7)
@@ -800,8 +853,13 @@ func _apoyo_rueda(delantera: bool, eje0: Vector3, eje1: Vector3) -> Dictionary:
 		var h := _tantear(eje1, ini, eje1.y - 0.05)
 		if h.has("dentro"):
 			# cayendo sobre una cuesta empinada (la rueda ya estaría dentro): buscarla desde más arriba
-			h = _tantear(eje1, ini + 2.5 + Rbx.flat(eje1 - eje0).length() * 2.0, eje1.y - 0.05)
+			var mov_h := Rbx.flat(eje1 - eje0).length()
+			h = _tantear(eje1, ini + 2.5 + mov_h * 2.0, eje1.y - 0.05)
 			if h.has("dentro"):
+				return {}
+			# (2026-10-28) pero no encima de algo mucho más alto que la rueda: parada de frente contra un bloque de
+			# 40 cm, la rueda delantera "aparecía" encima y la moto lo trepaba a paso de tortuga
+			if not h.is_empty() and float(h.y) > ini + 0.4 + mov_h * 1.5:
 				return {}
 		if h.is_empty() or (h.normal as Vector3).y < 0.42:
 			return {}
@@ -814,7 +872,7 @@ func _apoyo_rueda(delantera: bool, eje0: Vector3, eje1: Vector3) -> Dictionary:
 	var ult := {}
 	for i in range(1, n_p + 1):
 		var xz := eje0.lerp(eje1, float(i) / float(n_p))
-		var ini := y + ESCALON_MAX + paso_h * 1.8
+		var ini := y + _escalon() + paso_h * 1.8
 		var fin := minf(y, eje1.y) - 0.6 - paso_h * 2.2
 		var h := _tantear(xz, ini, fin)
 		if h.has("dentro"):
@@ -827,9 +885,42 @@ func _apoyo_rueda(delantera: bool, eje0: Vector3, eje1: Vector3) -> Dictionary:
 			return {}
 		if h.is_empty():
 			return {}
+		# (2026-10-28) ¿es el canto de un escalón (no una cuesta)? Justo detrás del punto de contacto el suelo está
+		# mucho más bajo: entonces solo se sube si el escalón no pasa de _escalon() (antes, deprisa, la rueda "subía"
+		# por el canto bloques de 40 cm)
+		var pc: Vector3 = h.pos
+		if pc.y > y - ModeloMoto.R_RUEDA + 0.2:
+			var atras := pc - dir * 0.15
+			var q := PhysicsRayQueryParameters3D.create(atras + Vector3(0, 0.05, 0), atras - Vector3(0, 3.0, 0), 1)
+			q.exclude = _q_rueda.exclude
+			var r := get_world_3d().direct_space_state.intersect_ray(q)
+			if not r.is_empty():
+				var escalon := pc.y - (r.position as Vector3).y
+				if escalon > 0.15 * 1.8 + 0.25 and escalon > _escalon() + 0.05:
+					return {"bloq": float(i - 1) / float(n_p)}
 		y = float(h.y)
 		ult = h
 	return ult
+
+
+## escalón que la rueda puede subir: despacio un bordillo bajo; deprisa algo más alto (de un golpe)
+func _escalon() -> float:
+	return lerpf(ESCALON_MAX, ESCALON_RAPIDO, clampf((absf(velocidad()) - 8.0) / 17.0, 0.0, 1.0))
+
+
+## altura (sobre el suelo de la moto) de lo que tiene justo delante de la rueda delantera
+func _altura_obstaculo(dir: Vector3) -> float:
+	var del := global_position + adelante() * (BATALLA * 0.5 + ModeloMoto.R_RUEDA * 0.6)
+	var mejor := 0.0
+	for k: float in [0.4, 1.0, 1.7]:
+		var p := del + dir * k
+		var q := PhysicsRayQueryParameters3D.create(p + Vector3(0, 40.0, 0), p + Vector3(0, -2.0, 0), 1)
+		q.exclude = [get_rid()]
+		q.hit_from_inside = true
+		var r := get_world_3d().direct_space_state.intersect_ray(q)
+		if not r.is_empty():
+			mejor = maxf(mejor, (r.position as Vector3).y - global_position.y)
+	return mejor
 
 
 var _cil_rueda: CylinderShape3D
@@ -872,6 +963,13 @@ func _tantear(xz: Vector3, y_ini: float, y_fin: float) -> Dictionary:
 	_q_rueda.transform = Transform3D(b, Vector3(xz.x, y_ini + (y_fin - y_ini) * float(res[1]), xz.z))
 	_q_rueda.motion = Vector3.ZERO
 	var info := space.get_rest_info(_q_rueda)
+	# (2026-10-28) a veces el punto de contacto no sale a la primera: se mira un pelín más abajo. Antes se suponía
+	# suelo plano, y el canto de un bloque (tocado con el "ecuador" de la rueda) se tomaba por suelo y la moto se subía
+	for extra in [0.01, 0.03]:
+		if not info.is_empty():
+			break
+		_q_rueda.transform = Transform3D(b, Vector3(xz.x, y_ini + (y_fin - y_ini) * float(res[1]) - extra, xz.z))
+		info = space.get_rest_info(_q_rueda)
 	if info.is_empty():
 		return {"y": y, "pos": Vector3(xz.x, y - ModeloMoto.R_RUEDA, xz.z), "normal": Vector3.UP}
 	return {"y": y, "pos": info.point, "normal": info.normal}
@@ -1106,6 +1204,9 @@ var _fisica_quieta := 0.0
 var _lev_desde := Transform3D.IDENTITY
 var _lev_hasta := Transform3D.IDENTITY
 var _giro_fisica := 0.0
+var _fis_v_prev := Vector3.ZERO
+var _golpe_caida := {}          # el golpe que la tira (para caer según él): {tipo, v, normal, impacto}
+var _fis_w_prev := Vector3.ZERO
 
 
 func _crear_fisica() -> void:
@@ -1148,7 +1249,11 @@ func _crear_fisica() -> void:
 	# la velocidad que llevaba, y un giro hacia el lado al que cae (y el de la curva)
 	var adel := adelante()
 	b.linear_velocity = vel_mundo()
-	b.angular_velocity = adel * (-caida_lado * clampf(1.2 + vel_h.length() * 0.04, 1.2, 3.0)) + Vector3(0, yaw_rate, 0)
+	_fis_v_prev = b.linear_velocity
+	b.angular_velocity = adel * (-caida_lado * clampf(1.2 + vel_h.length() * 0.04, 1.2, 3.0) * lerpf(0.8, 1.25, randf())) \
+		+ derecha() * lerpf(-0.6, 0.6, randf()) + Vector3(0, yaw_rate + lerpf(-0.5, 0.5, randf()), 0)
+	_caida_segun_golpe(b)
+	_fis_v_prev = b.linear_velocity
 	_fisica_quieta = 0.0
 	_fisica_t = 0.0
 	_giro_fisica = velocidad() / ModeloMoto.R_RUEDA
@@ -1220,6 +1325,18 @@ func _paso_fisica(dt: float) -> void:
 	caida_k = 1.0
 	# chispas al arrastrarse deprisa por el suelo
 	var v := b.linear_velocity
+	# (2026-10-28) el jugador es un cuerpo cinemático (masa infinita): si se solapa con la moto caída (al levantarse
+	# a su lado) la lanzaba por los aires a 30-80 studs/s. Un cambio de velocidad así de brusco con el jugador al lado
+	# no es un golpe de verdad: se recorta
+	if (v - _fis_v_prev).length() > 10.0:
+		for jg in get_tree().get_nodes_in_group("jugador"):
+			if ((jg as Node3D).global_position - bt.origin).length() < 8.0:
+				v = _fis_v_prev + (v - _fis_v_prev).limit_length(2.5)
+				b.linear_velocity = v
+				b.angular_velocity = b.angular_velocity.limit_length(maxf(_fis_w_prev.length(), 2.0))
+				break
+	_fis_v_prev = v
+	_fis_w_prev = b.angular_velocity
 	if v.length() > 7.0 and _cerca_del_suelo(bt):
 		_chispa_t -= dt
 		if _chispa_t <= 0.0:

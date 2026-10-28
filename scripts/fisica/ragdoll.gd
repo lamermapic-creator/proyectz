@@ -60,18 +60,37 @@ const CENTRO := {
 	"LeftKnee": Vector3(-1.24, 0.0, 0.0), "RightKnee": Vector3(-1.24, 0.0, 0.0),
 	"Waist": Vector3(0.05, 0.0, 0.0),
 }
-const KP := 680.0               # rigidez de los músculos (rad/s² por radian) a fuerza 1
-const ACEL_MAX := 480.0         # tope de aceleración angular de un músculo (estabilidad)
-## (2026-10-27, a pedido de KangooG: movimientos MUCHO más exagerados) cuánto se amplían los gestos (EXAGERA)
-## y la velocidad de los movimientos "nerviosos" (NERVIO) de todos los comportamientos
-const EXAGERA := 2.0
-const NERVIO := 2.0
+## (2026-10-28) músculos de verdad: antes cada músculo solo podía mover su propia pieza (inercia de la pieza) y el
+## cuerpo se "derramaba" como agua. Ahora cada articulación mueve TODO lo que cuelga de ella (inercia de la rama:
+## la cadera sostiene el tronco, el hombro el brazo entero) y, vivo, nunca baja de un tono mínimo (TONO).
+const KP := 1100.0              # rigidez de los músculos (rad/s² por radián) a fuerza 1
+const AMORT := 0.75             # amortiguación (1 = crítica)
+const ACEL_MAX := 1400.0        # tope de aceleración angular de un músculo (estabilidad)
+## tono mínimo de cada grupo mientras está vivo (consciente): el cuerpo no se desarma nunca
+const TONO := {"core": 0.55, "neck": 0.6, "arm": 0.4, "leg": 0.45}
+## cuánto se amplían los gestos (EXAGERA) y la velocidad de los movimientos "nerviosos" (NERVIO)
+## músculos resueltos por el motor de física (muelles de Generic6DOFJoint3D) en vez de pares calculados a mano
+const MUSCULOS_JOLT := true
+const KS := 1500.0              # rigidez de los músculos implícitos (par por radián y por unidad de inercia) a fuerza 1
+static var CONV_ORDEN := EULER_ORDER_ZYX  # (comprobado: con esta convención el error es 0,1°)
+static var CONV_SIGNO := -1.0
+const EXAGERA := 1.6
+const NERVIO := 1.25
 
 var dueno: Node3D
 var rig: RigPersonaje
 var cuerpos := {}               # pieza -> RigidBody3D
 var _uniones: Array[Joint3D] = []
 var _inercia := {}              # pieza -> inercia aproximada
+var _inercia_art := {}          # articulación -> inercia de lo que mueve (la rama más ligera de las dos)
+var error_medio := 0.0          # error medio de los músculos (rad), para las pruebas
+var pose_prueba := {}
+var _ignorados: Array = []      # [cuerpo, segundos que quedan] con los que no choca (ver ignorar)           # comportamiento "pose" (pruebas): postura fija
+var _j6 := {}                   # articulación -> Generic6DOFJoint3D (músculos implícitos)
+var _jl := {}                   # articulación -> base de la articulación en el espacio del padre
+var _rc := {}                   # articulación -> rotación del hijo respecto al padre en la postura central
+var _base_union := {}
+var _ultimo_musculo := {}       # articulación -> [k, equilibrio] puestos la última vez
 var comportamiento := "caer"
 var vivo := true
 var duracion := 2.0             # s mínimos antes de poder recuperarse (-1 = nunca: muerto)
@@ -212,7 +231,10 @@ func _construir() -> void:
 		var def: Array = ART[mn]
 		var j: Joint3D
 		var base: Basis
-		if def[0] == "bola":
+		if MUSCULOS_JOLT:
+			j = _crear_union_6dof(mn, def, t_pa, centro, pivote)
+			base = _base_union[mn]
+		elif def[0] == "bola":
 			var hueso: Vector3 = ((centro[m.part1] as Transform3D).origin - pivote)
 			if hueso.length() < 0.01:
 				hueso = -(t_pa.basis.y)
@@ -244,6 +266,118 @@ func _construir() -> void:
 		j.exclude_nodes_from_collision = true
 		add_child(j)
 		_uniones.append(j)
+	_calcular_inercias(centro)
+
+
+## (2026-10-28) articulación con músculos "implícitos": Generic6DOFJoint3D con límites por eje y un muelle
+## angular en cada eje que resuelve el propio motor de física (Jolt). Un muelle así puede ser todo lo rígido que
+## haga falta sin temblar (los pares calculados a mano temblaban en cuanto se subía la fuerza).
+## Ejes de la articulación: X = el hueso (giro sobre sí mismo) en las rótulas; X = el eje de la bisagra en codos y
+## rodillas (Y y Z bloqueados).
+func _crear_union_6dof(mn: String, def: Array, t_pa: Transform3D, centro: Dictionary, pivote: Vector3) -> Joint3D:
+	var m: RigPersonaje.Motor = rig.M[mn]
+	var base: Basis
+	var lim := Vector3.ZERO
+	if def[0] == "bola":
+		var hueso: Vector3 = ((centro[m.part1] as Transform3D).origin - pivote)
+		if hueso.length() < 0.01:
+			hueso = -(t_pa.basis.y)
+		var x := hueso.normalized()
+		var y := x.cross(t_pa.basis.z)
+		if y.length() < 0.1:
+			y = x.cross(t_pa.basis.x)
+		y = y.normalized()
+		base = Basis(x, y, x.cross(y).normalized())
+		lim = Vector3(deg_to_rad(def[2]), deg_to_rad(def[1]), deg_to_rad(def[1]))
+	else:
+		var x2 := t_pa.basis.x.normalized()
+		var y2 := t_pa.basis.y.normalized()
+		base = Basis(x2, y2, x2.cross(y2).normalized())
+		lim = Vector3(deg_to_rad(def[1]), 0.0, 0.0)
+	base = base.orthonormalized()
+	_base_union[mn] = base
+	_jl[mn] = t_pa.basis.orthonormalized().inverse() * base
+	_rc[mn] = t_pa.basis.orthonormalized().inverse() * (centro[m.part1] as Transform3D).basis.orthonormalized()
+	var g := Generic6DOFJoint3D.new()
+	var ejes := ["x", "y", "z"]
+	for i in 3:
+		var l: float = lim[i]
+		_set_eje(g, i, "lim", l)
+		_set_eje(g, i, "muelle", l > 0.0)
+	_j6[mn] = g
+	return g
+
+
+func _set_eje(g: Generic6DOFJoint3D, i: int, que: String, v) -> void:
+	match que:
+		"lim":
+			var f := Generic6DOFJoint3D.FLAG_ENABLE_ANGULAR_LIMIT
+			var lo := Generic6DOFJoint3D.PARAM_ANGULAR_LOWER_LIMIT
+			var up := Generic6DOFJoint3D.PARAM_ANGULAR_UPPER_LIMIT
+			match i:
+				0: g.set_flag_x(f, true); g.set_param_x(lo, -float(v)); g.set_param_x(up, float(v))
+				1: g.set_flag_y(f, true); g.set_param_y(lo, -float(v)); g.set_param_y(up, float(v))
+				2: g.set_flag_z(f, true); g.set_param_z(lo, -float(v)); g.set_param_z(up, float(v))
+		"muelle":
+			var f2 := Generic6DOFJoint3D.FLAG_ENABLE_ANGULAR_SPRING
+			match i:
+				0: g.set_flag_x(f2, bool(v))
+				1: g.set_flag_y(f2, bool(v))
+				2: g.set_flag_z(f2, bool(v))
+
+
+## músculo implícito: lleva la articulación hacia "obj" (rotación del hijo respecto al padre) con rigidez k y
+## amortiguación c
+func _musculo_6dof(mn: String, obj: Basis, k: float, c: float) -> void:
+	var g: Generic6DOFJoint3D = _j6[mn]
+	var jl: Basis = _jl[mn]
+	var delta: Basis = jl.inverse() * (obj * (_rc[mn] as Basis).inverse()) * jl
+	var e := delta.get_euler(CONV_ORDEN) * CONV_SIGNO
+	# (solo se tocan los parámetros si han cambiado algo: cambiarlos cuesta)
+	var prev: Array = _ultimo_musculo.get(mn, [])
+	if not prev.is_empty() and absf(prev[0] - k) < 0.04 * k and (prev[1] as Vector3).distance_to(e) < 0.012:
+		return
+	_ultimo_musculo[mn] = [k, e]
+	var K := Generic6DOFJoint3D.PARAM_ANGULAR_SPRING_STIFFNESS
+	var D := Generic6DOFJoint3D.PARAM_ANGULAR_SPRING_DAMPING
+	var E := Generic6DOFJoint3D.PARAM_ANGULAR_SPRING_EQUILIBRIUM_POINT
+	g.set_param_x(K, k); g.set_param_x(D, c); g.set_param_x(E, e.x)
+	if ART[mn][0] == "bola":
+		g.set_param_y(K, k); g.set_param_y(D, c); g.set_param_y(E, e.y)
+		g.set_param_z(K, k); g.set_param_z(D, c); g.set_param_z(E, e.z)
+
+
+## inercia que mueve cada músculo: la de la rama que cuelga de la articulación (o la del resto del cuerpo, si es
+## más ligera), respecto al pivote. Así la cadera puede sostener el tronco y el hombro el brazo entero.
+func _calcular_inercias(centro: Dictionary) -> void:
+	var hijos := {}
+	for mn in rig.M:
+		var m: RigPersonaje.Motor = rig.M[mn]
+		if not hijos.has(m.part0):
+			hijos[m.part0] = []
+		hijos[m.part0].append(m.part1)
+	for mn in ART:
+		var m: RigPersonaje.Motor = rig.M[mn]
+		var pivote: Vector3 = ((centro[m.part0] as Transform3D) * m.c0).origin
+		var rama := {}
+		var pila: Array = [m.part1]
+		while not pila.is_empty():
+			var n: String = pila.pop_back()
+			if rama.has(n) or not cuerpos.has(n):
+				continue
+			rama[n] = true
+			pila.append_array(hijos.get(n, []))
+		var i_rama := 0.0
+		var i_resto := 0.0
+		for n in cuerpos:
+			var b: RigidBody3D = cuerpos[n]
+			var d2 := ((centro[n] as Transform3D).origin - pivote).length_squared()
+			var i: float = b.mass * d2 + float(_inercia[n])
+			if rama.has(n):
+				i_rama += i
+			else:
+				i_resto += i
+		_inercia_art[mn] = minf(i_rama, i_resto)
 
 
 ## primer paso de física: de la postura central a la real, con su velocidad
@@ -318,6 +452,15 @@ func golpe(pieza: String, impulso: Vector3) -> void:
 	_quieto_t = 0.0
 
 
+## no chocar con "obj" durante "seg" segundos (el piloto que sale despedido no se engancha en su moto)
+func ignorar(obj: PhysicsBody3D, seg: float) -> void:
+	if obj == null or not is_instance_valid(obj):
+		return
+	for n in cuerpos:
+		(cuerpos[n] as RigidBody3D).add_collision_exception_with(obj)
+	_ignorados.append([obj, seg])
+
+
 func morir() -> void:
 	vivo = false
 	duracion = -1.0
@@ -334,6 +477,12 @@ func _physics_process(dt: float) -> void:
 		return
 	_t += dt
 	_t_comp += dt
+	for ig in _ignorados:
+		ig[1] = float(ig[1]) - dt
+		if float(ig[1]) <= 0.0 and is_instance_valid(ig[0]):
+			for n in cuerpos:
+				(cuerpos[n] as RigidBody3D).remove_collision_exception_with(ig[0])
+	_ignorados = _ignorados.filter(func(ig): return float(ig[1]) > 0.0 and is_instance_valid(ig[0]))
 	var bt: RigidBody3D = torso()
 	var v := _vel_centro()
 	# golpes del cuerpo contra algo: frenazo brusco del torso (suelo, pared, coche...)
@@ -367,13 +516,23 @@ func _physics_process(dt: float) -> void:
 		if duracion > 0.0:
 			duracion = minf(duracion, _t + 1.5)
 	# músculos
+	if vivo and not _avisado and duracion >= 0.0 and _t > duracion and _dist_suelo < 2.5 and v.length() < 7.0 \
+			and comportamiento in ["caer", "impacto", "retorcerse"]:
+		cambiar("prepararse")
 	var res: Array = _comportamiento(_t_comp)
 	var pose: Dictionary = res[0]
 	var fuerzas: Dictionary = res[1]
+	# vivo y consciente: los músculos nunca se sueltan del todo (salvo el instante del golpe contra el suelo)
+	var con_tono := vivo and comportamiento != "inerte" and not (comportamiento == "impacto" and _t_comp < 0.12)
+	var err_suma := 0.0
+	var err_peso := 0.0
 	for mn in ART:
 		var def: Array = ART[mn]
-		var s: float = float(fuerzas.get(def[4], 0.1)) * float(def[3]) * fuerza_mult
-		if s <= 0.001:
+		var f_g: float = float(fuerzas.get(def[4], 0.1))
+		if con_tono:
+			f_g = maxf(f_g, float(TONO[def[4]]))
+		var s: float = maxf(f_g * float(def[3]) * fuerza_mult, 0.0)
+		if s <= 0.001 and not MUSCULOS_JOLT:
 			continue
 		var m: RigPersonaje.Motor = rig.M[mn]
 		var pa: RigidBody3D = cuerpos[m.part0]
@@ -388,14 +547,22 @@ func _physics_process(dt: float) -> void:
 		var ang := 2.0 * acos(clampf(err.w, -1.0, 1.0))
 		var eje := Vector3(err.x, err.y, err.z)
 		eje = eje.normalized() if eje.length() > 1e-5 else Vector3.ZERO
+		err_suma += ang * float(def[3])
+		err_peso += float(def[3])
+		if MUSCULOS_JOLT:
+			var i_a: float = _inercia_art[mn]
+			var k_m := maxf(KS * s * i_a, 0.02)
+			_musculo_6dof(mn, obj, k_m, 2.0 * AMORT * sqrt(k_m * i_a))
+			continue
 		var kp := KP * s
-		var kd := 2.0 * sqrt(kp) * 0.85
+		var kd := 2.0 * sqrt(kp) * AMORT
 		var alfa := (rp * eje) * (kp * ang) - (hi.angular_velocity - pa.angular_velocity) * kd
 		if alfa.length() > ACEL_MAX:
 			alfa = alfa.normalized() * ACEL_MAX
-		var tq := alfa * minf(_inercia[m.part1], _inercia[m.part0])
+		var tq := alfa * float(_inercia_art[mn])
 		hi.apply_torque(tq)
 		pa.apply_torque(-tq)
+	error_medio = err_suma / maxf(err_peso, 1e-3)
 	# espasmos (muriendo)
 	if comportamiento in ["morir", "retorcerse"] and _t_comp > 0.8 and _t_comp < (6.0 if comportamiento == "morir" else 99.0) \
 			and randf() < (0.07 if comportamiento == "morir" else 0.025) * dt * 60.0:
@@ -407,7 +574,10 @@ func _physics_process(dt: float) -> void:
 		_quieto_t += dt
 	else:
 		_quieto_t = 0.0
-	if vivo and not _avisado and duracion >= 0.0 and _t > duracion and _quieto_t > 0.35 and v.length() < 4.0:
+	# se levanta cuando se para... o, preparado para levantarse, en cuanto ha tenido un momento (no espera a que el
+	# cuerpo esté quieto del todo: si no, a veces no se levantaba nunca)
+	if vivo and not _avisado and duracion >= 0.0 and _t > duracion and _dist_suelo < 2.5 \
+			and ((_quieto_t > 0.2 and v.length() < 5.0) or (comportamiento == "prepararse" and _t_comp > 0.9 and v.length() < 9.0)):
 		_avisado = true
 		recuperado.emit()
 	# cadáver quieto: se congela (no gasta física)
@@ -529,6 +699,10 @@ func _comportamiento(t: float) -> Array:
 			return _b_retorcerse(t)
 		"morir":
 			return _b_morir(t)
+		"prepararse":
+			return _b_prepararse(t)
+		"pose":
+			return [pose_prueba, {"core": 1.0, "neck": 1.0, "arm": 1.0, "leg": 1.0}]
 	return [{}, {"core": 0.02, "neck": 0.03, "arm": 0.02, "leg": 0.02}]
 
 
@@ -646,14 +820,36 @@ func _b_caida_libre(t: float) -> Array:
 
 ## impacto contra el suelo: un instante sin fuerza; después, aturdido, se retuerce (más débil si fue grave)
 func _b_impacto(t: float) -> Array:
-	if t < 0.22:
+	if t < 0.12:
 		return [{}, {"core": 0.03, "neck": 0.04, "arm": 0.03, "leg": 0.03}]
 	var r := _b_retorcerse(t)
-	var k := (0.35 + 0.75 * (1.0 - gravedad)) * minf(1.0, (t - 0.22) / 0.5)
+	var k := (0.55 + 0.6 * (1.0 - gravedad)) * minf(1.0, (t - 0.12) / 0.35)
 	var f: Dictionary = r[1]
 	for g in f:
 		f[g] = float(f[g]) * k
 	return r
+
+
+## a punto de levantarse: deja de retorcerse y coloca el cuerpo (boca abajo: manos bajo los hombros y cabeza
+## arriba; boca arriba: rodillas dobladas y barbilla al pecho), con fuerza
+func _b_prepararse(t: float) -> Array:
+	var k := minf(1.0, t / 0.4)
+	if boca_arriba():
+		return [{
+			"Neck": _ang(0.55), "Waist": _ang(0.25),
+			"LeftHip": _ang(1.0, 0, -0.12), "RightHip": _ang(0.85, 0, 0.12),
+			"LeftKnee": _ang(-1.7), "RightKnee": _ang(-1.5),
+			"LeftShoulder": _apuntar(Vector3(-0.6, -0.8, 0.25)), "RightShoulder": _apuntar(Vector3(0.6, -0.8, 0.25)),
+			"LeftElbow": _ang(0.9), "RightElbow": _ang(0.9),
+		}, {"core": 0.7 + 0.3 * k, "neck": 1.0, "arm": 0.8, "leg": 0.8}]
+	return [{
+		"Neck": _ang(-0.7), "Waist": _ang(-0.15),
+		"LeftHip": _ang(0.35, 0, -0.1), "RightHip": _ang(0.25, 0, 0.1),
+		"LeftKnee": _ang(-0.7), "RightKnee": _ang(-0.5),
+		"LeftShoulder": _apuntar(Vector3(-0.35, -0.7, -0.9)), "RightShoulder": _apuntar(Vector3(0.35, -0.7, -0.9)),
+		"LeftElbow": _ang(1.4), "RightElbow": _ang(1.4),
+		"LeftWrist": _ang(-0.8), "RightWrist": _ang(-0.8),
+	}, {"core": 0.7 + 0.3 * k, "neck": 1.0, "arm": 0.9, "leg": 0.7}]
 
 
 ## muerte: se agarra la herida, las rodillas ceden, cae protegiéndose, se retuerce y se apaga

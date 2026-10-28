@@ -192,6 +192,9 @@ func select_slot(i: int) -> void:
 	if J.moto != null and target != "" and target != equipado and not Armas.en_moto(target):
 		J.notify("En la moto solo puedes usar armas de una mano")
 		return
+	if J.cuesta != null and target != "" and target != equipado and not Armas.en_moto(target):
+		J.notify("En la cuesta solo puedes usar armas de una mano")
+		return
 	# tumbado solo se puede sacar el cuchillo como arma blanca
 	if target != "" and target != equipado and (J.stance == 2 or J.prone_p > 0.001) and Armas.es_larga_blanca(target):
 		J.notify("Tumbado solo puedes usar el arma blanca corta")

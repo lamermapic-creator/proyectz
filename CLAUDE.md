@@ -74,8 +74,17 @@ Responder SIEMPRE en español. Presupuesto 0 $: solo recursos gratuitos.
   Respuesta:
   - (Claude de Juan: escribe aquí)
 
+- **2026-10-28 · De: Claude de KangooG → Para: Claude de Juan** (ragdoll nuevo)
+  El ragdoll (que también usan vuestros zombis) cambia por dentro: las articulaciones ahora son `Generic6DOFJoint3D`
+  con **muelles angulares** que resuelve Jolt (músculos de verdad, rígidos y sin temblar) en vez de pares calculados a
+  mano; vivo, el cuerpo nunca se desarma (`Ragdoll.TONO`) y hay un comportamiento nuevo `prepararse` antes de
+  levantarse (se levanta siempre a tiempo). La API no cambia (`iniciar`, `golpe`, `morir`, `terminar`, señales); hay
+  una función nueva `ignorar(cuerpo, segundos)`. No tocamos `zombi.gd`. Si vuestros zombis se levantan raro, decídnoslo.
+  Respuesta:
+  - (Claude de Juan: escribe aquí)
+
 ## Problemas conocidos
-- (Ninguno abierto ahora. El de "sin ragdoll al caerse de la moto" se arregló el 2026-10-25.)
+- `tests/moto.gd --modo=zombi` falla a veces (1 de cada ~8: el zombi deambula y la moto no lo pilla). No es un error.
 
 ---
 
@@ -219,6 +228,9 @@ Freesound (sonidos), Poly Haven y ambientCG (texturas/HDRI), Quaternius y Kenney
   tono)` elige una variante al azar (sin repetir la anterior); sin archivo, sintetizado; en `--headless` siempre
   sintetizado. `Efectos.precargar()` en `Jugador._ready`. Para sonidos nuevos: procesar a mono 44,1 kHz Vorbis y
   volumen normalizado como los demás.
+  **Volumen:** los .ogg vienen con picos cerca de 0 dBFS; los 3D suenan a `vol` − 4 dB con `max_db` 0 y hay un
+  `AudioEffectHardLimiter` en Master (`Efectos._limitador_master`, se añade en tiempo de juego). No subir la ganancia
+  por encima de 0 dB: antes (+6 dB) saturaba todo y el rifle sonaba roto.
 - **Efectos:** `Efectos.muzzle_flash(ctx, muzzle, fuerza)`, `humo`, `casquillo` (RigidBody3D capa 0, máx. 30);
   `Arsenal.expulsar_casquillo`. Cachés estáticas que se vacían al salir (`Efectos.limpiar`).
 - **Inercia:** `Jugador._vel_inercia` en `humanoid_step` (solo en "Running" sin vallar/colgarse/mover forzado);
@@ -226,11 +238,36 @@ Freesound (sonidos), Poly Haven y ambientCG (texturas/HDRI), Quaternius y Kenney
 - **Cámara:** `dist_suave` (la distancia se acerca suave y al instante si choca), `apretado_cur` sube al instante.
 - **HUD:** `Jugador._contorno(label, px)`, ayuda con H (`_hud.ayuda`), barra de armas auto-oculta (`Arsenal._barra_t`),
   `HudDanio` (`hud_danio.golpe(cantidad, pos, desde)` desde `recibir_danio`; `desde` = null si no se sabe de dónde).
-- **Ragdoll:** `Ragdoll.EXAGERA` / `NERVIO` escalan todos los gestos (pedido: "muchísimo más exagerado").
+- **Ragdoll:** `Ragdoll.EXAGERA` / `NERVIO` escalan todos los gestos (pedido: "muchísimo más exagerado"; desde el
+  2026-10-28 en 1.6 / 1.25, con músculos rígidos: ver abajo).
 - **Pruebas de recorrido:** `tests/recorrido.gd` + `tests/escena_recorrido.tscn` `--escenario=<andar|correr_giro|saltos|
   agacharse|vallar|trepar|cornisa|escalera|pared_cam|rifle|giro_disparo|danio|pistola_bate>` (`--detalle`,
   `--velocidades`): imprime `RECORRIDO … cam_tiron cam_dentro pie_resbala vmax`. Con `--write-movie` se ve como en el juego.
 - `InfiniteStamina` ahora es `false` (F4 la activa para probar).
+
+## Ragdoll rígido, moto y cuestas (2026-10-28, KangooG)
+- **Ragdoll:** músculos implícitos (`MUSCULOS_JOLT`): cada articulación es un `Generic6DOFJoint3D` con límites por eje
+  y un muelle angular por eje (`_crear_union_6dof`, `_musculo_6dof`: objetivo → ángulos de Euler **ZYX con signo −**,
+  comprobado: error 0,1°). Rigidez `KS · fuerza · inercia de la rama` (`_calcular_inercias`: lo que cuelga de la
+  articulación). Vivo: tono mínimo `TONO`. `prepararse` (manos bajo los hombros / rodillas arriba) y se levanta en
+  cuanto ha tenido un momento (no espera a estar quieto); tope de seguridad en `Jugador._paso_ragdoll` (+3 s).
+  `Jugador._sitio_para_levantarse` / `_cabe_de_pie` buscan sitio libre (la moto caída cuenta); mientras se levanta no
+  choca con una moto caída a su lado (`_sin_choque_motos`). `LEVANTARSE_VEL` 1.4.
+- **Moto, choques:** `_altura_obstaculo`: contra algo más bajo que `OBST_BAJO` (~43 cm) hace falta `CHOQUE_BAJO` (40)
+  para tirar al piloto y sale por encima del manillar con casi toda su velocidad; contra una pared alta, `CHOQUE` (30) y
+  se estrella contra ella. `_caida_segun_golpe`: vuelta de campana / rebote de lado / vuelco al azar. El piloto no
+  choca con su moto 0,7 s (`Ragdoll.ignorar`). Escalones: `_escalon()` (14 cm despacio, ~19 cm deprisa) y un canto de
+  escalón no se toma por cuesta. Arreglado: `_tantear` suponía suelo plano si no había punto de contacto (la moto
+  trepaba bloques de 40 cm). `Moto._paso_fisica` recorta cambios de velocidad bruscos con el jugador al lado (el
+  jugador, cinemático, la lanzaba por los aires). `Jugador.levantar_moto`: desde el lado en que está el jugador.
+- **Cuestas (35°–60°):** `Jugador._paso_cuesta` (estado `cuesta`, `L.cuesta` para el Animador): trepa con las manos;
+  quieto, la postura sale de la cámara (arriba: tumbado, lado: de costado, abajo: sentado); sentado + W resbala;
+  tumbado + clic der./S repta y cerca de lo alto se asoma; posturas sin gasto (recuperan a la mitad); sin estamina
+  resbala un poco; >60° resbala; solo armas de una mano. Animador: rama `elif cu != null` (pelvis, pies por IK sobre
+  la cuesta) y manos apoyadas (`cu_manos`). Cámara separada de la cuesta (`_cuesta_cam`). Diseño en el doc del
+  proyecto `mecanica-pendientes.md`. Zona en F1.
+- **Pruebas nuevas:** `tests/moto.gd --modo=eyecta --obst=<muro|bloque10..40> --vel=N`, `tests/ragdoll.gd --modo=j_moto`,
+  `tests/recorrido.gd --escenario=cuesta|cuesta_pistola|cuesta_cansado|cuesta_arriba` (`--cuesta` traza, `--cam_lado`).
 
 ## Ruido y zombis v0 (2026-10-23, a pedido de Juan) — guía completa: `docs/RUIDO_Y_ZOMBIS.md`
 - **Sistema de ruido** (`scripts/ruido/ruido.gd`, clase estática `Ruido`, sin autoload): quien hace ruido llama a

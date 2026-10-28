@@ -65,8 +65,26 @@ if [ ${#SOLO[@]} -eq 0 ]; then
 		if grep -q "^OK moto_$modo" <<<"$salida" && [ -z "$errores" ]; then resumen+=("OK    moto_$m")
 		else [ -n "$errores" ] && echo "$errores" | head -10; fallos=$((fallos + 1)); resumen+=("FALLO moto_$m"); fi
 	done
+	# choques de la moto (2026-10-28, tests/moto.gd --modo=eyecta): un bloque de 20 cm no tira al piloto; uno de
+	# 40 cm a 50 studs/s lo lanza lejos por encima del manillar; un muro a 35 lo tira
+	for c in bloque20:50 bloque40:50 muro:35; do
+		o="${c%%:*}"; v="${c##*:}"
+		salida="$("$GODOT" --headless --path "$RAIZ" --fixed-fps 60 res://tests/escena_moto.tscn -- --modo=eyecta --obst=$o --vel=$v 2>&1)"
+		errores="$(hay_errores "$salida")"
+		grep -E "^MOTO eyecta|^(OK|MAL) moto_" <<<"$salida"
+		if grep -q "^OK moto_eyecta" <<<"$salida" && [ -z "$errores" ]; then resumen+=("OK    moto_eyecta_${o}_$v")
+		else [ -n "$errores" ] && echo "$errores" | head -10; fallos=$((fallos + 1)); resumen+=("FALLO moto_eyecta_${o}_$v"); fi
+	done
+	# cuestas empinadas (2026-10-28, tests/recorrido.gd): trepar con las manos, posturas, pistola, sin estamina, arriba
+	for e in cuesta cuesta_pistola cuesta_cansado cuesta_arriba; do
+		salida="$("$GODOT" --headless --path "$RAIZ" --fixed-fps 60 res://tests/escena_recorrido.tscn -- --escenario=$e 2>&1)"
+		errores="$(hay_errores "$salida")"
+		grep -E "^(OK|MAL) recorrido_" <<<"$salida"
+		if grep -q "^OK recorrido_$e" <<<"$salida" && [ -z "$errores" ]; then resumen+=("OK    $e")
+		else [ -n "$errores" ] && echo "$errores" | head -10; fallos=$((fallos + 1)); resumen+=("FALLO $e"); fi
+	done
 	# ragdoll (tests/ragdoll.gd): muñeco suelto y jugador (derribo, caída larga, aterrizaje fuerte, muerte)
-	for m in empuje alto morir limites j_derribo j_caida j_aterriza j_morir; do
+	for m in empuje alto morir limites j_derribo j_caida j_aterriza j_morir j_moto; do
 		salida="$("$GODOT" --headless --path "$RAIZ" --fixed-fps 60 res://tests/escena_ragdoll.tscn -- --modo=$m 2>&1)"
 		errores="$(hay_errores "$salida")"
 		grep -E "^(OK|MAL) ragdoll_" <<<"$salida"

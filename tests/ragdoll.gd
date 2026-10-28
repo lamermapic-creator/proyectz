@@ -71,6 +71,16 @@ func _inicio_jugador() -> void:
 			J.global_position += Vector3(0, 40, 0) # ~12 m
 		"j_aterriza":
 			J.global_position += Vector3(0, 18, 0) # cae a ~33 studs/s: duele
+		"j_moto":
+			# moto caída justo al lado y el jugador derribado encima de ella: tiene que levantarse fuera, libre
+			var mt: Moto = null
+			for x in get_tree().get_nodes_in_group("motos"):
+				mt = x
+				break
+			mt.global_position = J.global_position + Vector3(0, 0, 2.5)
+			mt.caer(1.0)
+			await get_tree().create_timer(0.8).timeout
+			J.ragdoll_iniciar(Vector3.ZERO, {"comportamiento": "caer", "impulso": Vector3(0, 3, 9), "duracion": 1.4})
 		"j_morir":
 			J._reiniciando = true # (en la prueba no se reinicia el nivel)
 			J.recibir_danio(500.0, J.global_position + Vector3(0, 0, -3))
@@ -82,6 +92,12 @@ func _proceso_jugador(dt: float) -> void:
 		J.ragdoll.impacto.connect(func(v): print("RAG impacto jugador %.1f" % v))
 	if notas_j.has("rag") and J.ragdoll == null and J.health > 0 and de_pie_t < 0.0 and not J.L.gettingUp and J.getup_p <= 0.0:
 		de_pie_t = t
+	# moto caída al lado: al levantarse no tiene que salir disparada (el jugador la empujaba como un muro)
+	if modo == "j_moto" and J.ragdoll == null and notas_j.has("rag"):
+		for x in get_tree().get_nodes_in_group("motos"):
+			var f = x.get("_fisica")
+			if f != null and is_instance_valid(f):
+				moto_v_tras = maxf(moto_v_tras, f.linear_velocity.length())
 	if fmod(t, 0.5) < dt:
 		print("RAG t=%.2f jugador ragdoll=%s vida=%.0f comp=%s getup=%.2f stance=%d pos_y=%.2f" % [t, str(J.ragdoll != null), J.health,
 			J.ragdoll.comportamiento if J.ragdoll else "-", J.getup_p, J.stance, J.global_position.y])
@@ -102,12 +118,17 @@ func _proceso_jugador(dt: float) -> void:
 				if vida_min >= 100.0: fallos.append("el aterrizaje no hace daño")
 			"j_morir":
 				if J.ragdoll == null: fallos.append("el muerto no queda en ragdoll")
+			"j_moto":
+				if de_pie_t < 0.0: fallos.append("no se levanta")
+				elif J._esfera_choca(J.global_position + Vector3(0, -0.3, 0), 0.7): fallos.append("se levanta dentro de algo")
+				if moto_v_tras > 8.0: fallos.append("la moto sale disparada al levantarse (%.0f studs/s)" % moto_v_tras)
 		print("RAG fin vida_min=%.0f de_pie=%.2f" % [vida_min, de_pie_t])
 		print(("OK ragdoll_" + modo) if fallos.is_empty() else ("MAL ragdoll_%s: %s" % [modo, ", ".join(fallos)]))
 		get_tree().quit()
 
 var notas_j := {}
 var _mov_acc := 0.0
+var moto_v_tras := 0.0
 
 func _process(dt: float) -> void:
 	t += dt
@@ -131,8 +152,8 @@ func _process(dt: float) -> void:
 		wsum += ((rd.cuerpos[n] as RigidBody3D).angular_velocity - wt).length()
 	_mov_acc += wsum / rd.cuerpos.size() * dt
 	if fmod(t, 0.5) < dt:
-		print("RAG t=%.2f comp=%s pelvis_y=%.2f v=%.1f estira=%.2f arriba=%s mov=%.2f" % [t, rd.comportamiento, p.y,
-			rd.velocidad(), max_estiramiento, str(rd.boca_arriba()), _mov_acc / 0.5])
+		print("RAG t=%.2f comp=%s pelvis_y=%.2f v=%.1f estira=%.2f arriba=%s mov=%.2f err=%.0f°" % [t, rd.comportamiento, p.y,
+			rd.velocidad(), max_estiramiento, str(rd.boca_arriba()), _mov_acc / 0.5, rad_to_deg(rd.error_medio)])
 		_mov_acc = 0.0
 	cam.current = true
 	var foco := p + Vector3(0, 0.5, 0)

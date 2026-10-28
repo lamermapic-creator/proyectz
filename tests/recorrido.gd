@@ -9,6 +9,9 @@ var j: Jugador
 var t := 0.0
 var esc := "andar"
 var evs: Array = []
+var cam_lado: Camera3D = null
+var posturas := {}
+var _hist := {}
 var giro := 0.0          # rad/s de giro de la cámara (ratón)
 var giro_p := 0.0
 var fuego := false
@@ -48,6 +51,15 @@ const ESC := {
 		[1.7, "fuego", true], [3.5, "fuego", false]]],
 	"danio": [Vector3(70, 3.2, 0), -PI / 2, 9.0, [[0.4, "ranura", 1], [1.0, "danio", [18.0, Vector3(0, 0, 10)]], [2.0, "danio", [22.0, Vector3(10, 0, 0)]],
 		[3.0, "danio", [25.0, Vector3(-8, 0, -8)]], [4.2, "danio", [40.0, Vector3(0, 0, -10)]]]],
+	# cuesta de 50° (2026-10-28): trepa con las manos; quieto mirando arriba (tumbado), a un lado (de lado) y abajo
+	# (sentado); W mirando abajo: se deja resbalar sentado hasta abajo
+	"cuesta": [Vector3(71, 3.2, -33), 0.0, 13.0, [[0.4, "k", KEY_W], [3.6, "ku", KEY_W], [5.0, "giro", 1.57], [6.0, "giro", 0.0],
+		[7.5, "giro", 1.57], [8.5, "giro", 0.0], [9.5, "k", KEY_W], [11.5, "ku", KEY_W]]],
+	"cuesta_pistola": [Vector3(71, 3.2, -33), 0.0, 10.0, [[0.2, "ranura", 0], [1.2, "k", KEY_W], [4.6, "ku", KEY_W], [5.0, "apunta", true],
+		[5.6, "fuego", true], [5.65, "fuego", false], [6.2, "apunta", false], [6.6, "giro", 3.14], [7.6, "giro", 0.0],
+		[8.0, "apunta", true], [8.4, "fuego", true], [8.45, "fuego", false], [9.0, "apunta", false]]],
+	"cuesta_cansado": [Vector3(71, 3.2, -33), 0.0, 7.0, [[0.4, "k", KEY_W], [2.4, "estamina", 8.0], [5.0, "ku", KEY_W]]],
+	"cuesta_arriba": [Vector3(71, 3.2, -33), 0.0, 13.0, [[0.4, "k", KEY_W], [7.6, "ku", KEY_W], [8.6, "k", KEY_W], [11.0, "ku", KEY_W]]],
 	"pistola_bate": [Vector3(70, 3.2, 0), -PI / 2, 9.0, [[0.3, "ranura", 0], [1.3, "apunta", true], [1.6, "fuego", true], [1.65, "fuego", false],
 		[2.0, "fuego", true], [2.05, "fuego", false], [2.4, "fuego", true], [2.45, "fuego", false], [2.8, "apunta", false],
 		[3.0, "ranura", 3], [4.0, "k", KEY_W], [5.6, "ku", KEY_W], [5.7, "golpe", 0], [6.6, "golpe", 0], [7.4, "golpe", 0]]],
@@ -105,6 +117,39 @@ func _process(dt: float) -> void:
 				var dd: Array = ev[2]
 				j.recibir_danio(float(dd[0]), j.global_position + (dd[1] as Vector3))
 			"ranura": j.arsenal.select_slot(int(ev[2]))
+			"estamina": j.stamina = float(ev[2])
+	if OS.get_cmdline_user_args().has("--cuesta") and (fmod(t, 0.25) < dt or OS.get_cmdline_user_args().has("--cada")):
+		var cu = j.cuesta
+		print("CUESTA t=%.2f %s ang=%.0f centro=%.2f pos=%s estamina=%.0f arma=%s" % [t, cu.postura if cu != null else "-",
+			rad_to_deg(float(cu.ang)) if cu != null else 0.0, j.center_cur, str(j.global_position.snapped(Vector3.ONE * 0.1)),
+			j.stamina, j.arsenal.equipado])
+	if OS.get_cmdline_user_args().has("--cam_lado"):
+		# cámara fija de lado (para ver posturas), en vez de la del juego
+		if cam_lado == null:
+			cam_lado = Camera3D.new()
+			add_child(cam_lado)
+			cam_lado.fov = 40
+		cam_lado.current = true
+		var foco := j.global_position + Vector3(0, 0.5, 0)
+		cam_lado.global_position = foco + Vector3(16, 3.5, 2)
+		cam_lado.look_at(foco, Vector3.UP)
+	if j.cuesta != null:
+		posturas[j.cuesta.postura] = true
+	if OS.get_cmdline_user_args().has("--suavidad"):
+		# tirones de la animación: salto de cada pieza (respecto a donde "debería" estar siguiendo su velocidad)
+		var post := str(j.cuesta.postura) if j.cuesta != null else "-"
+		for pz in ["Head", "LowerTorso", "LeftHand", "RightHand", "LeftFoot", "RightFoot"]:
+			var pp: Vector3 = (j.rig.P[pz] as Node3D).global_position
+			var hist: Array = _hist.get(pz, [])
+			if hist.size() >= 2:
+				var pred: Vector3 = hist[-1] + (hist[-1] - hist[-2])
+				var err := (pp - pred).length()
+				if err > 0.25:
+					print("TIRON t=%.2f %s %.2f studs postura=%s" % [t, pz, err, post])
+			hist.append(pp)
+			if hist.size() > 2:
+				hist.pop_front()
+			_hist[pz] = hist
 	j.yaw += giro * dt
 	j.pitch = clampf(j.pitch + giro_p * dt, -1.2, 1.2)
 	if fuego:
@@ -123,6 +168,17 @@ func _process(dt: float) -> void:
 		print("RECORRIDO %s cam_tiron=%.3f cam_dentro=%d pie_resbala=%.2f resbalones=%d ms_jugador=%.2f vmax=%.1f estado=%s vida=%.0f" % [
 			esc, medidas.cam_tiron, medidas.cam_dentro, medidas.pie_resbala, medidas.resbalones,
 			medidas.ms / maxf(1.0, medidas.n), medidas.vmax, j.estado, j.health])
+		if esc.begins_with("cuesta"):
+			# (para tests/ejecutar_pruebas.sh) las posturas que tienen que salir en cada recorrido de la cuesta
+			var pide: Array = {"cuesta": ["trepa", "tumbado", "lado", "sentado"], "cuesta_pistola": ["trepa", "tumbado", "sentado"],
+				"cuesta_cansado": ["trepa", "resbala", "tumbado"], "cuesta_arriba": ["trepa", "tumbado"]}.get(esc, [])
+			var faltan := pide.filter(func(x): return not posturas.has(x))
+			var fallos := []
+			if not faltan.is_empty(): fallos.append("faltan posturas %s" % str(faltan))
+			if esc == "cuesta" and j.cuesta != null: fallos.append("no sale de la cuesta al bajar resbalando")
+			if esc == "cuesta_arriba" and j.global_position.y < 15.0: fallos.append("no llega arriba (y=%.1f)" % j.global_position.y)
+			if esc == "cuesta_pistola" and j.arsenal.datos_equipado().mag >= 12: fallos.append("no dispara en la cuesta")
+			print(("OK recorrido_" + esc) if fallos.is_empty() else ("MAL recorrido_%s: %s" % [esc, ", ".join(fallos)]))
 		get_tree().quit()
 
 

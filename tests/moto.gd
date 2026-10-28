@@ -29,6 +29,8 @@ var _n_med := 0
 var modo_fuerte := OS.get_cmdline_user_args().has("--fuerte")
 var temblor_mano := 0.0
 var angulo := 50
+var vel_obj := 40.0
+var obst := "muro"
 
 
 func _key(k: int, p: bool) -> void:
@@ -48,6 +50,10 @@ func _ready() -> void:
 			modo = a.split("=")[1]
 		if a.begins_with("--angulo="):
 			angulo = int(a.split("=")[1])
+		if a.begins_with("--vel="):
+			vel_obj = float(a.split("=")[1])
+		if a.begins_with("--obst="):
+			obst = a.split("=")[1]
 	j = get_parent().get_node("Jugador")
 	var args := OS.get_cmdline_user_args()
 	if (args.has("--video") and not args.has("--camjuego")) or modo == "vitrina":
@@ -102,7 +108,8 @@ func _inicio() -> void:
 		"levantar":
 			moto = _moto("Moto_1")
 			moto.caer(1.0)
-			j.teletransportar(moto.global_position + Vector3(-5.0, 0, 0.5), 0.0)
+			var lado_x := 5.0 if OS.get_cmdline_user_args().has("--otro_lado") else -5.0
+			j.teletransportar(moto.global_position + Vector3(lado_x, 0, 0.5), 0.0)
 			fin = 5.0
 		"zombi":
 			# atropellar a un zombi de verdad (el de Juan): se usa su contrato de objetivo
@@ -135,6 +142,29 @@ func _inicio() -> void:
 			moto.rumbo = PI
 			j.teletransportar(moto.global_position + Vector3(2.6, 0, -0.5), PI)
 			fin = 7.0
+		"eyecta":
+			# --vel=<studs/s> contra --obst=<muro|bloque20|bloque10|bordillo>: a esa velocidad, ¿tira al piloto?
+			# ¿a dónde sale despedido? ¿cómo cae la moto? (2026-10-28)
+			moto = _moto("Moto_2")
+			moto.global_position = Vector3(-40, 0, 60) * M
+			moto.rumbo = 0.0
+			j.teletransportar(moto.global_position + Vector3(-2.6, 0, 0.5), 0.0)
+			var alto: float = {"muro": 3.0, "bloque20": 0.2, "bloque30": 0.3, "bloque10": 0.1, "bordillo": 0.15, "bloque40": 0.4}.get(obst, 3.0) / 0.31
+			var sb := StaticBody3D.new()
+			var cs := CollisionShape3D.new()
+			var bx := BoxShape3D.new()
+			bx.size = Vector3(30, alto, 4)
+			cs.shape = bx
+			sb.add_child(cs)
+			var mi := MeshInstance3D.new()
+			var bm := BoxMesh.new()
+			bm.size = bx.size
+			mi.mesh = bm
+			sb.add_child(mi)
+			get_parent().add_child(sb)
+			sb.global_position = moto.global_position + Vector3(0, alto * 0.5, -24)
+			notas.z_obst = sb.global_position.z
+			fin = 5.5
 		"choque":
 			moto = _moto("Moto_2")
 			# de frente al muro de la zona de motos
@@ -290,6 +320,25 @@ func _process(dt: float) -> void:
 			if en and not moto.en_aire and p2.z > zr2 - 6.0 * M * cos(deg_to_rad(30.0)) + 3.0 and p2.z < zr2 - 3.0:
 				notas.cab_bajada = minf(float(notas.get("cab_bajada", 0.0)), moto.cabeceo)
 				notas.v_bajada = maxf(float(notas.get("v_bajada", 0.0)), moto.velocidad())
+		"eyecta":
+			# lanzada a vel_obj hacia el obstáculo (con gas para mantenerla)
+			if en and t > 1.0 and not notas.has("lanzada"):
+				notas.lanzada = true
+				moto.vel_h = moto.adelante() * vel_obj
+				moto.marcha = 5
+			_key(KEY_W, t > 1.0 and t < 4.0)
+			if OS.get_cmdline_user_args().has("--traza") and absf(moto.global_position.z - float(notas.get("z_obst", 0.0))) < 9.0:
+				print("TRAZA t=%.3f z=%.2f y=%.2f v=%.1f cab=%.2f apoyo=%d aire=%s piloto=%s del=%s tras=%s" % [t, moto.global_position.z - float(notas.z_obst), moto.global_position.y, moto.velocidad(), moto.cabeceo, moto.apoyo, str(moto.en_aire), str(moto.piloto != null), str(moto.suelo_del), str(moto.suelo_tras)])
+			if not en and notas.has("lanzada") and not notas.has("choco"):
+				notas.choco = t
+				notas.p_choque = moto.global_position
+				notas.v_choque = moto.ultimo_choque
+			if notas.has("choco"):
+				notas.j_fin = j.global_position
+				var f = moto.get("_fisica")
+				if f != null and is_instance_valid(f):
+					notas.giro_moto = maxf(float(notas.get("giro_moto", 0.0)), (f as RigidBody3D).angular_velocity.length())
+					notas.moto_fin = (f as RigidBody3D).global_position
 		"choque":
 			# hacia el muro de la zona de motos
 			_key(KEY_W, t > 1.2 and t < 8.0)
@@ -400,6 +449,19 @@ func _veredicto() -> void:
 			if moto.atropellos < 1 or float(notas.get("man_min", 100.0)) >= 100.0: fallos.append("no atropella al muñeco")
 		"zombi":
 			if moto.atropellos < 1 or zom.health >= 100.0: fallos.append("no atropella al zombi")
+		"eyecta":
+			if notas.has("choco"):
+				var d: Vector3 = notas.j_fin - notas.p_choque
+				var dm: Vector3 = notas.get("moto_fin", notas.p_choque) - notas.p_choque
+				print("MOTO eyecta vel=%.0f obst=%s: TIRA AL PILOTO (choque %.1f) sale %.1f studs (%.1f m) por delante; la moto acaba a %.1f studs y gira hasta %.1f rad/s" % [vel_obj, obst, float(notas.v_choque), -d.z, -d.z * 0.31, dm.length(), float(notas.get("giro_moto", 0.0))])
+				if obst in ["bloque10", "bloque20"]: fallos.append("un bloque de %s tira al piloto" % obst)
+				if obst == "bloque40" and vel_obj >= 45.0 and -d.z < 15.0: fallos.append("sale despedido muy poco (%.1f studs)" % -d.z)
+			else:
+				print("MOTO eyecta vel=%.0f obst=%s: NO tira al piloto (v final %.1f, %s el obstáculo)" % [vel_obj, obst, moto.velocidad(),
+					"pasa" if moto.global_position.z < float(notas.z_obst) - 2.0 else "NO pasa"])
+				if obst == "muro" and vel_obj >= 35.0: fallos.append("chocar contra el muro no tira al piloto")
+				if obst == "bloque40" and vel_obj >= 45.0: fallos.append("a esa velocidad contra un bloque de 40 cm no pasa nada")
+				if obst in ["bloque30", "bloque40"] and moto.global_position.z < float(notas.z_obst) - 2.0: fallos.append("la moto trepa el bloque")
 		"choque":
 			# sale despedido hacia delante (hacia el muro, por encima del manillar), nunca hacia atrás
 			var adel_j: float = (j.global_position - moto.global_position).dot(Vector3(0, 0, -1))

@@ -66,6 +66,8 @@ var air_vel = null
 var air_cap := 0.0
 var fall_bias := 0.0
 var getup_p := 0.0
+var _sin_choque_motos: Array = [] # motos caídas con las que no choca mientras se levanta a su lado
+var _getup_vel := 1.0 # (tras un ragdoll se levanta algo más deprisa que al salir de cuerpo a tierra)
 var cur_move := 0.0
 var side_cur := 1.0
 var cam_pivot = null
@@ -246,7 +248,7 @@ func _crear_hud() -> void:
 	capa.add_child(aviso)
 	_hud["aviso"] = aviso
 	var ayuda := Label.new()
-	ayuda.text = "1-4: armas · Clic der: apuntar · Clic izq: disparar/golpear · R: recargar · X: apoyar arma · F: recoger / subir a la moto · Shift: correr · C: agacharse · Z: cuerpo a tierra · Espacio: saltar/sortear · Q/E: asomarse · V: hombro · H: esta ayuda · Rueda: acercar/alejar cámara · Colgado: A/D moverse (Shift: rápido), Espacio subir, S soltarse · Esc: pausa" + (" · F1: trucos · F4: estamina infinita · F5: balas infinitas · F6: ver ruido · F7: zombis sordos" if OS.is_debug_build() else "")
+	ayuda.text = "1-4: armas · Clic der: apuntar · Clic izq: disparar/golpear · R: recargar · X: apoyar arma · F: recoger / subir a la moto · Shift: correr · C: agacharse · Z: cuerpo a tierra · Espacio: saltar/sortear · Q/E: asomarse · V: hombro · H: esta ayuda · Rueda: acercar/alejar cámara · Colgado: A/D moverse (Shift: rápido), Espacio subir, S soltarse · Cuesta empinada: W trepar; quieto, la cámara elige la postura (arriba: tumbado, a un lado: de costado, abajo: sentado; mirando abajo, W para resbalar sentado; clic der. tumbado: reptar) · Esc: pausa" + (" · F1: trucos · F4: estamina infinita · F5: balas infinitas · F6: ver ruido · F7: zombis sordos" if OS.is_debug_build() else "")
 	# ayuda de controles: oculta (H la muestra/oculta), en un recuadro que no se sale de la pantalla
 	ayuda.add_theme_font_size_override("font_size", 15)
 	ayuda.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -1199,7 +1201,7 @@ func update_character(dt: float) -> void:
 
 	# estamina y velocidad
 	var moving := move_direction.length() > 0.1
-	var want_sprint := Input.is_physical_key_pressed(KEY_SHIFT) and moving and not aiming and not firing
+	var want_sprint := Input.is_physical_key_pressed(KEY_SHIFT) and moving and not aiming and not firing and cuesta == null
 	# tumbado: Shift = reptar rápido (solo boca abajo y ya tumbado); agachado se corre agachado
 	if stance == 2:
 		want_sprint = want_sprint and not supine and prone_p > 0.98
@@ -1300,7 +1302,14 @@ func update_character(dt: float) -> void:
 			speed *= 0.5
 	# durante la transición de cuerpo a tierra no te mueves
 	var in_transition := prone_p > 0.001 and prone_p < 0.999
-	getup_p = maxf(0.0, getup_p - dt / C.PLAYER.ProneTime * 1.15)
+	getup_p = maxf(0.0, getup_p - dt / C.PLAYER.ProneTime * 1.15 * _getup_vel)
+	if getup_p <= 0.0:
+		_getup_vel = 1.0
+		if not _sin_choque_motos.is_empty() and reloj - _ragdoll_t > 1.0:
+			for fis in _sin_choque_motos:
+				if is_instance_valid(fis) and not _esfera_choca_con(fis, global_position, 1.2):
+					remove_collision_exception_with(fis)
+			_sin_choque_motos = _sin_choque_motos.filter(func(f): return is_instance_valid(f) and f in get_collision_exceptions())
 	if getup_p > 0:
 		in_transition = true
 	L.gettingUp = getup_p > 0
@@ -1345,11 +1354,19 @@ func update_character(dt: float) -> void:
 	root_size = PRONE_SIZE if center_cur < 1.3 else STAND_SIZE
 	hip_height = maxf(0.05, center_cur - root_size.y / 2)
 	_actualizar_formas()
+	# cuestas empinadas (2026-10-28): trepar con las manos y posturas (ver _paso_cuesta)
+	_paso_cuesta(dt, moving)
 
 	# orientación
 	if not L.knocked and vaulting == null and colgado == null:
 		var cy := Rbx.yaw_of(root_cf())
-		if stance == 2:
+		if cuesta != null:
+			# en la cuesta el cuerpo mira según la postura (cuesta arriba, cuesta abajo o a lo largo)
+			# (girar del todo, p. ej. de tumbado a sentado, lleva su tiempo: no da la vuelta de golpe)
+			var dy := Rbx.wrap_a(float(cuesta.giro) - cy)
+			var paso_g := clampf(dy * minf(1.0, dt * 7.0), -4.5 * dt, 4.5 * dt)
+			rotation = Vector3(0, cy + paso_g, 0)
+		elif stance == 2:
 			# cuerpo a tierra (como Ghost Recon): el cuerpo SIEMPRE sigue a la cámara
 			#  · boca abajo: la cabeza apunta hacia donde mira la cámara
 			#  · si miras hacia atrás (>115°) o hacia arriba: rueda y queda boca arriba
@@ -1411,6 +1428,7 @@ func update_character(dt: float) -> void:
 	L.sprinting = sprinting
 	L.stance = stance
 	L.stanceT = stance_change_t
+	L.cuesta = cuesta
 	L.stanceFrom = stance_from
 	L.proneP = prone_p
 	L.yaw = yaw
@@ -1673,6 +1691,14 @@ func update_camera(dt: float) -> void:
 	var eye_t := eye_base + (eye_prone - eye_base) * smooth01(maxf(prone_p, getup_p))
 	eye_cur += (eye_t - eye_cur) * minf(1, dt * 4)
 	var pivot := global_position + Vector3(0, eye_cur - rest_lower_cur, 0)
+	# en una cuesta empinada la cuesta queda justo detrás (sentado) o debajo (tumbado): la cámara se separa de ella
+	if cuesta != null:
+		var sep: float = {"sentado": 3.2, "resbala": 3.0, "tumbado": 1.3, "lado": 1.1, "trepa": 0.9}.get(cuesta.postura, 1.0)
+		_cuesta_cam = Rbx.damp(_cuesta_cam, sep, 4.0, dt)
+	else:
+		_cuesta_cam = Rbx.damp(_cuesta_cam, 0.0, 4.0, dt)
+	if _cuesta_cam > 0.01:
+		pivot += normal_suelo * _cuesta_cam + Vector3(0, maxf(0.0, _cuesta_cam - 1.5) * 0.6, 0)
 	# ladeo: la cabeza (y la cámara) salen hacia el lado y bajan un poco
 	pivot += Rbx.right(Rbx.ang(0, yaw, 0)) * lean_cur * 1.15 - Vector3(0, absf(lean_cur) * 0.18, 0)
 	# la cámara de carrera (más lejos, más campo de visión, balanceo) solo si de verdad se corre: chocando
@@ -2052,6 +2078,12 @@ func expulsar_moto(imp: Vector3, danio: float, motivo := "") -> void:
 	var plano := Rbx.flat(imp)
 	var giro := Vector3.UP.cross(plano.normalized()) * clampf(plano.length() * 0.15, 1.0, 6.0) if plano.length() > 0.5 else Vector3.ZERO
 	ragdoll_iniciar(imp, {"comportamiento": "caer", "giro": giro, "duracion": 1.6})
+	# (2026-10-28) sale volando por encima de su moto: no se engancha en ella (antes chocaba con el manillar y caía a
+	# un metro, fuera cual fuera la velocidad)
+	if ragdoll != null:
+		var fis = m.get("_fisica")
+		if fis != null:
+			ragdoll.ignorar(fis, 0.7)
 	if motivo != "muerte":
 		notify("¡Te has caído de la moto!")
 	if danio > 0.0:
@@ -2104,6 +2136,10 @@ func levantar_moto(m: Moto) -> void:
 	var dir := m.lado_arriba()
 	if dir.length() < 0.1:
 		dir = -m.derecha()
+	# (2026-10-28) desde el lado en que está el jugador (antes siempre por el mismo lado: el del asiento)
+	var hacia_mi := Rbx.flat(global_position - m.global_position)
+	if hacia_mi.length() > 0.3 and hacia_mi.dot(dir) < 0.0:
+		dir = -dir
 	m.empezar_a_levantar()
 	levantando_moto = {"moto": m, "t0": reloj, "dir": dir, "giro": atan2(dir.x, dir.z)}
 	notify("Levantando la moto…")
@@ -2153,6 +2189,7 @@ var ragdoll: Ragdoll = null
 var _ragdoll_t := -99.0
 var _golpe_dir := Vector3.ZERO
 var _aire_t := 0.0
+const LEVANTARSE_VEL := 1.4 # rapidez de la animación de levantarse tras un ragdoll (1 = la de cuerpo a tierra)
 const DERRIBO_ESPERA := 6.0 # s mínimos entre dos derribos por golpes
 
 
@@ -2202,6 +2239,11 @@ func _paso_ragdoll(dt: float) -> void:
 	var pel := ragdoll.pelvis()
 	# el "jugador" (cámara, zombis que lo buscan) va con la pelvis
 	global_position = pel
+	# por si acaso: vivo y en el suelo, nunca se queda más de 3 s pasado su tiempo sin levantarse
+	if health > 0.0 and ragdoll.vivo and ragdoll.duracion >= 0.0 and ragdoll._t > ragdoll.duracion + 3.0 \
+			and ragdoll._dist_suelo < 3.0:
+		_ragdoll_levantarse()
+		return
 	vel_real = ragdoll.torso().linear_velocity
 	en_suelo = false
 	if not estamina_infinita:
@@ -2231,7 +2273,7 @@ func _ragdoll_impacto(vel: float) -> void:
 	var sev := clampf(dmg / 70.0, 0.0, 1.0)
 	if dmg > 0.5 or ragdoll.comportamiento == "caida_libre":
 		ragdoll.gravedad = sev
-		ragdoll.duracion = ragdoll._t + 1.1 + sev * 3.4
+		ragdoll.duracion = ragdoll._t + 0.6 + sev * 1.5
 		if ragdoll.comportamiento in ["caer", "caida_libre"]:
 			ragdoll.cambiar("impacto")
 
@@ -2261,7 +2303,68 @@ func _aterrizaje_fuerte(vel: float) -> void:
 	if health > 0.0 and vel >= float(F.KnockSpeed) and ragdoll == null:
 		var sev := clampf(dmg / 70.0, 0.0, 1.0)
 		ragdoll_iniciar(Rbx.flat(vel_real) * 0.3 + Vector3(0, -2, 0), {"comportamiento": "impacto", "gravedad": sev,
-			"duracion": 1.1 + sev * 3.4})
+			"duracion": 0.6 + sev * 1.5})
+
+
+## suelo bajo "p" (sin contar las motos, que no son suelo para ponerse de pie) y si cabe de pie ahí; prueba
+## alrededor hasta 4,5 studs. Devuelve el punto del suelo donde levantarse.
+func _sitio_para_levantarse(p: Vector3) -> Vector3:
+	var sin_motos: Array = []
+	for mt in get_tree().get_nodes_in_group("motos"):
+		sin_motos.append((mt as CollisionObject3D).get_rid())
+		var fis = mt.get("_fisica")
+		if fis != null and is_instance_valid(fis):
+			sin_motos.append((fis as CollisionObject3D).get_rid())
+	var primero := Vector3.INF
+	for r: float in [0.0, 1.5, 3.0, 4.5]:
+		for i in (1 if r == 0.0 else 8):
+			var a := TAU * float(i) / 8.0
+			var c := p + Vector3(cos(a), 0, sin(a)) * r
+			var gs := raycast(c + Vector3(0, 3.0, 0), Vector3(0, -12.0, 0), sin_motos)
+			if gs.is_empty():
+				continue
+			var g: Vector3 = gs.position
+			if primero == Vector3.INF:
+				primero = g
+			if g.y > p.y + 2.5:
+				continue # (encima de algo alto: no)
+			if _cabe_de_pie(g):
+				return g
+	return primero if primero != Vector3.INF else p - Vector3(0, 0.5, 0)
+
+
+## ¿una esfera en "p" toca el cuerpo "obj"? (para saber si ya se ha separado de la moto caída)
+func _esfera_choca_con(obj: CollisionObject3D, p: Vector3, radio: float) -> bool:
+	var sh := SphereShape3D.new()
+	sh.radius = radio
+	var q := PhysicsShapeQueryParameters3D.new()
+	q.shape = sh
+	q.transform = Transform3D(Basis.IDENTITY, p)
+	q.collision_mask = obj.collision_layer
+	for r in get_world_3d().direct_space_state.intersect_shape(q, 8):
+		if r.collider == obj:
+			return true
+	return false
+
+
+## ¿cabe el jugador en el suelo "g", tumbado (al empezar a levantarse) y de pie? (con margen; la moto caída cuenta)
+func _cabe_de_pie(g: Vector3) -> bool:
+	var space := get_world_3d().direct_space_state
+	var q := PhysicsShapeQueryParameters3D.new()
+	q.collision_mask = 1
+	q.exclude = [get_rid()]
+	var caja := BoxShape3D.new()
+	caja.size = Vector3(2.6, 0.9, 2.6)
+	q.shape = caja
+	q.transform = Transform3D(Basis.IDENTITY, g + Vector3(0, 0.6, 0))
+	if not space.intersect_shape(q, 1).is_empty():
+		return false
+	var cap := CapsuleShape3D.new()
+	cap.radius = 0.95
+	cap.height = 4.4
+	q.shape = cap
+	q.transform = Transform3D(Basis.IDENTITY, g + Vector3(0, 2.75, 0))
+	return space.intersect_shape(q, 1).is_empty()
 
 
 ## el cuerpo se ha parado: se levanta donde quedó, mirando hacia donde apunta la cabeza
@@ -2271,10 +2374,11 @@ func _ragdoll_levantarse() -> void:
 	var arriba := ragdoll.boca_arriba()
 	var dir := ragdoll.direccion_cabeza()
 	var pel := ragdoll.pelvis()
-	var gs := raycast(pel + Vector3(0, 3.0, 0), Vector3(0, -12.0, 0))
-	var gy: float = (gs.position as Vector3).y if not gs.is_empty() else pel.y - 0.5
+	# (2026-10-28) sitio libre para ponerse de pie: antes, junto a la moto caída (o pegado a una pared) aparecía
+	# dentro de ella y se quedaba atascado en el suelo
+	var sitio := _sitio_para_levantarse(pel)
 	var giro := atan2(-dir.x, -dir.z)
-	global_transform = Transform3D(Basis(Vector3.UP, giro), Vector3(pel.x, gy + float(C.STANCE[2].Center), pel.z))
+	global_transform = Transform3D(Basis(Vector3.UP, giro), Vector3(sitio.x, sitio.y + float(C.STANCE[2].Center), sitio.z))
 	velocity = Vector3.ZERO
 	vel_real = Vector3.ZERO
 	collision_layer = 1
@@ -2285,12 +2389,210 @@ func _ragdoll_levantarse() -> void:
 	supine = false
 	# levantarse lleva lo que la animación de cuerpo a tierra (y antes, rodar si está boca arriba)
 	getup_p = 1.0 + (0.75 * 1.15 / float(C.PLAYER.ProneTime) if arriba else 0.0)
+	_getup_vel = LEVANTARSE_VEL
 	center_cur = float(C.STANCE[2].Center)
 	_set_estado("Running")
 	en_suelo = true
 	var an := get_node_or_null("Animador") as Animador
 	if an:
-		an.levantarse = {"t0": an.ahora(), "arriba": arriba}
+		an.levantarse = {"t0": an.ahora(), "arriba": arriba, "vel": LEVANTARSE_VEL}
 		an.replant = true
 	ragdoll.terminar(0.35)
 	ragdoll = null
+	# mientras se levanta no choca con una moto caída que tenga al lado (el cuerpo que la sostenía desaparece y la
+	# moto se recoloca; si chocaran, el jugador la empujaría como un muro)
+	for mt in get_tree().get_nodes_in_group("motos"):
+		var fis = mt.get("_fisica")
+		if fis != null and is_instance_valid(fis) and ((fis as Node3D).global_position - global_position).length() < 9.0:
+			add_collision_exception_with(fis)
+			_sin_choque_motos.append(fis)
+
+
+## ---------------------------------------------------------------- cuestas empinadas (2026-10-28, KangooG)
+## De 35° a 60° el personaje trepa con las manos (inclinado hacia la cuesta, manos alternas; con la pistola en la
+## mano solo apoya la otra y va más despacio). Quieto, la postura sale de hacia dónde mira la cámara:
+##   cuesta abajo -> "sentado" de espaldas, los pies clavados aguantando el peso (W: se deja resbalar sentado)
+##   a un lado    -> "lado": pegado de costado a la cuesta (W/S: anda de lado a lo largo de ella)
+##   cuesta arriba-> "tumbado" sobre la cuesta (con clic derecho o S repta; cerca de lo alto se asoma)
+## Las posturas no gastan estamina y la recuperan a la mitad; trepar hacia arriba la gasta y sin ella resbala un
+## poco. Más de 60°: no se sube, resbala. Solo armas de una mano (como en la moto).
+## Diseño: docs (proyecto) "mecanica-pendientes.md".
+const CUESTA_MIN := deg_to_rad(35.0)
+const CUESTA_SALIR := deg_to_rad(31.0)
+const CUESTA_MAX := deg_to_rad(60.0)
+const CUESTA_TREPAR := 3.0        # studs/s a lo largo de la cuesta (hacia arriba)
+const CUESTA_BAJAR := 3.2
+const CUESTA_LADO := 2.4
+const CUESTA_REPTAR := 1.3
+const CUESTA_DESLIZAR := 6.5
+const CUESTA_RESBALA := 9.0
+const CUESTA_GASTO := 9.0         # estamina/s trepando hacia arriba
+var cuesta = null                 # null o {postura, n, arriba, t_up, lat, ang, giro, fase, mov, lado, asoma}
+var _cuesta_fuera_t := 0.0
+var _cuesta_resbala_t := 0.0
+var _cuesta_zona := "arriba"
+var _cuesta_asoma := 0.0
+var _cuesta_centro := 3.1
+var _cuesta_cam := 0.0
+
+
+func _paso_cuesta(dt: float, moving: bool) -> void:
+	var n := normal_suelo
+	var ang := acos(clampf(n.y, -1.0, 1.0))
+	var puede: bool = health > 0 and moto == null and colgado == null and vaulting == null and not L.knocked \
+		and levantando_moto == null and ragdoll == null and estado == "Running" and getup_p <= 0.0 \
+		and arsenal.recogiendo == null and (stance != 2 or cuesta != null) and (prone_p < 0.05 or cuesta != null)
+	if cuesta == null:
+		if not (puede and en_suelo and ang >= CUESTA_MIN):
+			return
+		_entrar_cuesta()
+	# ¿se sale? (cuesta suave, en el aire un rato, otra acción)
+	if en_suelo:
+		_cuesta_fuera_t = 0.0
+	else:
+		_cuesta_fuera_t += dt
+	if not puede or _cuesta_fuera_t > 0.25 or (en_suelo and ang < CUESTA_SALIR):
+		_salir_cuesta()
+		return
+	stance = 0
+	# normal suavizada (en el canto de arriba o en juntas la normal del suelo baila o se da la vuelta)
+	if cuesta.has("n"):
+		var n_prev: Vector3 = cuesta.n
+		if Rbx.flat(n).dot(Rbx.flat(n_prev)) < 0.0:
+			n = n_prev
+		n = n_prev.slerp(n, 1.0 - exp(-10.0 * dt)).normalized()
+		ang = acos(clampf(n.y, -1.0, 1.0))
+	var arriba := -Rbx.flat(n)
+	arriba = arriba.normalized() if arriba.length() > 0.01 else Rbx.look(root_cf())
+	var t_up := (arriba - n * arriba.dot(n)).normalized()
+	var lat := t_up.cross(n).normalized() # a la derecha mirando cuesta arriba
+	var contorno := Vector3(lat.x, 0, lat.z).normalized()
+	# zona de la cámara respecto a la cuesta (con margen para no cambiar a cada momento)
+	var fc := Rbx.look(Rbx.ang(0, yaw, 0))
+	fc = Vector3(fc.x, 0, fc.z).normalized()
+	var rel := atan2(arriba.cross(fc).y, arriba.dot(fc)) # + = la cámara mira a la izquierda de cuesta arriba
+	var ar := absf(rel)
+	var zona := _cuesta_zona
+	var m1 := deg_to_rad(10.0) if _cuesta_zona == "arriba" else 0.0
+	var m2 := deg_to_rad(10.0) if _cuesta_zona == "abajo" else 0.0
+	if ar < deg_to_rad(55.0) + m1:
+		zona = "arriba"
+	elif ar > deg_to_rad(125.0) - m2:
+		zona = "abajo"
+	elif ar > deg_to_rad(65.0) and ar < deg_to_rad(115.0):
+		zona = "lado"
+	_cuesta_zona = zona
+	var lado := 1.0 if rel < 0.0 else -1.0 # 1 = la cuesta queda a la izquierda (mira hacia la derecha)
+	# movimiento (respecto a la cuesta)
+	var md := move_direction
+	var sube := md.dot(arriba)
+	var deriva := md.dot(contorno)
+	var una_mano: bool = arsenal.equipado != "" and Armas.WEAPONS.get(arsenal.equipado, {}).get("Kind", "") == "Gun"
+	var postura := "trepa"
+	var dir := Vector3.ZERO
+	var vel := 0.0
+	var giro := atan2(-arriba.x, -arriba.z)
+	var trepando_arriba := false
+	if ang > CUESTA_MAX + deg_to_rad(2.0) or _cuesta_resbala_t > 0.0:
+		# demasiado empinada (o sin fuerzas): resbala cuesta abajo, sentado, frenando con los pies
+		_cuesta_resbala_t = maxf(0.0, _cuesta_resbala_t - dt)
+		postura = "resbala"
+		dir = -arriba
+		vel = CUESTA_RESBALA if ang > CUESTA_MAX else 5.0
+		giro = atan2(arriba.x, arriba.z)
+	elif moving:
+		if zona == "abajo" and sube < -0.5:
+			postura = "sentado"
+			dir = -arriba
+			vel = CUESTA_DESLIZAR
+			giro = atan2(arriba.x, arriba.z)
+		elif zona == "lado" and absf(deriva) > 0.6:
+			postura = "lado"
+			dir = contorno * signf(deriva)
+			vel = CUESTA_LADO
+			giro = atan2(-dir.x, -dir.z)
+		elif zona == "arriba" and (aiming or sube < -0.5):
+			postura = "tumbado"
+			dir = md.normalized()
+			vel = CUESTA_REPTAR * (1.25 if sube < 0.0 else 1.0)
+		elif exhausted and sube > 0.3:
+			# agotado: no puede seguir subiendo; se queda agarrado descansando
+			postura = "tumbado"
+		else:
+			postura = "trepa"
+			dir = md.normalized()
+			vel = CUESTA_TREPAR if sube > 0.3 else (CUESTA_BAJAR if sube < -0.3 else CUESTA_LADO)
+			if una_mano:
+				vel *= 0.65
+			trepando_arriba = sube > 0.3
+	else:
+		match zona:
+			"abajo":
+				postura = "sentado"
+				giro = atan2(arriba.x, arriba.z)
+			"lado":
+				postura = "lado"
+				var d_l := contorno * (1.0 if rel < 0.0 else -1.0)
+				giro = atan2(-d_l.x, -d_l.z)
+			_:
+				postura = "tumbado"
+	# estamina: trepar hacia arriba gasta; en las posturas se recupera a la mitad (la normal ya se ha sumado)
+	if not estamina_infinita:
+		var regen: float = C.PLAYER.StaminaRegen * dt * (0.6 if moving else 1.0)
+		if trepando_arriba:
+			stamina = maxf(0.0, stamina - regen - CUESTA_GASTO * dt)
+			if stamina <= 0.0:
+				_cuesta_resbala_t = 0.7
+				notify("¡Sin fuerzas! Resbalas")
+		else:
+			stamina = maxf(0.0, stamina - regen * 0.5)
+	# lo alto de la cuesta delante (tumbado: se asoma por encima)
+	var asoma_obj := 0.0
+	if postura == "tumbado":
+		var g := raycast(global_position + arriba * 3.2 + Vector3(0, 4.0, 0), Vector3(0, -9.0, 0))
+		if not g.is_empty() and (g.normal as Vector3).y > cos(deg_to_rad(22.0)):
+			asoma_obj = 1.0
+	_cuesta_asoma = Rbx.damp(_cuesta_asoma, asoma_obj, 4.0, dt)
+	# altura del cuerpo sobre el suelo según la postura
+	var c_obj: float = {"trepa": 2.1, "tumbado": 0.95 + 0.9 * _cuesta_asoma, "sentado": 1.25, "lado": 2.0, "resbala": 1.2}[postura]
+	_cuesta_centro = Rbx.damp(_cuesta_centro, c_obj, 6.0, dt)
+	center_cur = _cuesta_centro
+	root_size = PRONE_SIZE if center_cur < 1.3 else STAND_SIZE
+	hip_height = maxf(0.05, center_cur - root_size.y / 2)
+	_actualizar_formas()
+	# moverse: dirección y velocidad propias (sin inercia de andar ni carrera)
+	_move_override = dir
+	walk_speed = vel
+	jump_height = 0.0
+	# fase del ciclo de pasos: va con lo que de verdad avanza (un ciclo cada ~2,2 studs: así manos y pies no patinan)
+	var fase: float = float(cuesta.fase) + vel * dt * (TAU / 2.2)
+	var mov_k: float = Rbx.damp(float(cuesta.mov), 1.0 if vel > 0.1 else 0.0, 6.0, dt)
+	cuesta = {"postura": postura, "n": n, "arriba": arriba, "t_up": t_up, "lat": lat, "ang": ang, "giro": giro,
+		"fase": fase, "mov": mov_k, "lado": lado, "asoma": _cuesta_asoma, "una_mano": una_mano,
+		"t0": cuesta.t0, "dir": dir}
+
+
+func _entrar_cuesta() -> void:
+	cuesta = {"postura": "trepa", "fase": 0.0, "mov": 0.0, "t0": reloj, "giro": yaw}
+	_cuesta_fuera_t = 0.0
+	_cuesta_resbala_t = 0.0
+	_cuesta_asoma = 0.0
+	_cuesta_centro = center_cur
+	stance = 0
+	lean_cur = 0.0
+	arsenal.end_rest()
+	# solo armas de una mano: las demás a la espalda
+	if arsenal.equipado != "" and not Armas.en_moto(arsenal.equipado):
+		arsenal.guardar_ya()
+
+
+func _salir_cuesta() -> void:
+	cuesta = null
+	# vuelve a su altura poco a poco, sin saltar (desde la que tenía en la cuesta)
+	non_prone_c = _cuesta_centro
+	center_cur = _cuesta_centro
+	root_size = PRONE_SIZE if center_cur < 1.3 else STAND_SIZE
+	hip_height = maxf(0.05, center_cur - root_size.y / 2)
+	_actualizar_formas()
+	_move_override = null
+	_vel_inercia = Rbx.flat(vel_real) # (sigue con lo que llevaba y frena con la inercia normal, sin parar en seco)

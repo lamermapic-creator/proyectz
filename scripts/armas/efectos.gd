@@ -517,9 +517,22 @@ static func precargar() -> void:
 		if _grabados(tipo).is_empty() and not _sonidos.has(tipo):
 			_vigilar()
 			_sonidos[tipo] = _generar(tipo)
+	_limitador_master()
 	# y las texturas del fogonazo y del humo (se generan por código)
 	_textura_destello()
 	_textura_humo()
+
+
+## limitador en el bus Master (solo en tiempo de juego, no toca default_bus_layout): varios disparos a la vez no
+## saturan (se oían "rotos")
+static func _limitador_master() -> void:
+	for i in AudioServer.get_bus_effect_count(0):
+		if AudioServer.get_bus_effect(0, i) is AudioEffectHardLimiter:
+			return
+	var lim := AudioEffectHardLimiter.new()
+	lim.ceiling_db = -0.5
+	lim.release = 0.12
+	AudioServer.add_bus_effect(0, lim)
 
 
 static func _stream(tipo: String) -> Array:
@@ -556,7 +569,10 @@ static func sonido(ctx: Node, tipo: String, pos, vol := 1.0, tono := 1.0) -> voi
 	var p := AudioStreamPlayer3D.new()
 	p.add_to_group("efectos_audio")
 	p.stream = sel[0]
-	p.volume_db = linear_to_db(vol) + 6.0
+	# (2026-10-27) antes +6 dB y hasta +3 dB más por la distancia: los .ogg ya vienen casi a 0 dBFS, así que todo
+	# saturaba (sobre todo las ráfagas del rifle). Ahora -4 dB, sin ganancia extra de cerca y un limitador en Master.
+	p.volume_db = linear_to_db(vol) - 4.0
+	p.max_db = 0.0
 	p.pitch_scale = tono
 	p.unit_size = 12.0 # escala en studs
 	p.max_distance = 600.0

@@ -11,7 +11,7 @@ variantes basta con poner `Tipo_<n+1>.ogg` en la carpeta. Si un tipo no tiene ar
 |---|---|---|
 | Pistol_1.ogg | [9mm pistol shot](https://freesound.org/s/427592/) | michorvath |
 | Revolver_1.ogg | [22 magnum pistol shot](https://freesound.org/s/427594/) | michorvath |
-| Rifle_1.ogg | [ak 47 - single shot](https://freesound.org/s/520934/) | ninebilly |
+| Rifle_1-4.ogg | [AR15 rifle shot](https://freesound.org/s/427596/), de la misma serie que la pistola; cola recortada para que suene seco y 4 variantes de tono/brillo (2026-10-27; script `/home/claude/sfx/rifle_build2.py`) | michorvath |
 | SMG_1.ogg | [Thompson SMG Shot](https://freesound.org/s/258198/) | wadaltmon |
 | SMG_2.ogg | [M3 Grease Gun Firing](https://freesound.org/s/258257/) | wadaltmon |
 | Shotgun_1.ogg | [20 gauge shotgun gunshot](https://freesound.org/s/427595/) | michorvath |

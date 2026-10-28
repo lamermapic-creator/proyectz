@@ -13,6 +13,61 @@ en el mismo commit que el cambio. Formato:
 
 ---
 
+## 2026-10-28 (2) · KangooG · Claude — animación de las cuestas fluida
+
+Pedido: "no se ve nada fluida la animación de la mecánica nueva".
+
+- Piernas, brazos y cadera en la cuesta van con un "muelle" (amortiguado crítico): aceleran y frenan hacia su pose en vez de saltar. Al salir de la cuesta el muelle pasa poco a poco a la animación normal (0,8 s), sin salto final.
+- Los pasos de manos y pies solo empiezan al principio de su parte del ciclo (antes, al cambiar de postura, un pie "saltaba" al sitio nuevo en un fotograma).
+- Al entrar andando, el pie que iba por el aire termina su paso hasta la cuesta en vez de pararse en seco.
+- De costado, la mano de fuera descansa sobre el muslo (antes colgaba contra la cuesta y daba tirones al chocar).
+- Las manos cambian entre arma y cuesta con muelle (antes a velocidad fija, con arranque y parada bruscos).
+- Medido con `--suavidad`: los tirones de la cuesta bajan de ~0,9 a ≤0,5 studs por fotograma (como andar normal). Pruebas: TODO BIEN.
+- Archivos: scripts/jugador/animador.gd (y jugador.gd, tests/recorrido.gd del cambio anterior).
+
+## 2026-10-28 · KangooG · Claude — ragdoll rígido, levantarse siempre, choques de moto realistas y trepar cuestas
+**Qué:**
+- **Ragdoll con músculos de verdad:** antes el cuerpo se "derramaba como agua". Ahora cada articulación lleva músculos
+  que resuelve el motor de física (muelles de `Generic6DOFJoint3D`, rígidos y sin temblar) y cada músculo mueve todo lo
+  que cuelga de él (la cadera sostiene el tronco). Vivo, el cuerpo nunca se desarma; muerto, se apaga poco a poco.
+  Medido: los músculos llegan a su postura con 5-20° de error (antes 35-50°) y las articulaciones ya no se estiran.
+- **Levantarse:** antes esperaba a que el cuerpo estuviera quieto del todo (a veces nunca). Ahora se prepara (manos bajo
+  los hombros o rodillas arriba) y se levanta enseguida, con un tope de seguridad; la animación es algo más rápida.
+  Busca un sitio libre para ponerse de pie (no dentro de la moto caída) y la moto ya no sale disparada al levantarse
+  a su lado. Derribo: de pie en ~4 s (antes ~4); caída de 12 m: ~5 s (antes 8,5).
+- **Moto:** el piloto sale despedido según la velocidad y el choque: contra un bloque bajo a ~55 km/h vuela ~15 m por
+  encima del manillar; contra una pared alta se estrella contra ella. Bordillos y bloques de hasta ~20 cm ya no te tiran
+  (se suben de un golpe y se frena). La moto cae según el golpe (vuelta de campana, rebote de lado, vuelco) y no
+  siempre igual. Al levantarla, el jugador va por el lado en que está. Arreglado de paso: la moto podía "trepar"
+  bloques de 40 cm (fallo al tantear el suelo con las ruedas).
+- **Cuestas de 35° a 60°:** trepa con las manos (manos y pies alternos; con la pistola solo apoya la otra mano y va más
+  lento). Quieto, la postura la elige la cámara: mirando cuesta arriba se tumba (repta con clic derecho o S y cerca de
+  lo alto se asoma), a un lado se pega de costado (W/S anda de lado), cuesta abajo se sienta de espaldas con los pies
+  clavados (W: se deja resbalar sentado). Se puede disparar con la pistola en todas. Las posturas no gastan estamina y
+  la recuperan a la mitad; trepar la gasta y sin estamina resbala un poco y descansa. Más de 60°: resbala. Solo armas
+  de una mano. Zona nueva en F1: "Cuesta de 50°".
+**Archivos:** `scripts/fisica/ragdoll.gd`, `scripts/jugador/{jugador,animador,arsenal}.gd`, `scripts/vehiculos/moto.gd`,
+`scripts/ui/menu_trucos.gd`, `tests/{moto,ragdoll,recorrido}.gd`, `tests/ejecutar_pruebas.sh` (8 pruebas nuevas),
+`CLAUDE.md`.
+**Cómo probarlo:** F1 → "Cuesta de 50°" y subir con W; quieto, girar la cámara arriba/al lado/abajo; con la pistola (1)
+disparar sentado y tumbado. F1 → zona de motos: chocar contra los bloques y el muro a distintas velocidades. Recibir
+golpes fuertes / caer desde alto para ver el ragdoll y cómo se levanta.
+**Pendiente / avisos:** Juan: vuestros zombis usan el mismo ragdoll (más rígido ahora; la API no cambia). Ver mensaje
+en CLAUDE.md.
+
+## 2026-10-27 (4) · KangooG · Claude — sonido nuevo del rifle de asalto y fin de la saturación
+**Qué:** el disparo del rifle sonaba "roto": el archivo anterior eran dos soplidos de ruido sin golpe, y además todos
+los sonidos se reproducían +6 dB (+3 dB más de cerca) por encima de archivos que ya están casi a 0 dBFS, así que
+saturaban, sobre todo en ráfaga. Ahora:
+- 4 variantes nuevas (`Rifle_1..4.ogg`), **secas como la pistola** (pedido de KangooG): disparo real de un AR-15 de la
+  misma serie de grabaciones que la pistola (michorvath, CC0), con la cola recortada (~0,4 s, sin eco) para que cada
+  disparo de la ráfaga se oiga separado; varían un poco de tono y brillo y no se repite la misma dos veces seguidas.
+- Volumen: los sonidos 3D suenan a −4 dB sin ganancia extra de cerca, y hay un limitador en el bus Master (se añade
+  al empezar, `Efectos._limitador_master`). Medido en una ráfaga del juego: pico −2,5 dBFS, 0 muestras saturadas.
+  Al quitar la saturación, el resto de sonidos (pasos, golpes...) también se oyen más limpios y algo más bajos.
+**Archivos:** `sonidos/Rifle_1..4.ogg`, `scripts/armas/efectos.gd`, `docs/SONIDOS.md`, `CLAUDE.md`.
+**Cómo probarlo:** F5, rifle (2) y disparar a ráfagas; comparar con la pistola.
+
 ## 2026-10-27 (3) · KangooG · Claude — versión V0.3 en el menú
 **Qué:** el menú principal muestra "V0.3 · prototipo" (abajo a la derecha) en vez de "v0.2".
 **Archivos:** `scripts/ui/menu_principal.gd` (`VERSION`).
