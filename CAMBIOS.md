@@ -13,6 +13,16 @@ en el mismo commit que el cambio. Formato:
 
 ---
 
+## 2026-10-28 (3) · KangooG · Claude — versión V0.3.5
+
+Pedido: "pon en todos lados que estamos en la V0.3.5".
+
+- project.godot: `application/config/version = "0.3.5"` (fuente única de la versión).
+- Menú principal (abajo a la derecha) y menú de pausa (bajo "PAUSA"): "V0.3.5 · prototipo", leído de project.godot.
+- Título de la ventana: "Proyecto Z · V0.3.5".
+- Exportación (export_presets.cfg): `../versiones/v0.3.5/V0.3.5.exe`, versión del archivo y del producto 0.3.5.0, producto "Proyecto Z".
+- CLAUDE.md: ruta del ejecutable actualizada. (Las menciones antiguas "v0.4" en comentarios son historia y se dejan.)
+
 ## 2026-10-28 (2) · KangooG · Claude — animación de las cuestas fluida
 
 Pedido: "no se ve nada fluida la animación de la mecánica nueva".

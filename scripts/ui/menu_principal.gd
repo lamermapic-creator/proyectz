@@ -4,7 +4,9 @@ extends Node3D
 
 const JUEGO := "res://escenas/pruebas_movimiento.tscn"
 const NIVEL := preload("res://scripts/nivel/nivel_pruebas.gd")
-const VERSION := "V0.3 · prototipo"
+## (la versión sale de project.godot: application/config/version)
+static func version_texto() -> String:
+	return "V%s · prototipo" % str(ProjectSettings.get_setting("application/config/version", "?"))
 
 var cam: Camera3D
 var rig: RigPersonaje
@@ -19,6 +21,7 @@ var _cabecera: Array = []
 
 func _ready() -> void:
 	Opciones.cargar()
+	get_window().title = "Proyecto Z · V%s" % str(ProjectSettings.get_setting("application/config/version", "?"))
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	get_tree().paused = false
 	# escenario de fondo (el mismo nivel, sin muñecos)
@@ -149,7 +152,7 @@ func _crear_ui() -> void:
 	_controles.visible = false
 	col.add_child(_controles)
 	var ver := Label.new()
-	ver.text = VERSION
+	ver.text = version_texto()
 	ver.add_theme_color_override("font_color", Color(1, 1, 1, 0.45))
 	ver.anchor_left = 1.0
 	ver.anchor_right = 1.0

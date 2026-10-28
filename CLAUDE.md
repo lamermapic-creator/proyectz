@@ -156,7 +156,7 @@ Freesound (sonidos), Poly Haven y ambientCG (texturas/HDRI), Quaternius y Kenney
   MenuTrucos, lo crea el Jugador solo en desarrollo): interruptores, acciones y teletransporte (`Jugador.teletransportar`,
   zonas en `MenuTrucos.ZONAS`, en metros). Si se añade una zona o mecánica nueva al nivel, añadirla ahí.
 - **Pantalla de carga:** `PantallaCarga.ir_a(get_tree(), ruta)` (`scripts/ui/pantalla_carga.gd`); la usan Jugar y "Volver al menú".
-- Ejecutable: Proyecto → Exportar → Windows Desktop, PCK embebido, sin depuración → `C:\Users\ferna\Documents\godotproyectz\versiones\v0.2 con menu\ProyectoZ.exe` (un solo .exe, ~110 MB). Las plantillas de exportación 4.7.2 ya están instaladas.
+- Ejecutable: Proyecto → Exportar → Windows Desktop, PCK embebido, sin depuración → `C:\Users\ferna\Documents\godotproyectz\versiones\v0.3.5\V0.3.5.exe` (versión actual: V0.3.5; se cambia en un solo sitio, `application/config/version` de project.godot, y la ruta en export_presets.cfg) (un solo .exe, ~110 MB). Las plantillas de exportación 4.7.2 ya están instaladas.
 
 ## Arreglos de jugabilidad (2026-10-24, KangooG)
 - Disparo: la bala sale del `Muzzle` en la dirección del cañón (`Arsenal.salida_bala`); al apuntar/disparar el
