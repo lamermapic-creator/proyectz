@@ -30,6 +30,7 @@ var ankle_in_foot := {}
 var wrist_in_hand := {}
 var S := {}
 var pelvis_drop := 0.0
+var pelvis_drop_v := 0.0   # velocidad del muelle de pelvis_drop
 ## arma contra una pared: primero se recoge hacia el cuerpo (RETRO_MAX studs, sigue apuntando) y solo si no
 ## basta, extremadamente pegado, se levanta (ALZA_RECORRIDO studs más para quedar del todo levantada)
 const ALZA_ACTIVA := false   # levantar el arma pegado a una pared: DESACTIVADO a pedido de KangooG (molestaba
@@ -121,6 +122,11 @@ var air_runoff := false   # en el aire sin haber saltado (salir corriendo de un 
 var gait_ph := 0.0
 var gait_rate := 0.0
 var gait_amp := 0.0
+# ciclos de la marcha hechos en Blender (Movimientos, 2026-11-02): mezcla andar / correr / agachado y amplitud
+var mez_run := 0.0     # 0 andar, 1 correr (según la velocidad, como run01 de los pasos)
+var mez_pie_run := 0.0 # lo mismo, para la forma del paso (sin suavizar: el de update_feet)
+var amp_ciclo := 0.0   # 0 quieto, 1 a la velocidad para la que está hecho el ciclo
+var air_tj := 0.0      # fase del salto (0 despegue .. 1 a punto de aterrizar), para Movimientos.SALTOS
 var sw_prev := {"L": false, "R": false}
 var last_step_t := -9.0
 var step_start := {"L": -9.0, "R": -9.0}
@@ -563,6 +569,7 @@ func update_feet(root_cf: Transform3D, vel: Vector3, speed: float, dt: float, gr
 	var step_dur := clampf(0.36 - speed * 0.005, 0.25, 0.36)
 	# corriendo el pie toca el suelo poco tiempo (no se queda atrás arrastrando la pierna)
 	var run01 := clampf((speed - 7.0) / 6.0, 0, 1)
+	mez_pie_run = run01
 	var k_thr := lerpf(0.83, 0.5, run01)
 	# el pie se apoya delante de la cadera (andando más; corriendo justo bajo el cuerpo)
 	var lead := step_dur * (0.25 if running else 0.35)
@@ -646,14 +653,28 @@ func update_feet(root_cf: Transform3D, vel: Vector3, speed: float, dt: float, gr
 			var hu := Rbx.smooth((u - 0.05) / 0.5) if rise > 0 else Rbx.smooth(u / lerpf(1.0, 0.55, clampf(-rise / 1.5, 0.0, 1.0)))
 			# corriendo el pie sube algo más (la rodilla se dobla sola porque la pierna en el aire
 			# nunca va estirada: ver el límite de alcance en la IK de piernas)
-			var hz := Rbx.smooth(u)
-			var kick := run01 * 0.75 * sin(PI * u)
+			# forma del paso (Blender, Movimientos): cuánto avanza, cuánto sube y, corriendo, el talón hacia el glúteo
+			# (el pie se queda atrás al despegar) y la pierna que alcanza por delante y "araña" antes de apoyar
+			var r_pie := 0.0 if bool(sw.get("idle", false)) else run01
+			var hz := _curva_pie("pie_avance", u, 0.0)
+			if r_pie > 0.001:
+				hz = lerpf(hz, Movimientos.pie("correr", "pie_avance", u), r_pie)
+			var alto_w := arc * _curva_pie("pie_alto", u, 0.0)
+			var kick := 0.0
+			var atras := 0.0
+			if r_pie > 0.001:
+				kick = (Movimientos.pie("correr", "pie_alto", u) - alto_w * 0.65) * r_pie
+				atras = Movimientos.pie("correr", "pie_atras", u) * r_pie
 			# bajando (escaleras, cuesta abajo) el talón no se dispara hacia arriba por detrás
 			if rise < 0.0:
 				kick *= clampf(1.0 + rise * 0.6, 0.15, 1.0)
-			var p := _keep_side(frame, f, from_v.lerp(to, hz))
-			f.cur = Vector3(p.x, from_v.y + rise * hu + arc * sin(PI * u) + kick, p.z)
-			f.roll = Rbx.damp(f.get("roll", 0.0), 0.0, 12, dt)
+				atras *= clampf(1.0 + rise * 0.6, 0.15, 1.0)
+			var p := _keep_side(frame, f, from_v.lerp(to, hz) - Rbx.look(frame) * atras)
+			f.cur = Vector3(p.x, from_v.y + rise * hu + alto_w + kick, p.z)
+			# el pie gira sobre la punta al despegar y sobre el talón al apoyar (curva de Blender), empalmado con el
+			# giro que traía del apoyo (sin saltos)
+			var r0: float = sw.get("roll0", 0.0)
+			f.roll = lerpf(r0, _curva_pie("pie_inclina", u, r_pie), Rbx.smooth(clampf(u / 0.3, 0.0, 1.0)))
 			f.u = u
 			# el pie gira en el aire hacia la nueva orientación del cuerpo
 			var fy: float = sw.fromYaw if sw.fromYaw != null else body_yaw
@@ -792,7 +813,7 @@ func update_feet(root_cf: Transform3D, vel: Vector3, speed: float, dt: float, gr
 		if forced[first_k]:
 			dur = minf(dur, 0.24)
 		_registrar_paso(first_k, run01)
-		first.swing = {"from": first.pos, "t": 0.0, "dur": dur, "fromYaw": first.get("yaw") if first.get("yaw") != null else body_yaw, "idle": speed < 0.6}
+		first.swing = {"from": first.pos, "t": 0.0, "dur": dur, "fromYaw": first.get("yaw") if first.get("yaw") != null else body_yaw, "idle": speed < 0.6, "roll0": first.get("roll", 0.0)}
 	elif second.swing == null and ds > thr_s * 1.3 and can_second and first.swing == null:
 		# en marcha, si este pie fue el último en dar el paso, le toca al otro (alternar siempre)
 		var mover: Dictionary = second
@@ -801,7 +822,7 @@ func update_feet(root_cf: Transform3D, vel: Vector3, speed: float, dt: float, gr
 			mover = first
 			mk = first_k
 		_registrar_paso(mk, run01)
-		mover.swing = {"from": mover.pos, "t": 0.0, "dur": 0.3 if speed < 0.6 else step_dur, "fromYaw": mover.get("yaw") if mover.get("yaw") != null else body_yaw, "idle": speed < 0.6}
+		mover.swing = {"from": mover.pos, "t": 0.0, "dur": 0.3 if speed < 0.6 else step_dur, "fromYaw": mover.get("yaw") if mover.get("yaw") != null else body_yaw, "idle": speed < 0.6, "roll0": mover.get("roll", 0.0)}
 
 
 func _registrar_paso(k: String, run01: float) -> void:
@@ -829,12 +850,7 @@ func clamp_planted(root_cf: Transform3D) -> void:
 func foot_cf(f: Dictionary, yaw: float) -> Transform3D:
 	var p: Vector3 = f.cur if f.get("cur") != null else f.pos
 	var pitch := 0.0
-	if f.get("u") != null:
-		var u: float = f.u
-		if u < 0.3:
-			pitch = -0.55 * (1 - u / 0.3)          # despegue de puntera
-		elif u > 0.65:
-			pitch = 0.25 * (u - 0.65) / 0.35       # talón primero al apoyar
+	# (el giro del pie en el aire va en f.roll: sobre la punta al despegar, sobre el talón al apoyar)
 	var n: Vector3 = f.normal if f.get("normal") != null else Vector3.UP
 	# apoyado, el pie mantiene la orientación con la que pisó (no gira sobre sí mismo)
 	var fy: float = yaw
@@ -881,8 +897,10 @@ func update_roll(f: Dictionary, s: String, hip: Vector3, yaw: float, yaw_only: T
 			else:
 				hi = mid
 		target = hi
-	# sin retraso (si no, la pelvis tendría que bajar mientras el pie termina de rodar)
-	f.roll = prev + clampf(target - prev, -10 * dt, 10 * dt)
+	# sin retraso (si no, la pelvis tendría que bajar mientras el pie termina de rodar); pero el pie que acaba de
+	# apoyar con el talón (punta arriba) baja la punta en ~0,1 s, no de golpe
+	var baja := 3.0 if (prev > 0.0 and target < prev) else 10.0
+	f.roll = prev + clampf(target - prev, -baja * dt, 10 * dt)
 
 
 ## suavizado de articulaciones: da peso e inercia al cuerpo (evita movimientos bruscos)
@@ -994,6 +1012,33 @@ func _brazo_sin_choque(Lm: Limb, s: String, chest: Transform3D) -> void:
 ## pie que está en el aire. Brazos y torso siguen esta onda suave en vez de seguir a saltos la
 ## posición de los pies (que se paran al apoyar y se disparan al dar el paso).
 ## sin(gait_ph) = +1 -> brazo derecho delante (pierna izquierda delante).
+## ---- ciclos de la marcha de Blender (Movimientos): mezcla según la velocidad y la postura
+func _ciclo(canal: String, phi: float) -> float:
+	var v := Movimientos.ciclo("andar", canal, phi)
+	if mez_run > 0.001:
+		v = lerpf(v, Movimientos.ciclo("correr", canal, phi), mez_run)
+	if crouch_b > 0.001:
+		v = lerpf(v, Movimientos.ciclo("agachado", canal, phi), crouch_b)
+	return v
+
+
+## hombro (x, y, z), codo y muñeca del brazo s ("L" | "R"): el izquierdo va medio ciclo después y en espejo
+func _brazo_ciclo(s: String, phi: float) -> Array:
+	var f := phi if s == "R" else phi + 0.5
+	var sg := 1.0 if s == "R" else -1.0
+	return [_ciclo("hombro_p", f), sg * _ciclo("hombro_y", f), sg * _ciclo("hombro_r", f), _ciclo("codo", f), _ciclo("muneca", f)]
+
+
+## forma del paso (u = 0 despega, 1 apoya): andar / agachado, y correr según run01
+func _curva_pie(canal: String, u: float, run01: float) -> float:
+	var v := Movimientos.pie("andar", canal, u)
+	if crouch_b > 0.001:
+		v = lerpf(v, Movimientos.pie("agachado", canal, u), crouch_b)
+	if run01 > 0.001:
+		v = lerpf(v, Movimientos.pie("correr", canal, u), run01)
+	return v
+
+
 func _fase_marcha(speed: float, dt: float) -> void:
 	var now := ahora()
 	for s in ["L", "R"]:
@@ -1016,7 +1061,8 @@ func _fase_marcha(speed: float, dt: float) -> void:
 		gait_rate = Rbx.damp(gait_rate, 0.0, 3, dt)
 	gait_ph += gait_rate * dt
 	if target != null:
-		gait_ph += wrapf(float(target) - gait_ph, -PI, PI) * minf(1.0, dt * 5.0)
+		# (corrección suave: tirar fuerte de la fase hacía que avanzara a tirones y el cuerpo con ella)
+		gait_ph += wrapf(float(target) - gait_ph, -PI, PI) * minf(1.0, dt * 2.5)
 	gait_ph = wrapf(gait_ph, 0.0, TAU)
 	gait_amp = Rbx.damp(gait_amp, clampf(speed / 3.0, 0.0, 1.0) if speed > 0.6 else 0.0, 4, dt)
 
@@ -1444,8 +1490,9 @@ func update_rig(dt: float) -> void:
 		replant = true
 	if va != null:
 		va.right = (va.dir as Vector3).cross(Vector3.UP)
-		va.sv = sin(PI * clampf((va.p - 0.1) / 0.75, 0, 1))
-		va.pull = sin(PI * clampf((va.p - 0.08) / 0.82, 0, 1))
+		# (curvas de Blender, Movimientos.SORTEAR: empiezan y acaban sin tirones)
+		va.sv = Movimientos.sortear("valla_giro", va.p)
+		va.pull = Movimientos.sortear("trepar_tira", va.p)
 		was_vault = true
 	elif was_vault:
 		was_vault = false
@@ -1486,6 +1533,13 @@ func update_rig(dt: float) -> void:
 	var pelvis_yaw := 0.0
 	var pelvis_roll := 0.0
 	var bob := 0.0
+	# ciclo de la marcha (Blender): desplazamiento y giro de la pelvis que se suman a los demás
+	var cic_x := 0.0
+	var cic_z := 0.0
+	var cic_p := 0.0
+	var cic_y := 0.0
+	var cic_r := 0.0
+	var ph01 := gait_ph / TAU
 	var waistP := 0.0
 	var waistY := 0.0
 	var waistR := 0.0
@@ -1539,7 +1593,6 @@ func update_rig(dt: float) -> void:
 		##  0.00-0.40  se agacha y apoya una rodilla en el suelo
 		##  0.30-0.70  se inclina hacia delante y pone las manos en el suelo
 		##  0.55-1.00  estira las piernas hacia atrás y se tumba boca abajo
-		var kneel := sin(PI * clampf(pb / 0.8, 0, 1))
 		var lean := Rbx.smooth(clampf((pb - 0.2) / 0.5, 0, 1))
 		var lay := Rbx.smooth(clampf((pb - 0.45) / 0.55, 0, 1))
 		var gy: float = ground(root_cf.origin)[0]
@@ -1572,42 +1625,75 @@ func update_rig(dt: float) -> void:
 		var ca := crawl_amt * (1 - rlv)
 		var roll := sin(ph) * 0.13 * ca + sin(now * 0.7) * 0.012
 		var sway := sin(ph) * 0.09 * ca
-		var tilt := -1.2 * lean * (1 - lay) - 1.54 * lay # pelvis: de inclinada a horizontal
+		# pelvis: de inclinada a horizontal y bajando hasta el suelo (curvas de Blender, Movimientos.TUMBAR)
+		var tilt := Movimientos.tumbar("inclina", pb)
+		drop = (pelvis_stand_y - (gy + 0.4)) * Movimientos.tumbar("baja", pb)
 		# al rodar, a mitad del giro el cuerpo queda de costado (el centro sube un poco)
 		var lift := sin(PI * rlv) * 0.3
 		Mr.transform = Rbx.cf(0, -drop + lift, 0) * Rbx.ang(tilt, sway * lay + sweep * (1 - rlv), roll * lay) * Rbx.ang(0, PI * rlv * side, 0)
 		smooth_j(Mr, "Root", 9, dt)
 		waistY -= sweep * 1.3 # el pecho se queda apuntando mientras la cadera barre
 		pelvis_cf = fk(root_cf, Mr)
+		# PIERNAS (2026-11-02, diseño de Blender: Movimientos.TUMBAR y REPTAR): por IK a sitios del suelo, así los pies
+		# y las rodillas no se meten en el suelo ni flotan. Pie plantado donde estaba -> arrodillado (la rodilla al suelo
+		# bajo la cadera, o detrás si la cadera ya está baja; la espinilla hacia atrás; la punta del pie en el suelo: de
+		# puntillas y, tumbado, con el empeine). Reptando, la rodilla sube por el costado a ras de suelo.
+		# Boca arriba (y al rodar), como antes: rodillas arriba y pies apoyados.
+		var yaw_p := Rbx.cfp(root_cf.origin) * yaw_cf
+		var atras := -Rbx.look(yaw_p)
+		var dcha := Rbx.right(yaw_p)
 		for s in ["L", "R"]:
 			var sgn := -1.0 if s == "L" else 1.0
-			# tumbado: piernas algo abiertas, punteras hacia el suelo; al reptar la rodilla sube hacia el costado
-			var up := maxf(0, sin(ph + (PI if s == "L" else 0.0))) * ca
 			var Lg: Limb = leg[s]
-			# boca arriba: rodillas flexionadas hacia arriba y pies apoyados
-			var hip_down := Rbx.ang(0.12 * up, sgn * -0.12, sgn * (0.2 + 0.85 * up))
-			var hip_up := Rbx.ang(0.55 + (0.15 if s == "L" else 0.0), 0, sgn * 0.18)
-			Lg.top.transform = Transform3D.IDENTITY.interpolate_with(hip_down.interpolate_with(hip_up, rlv), lay)
-			Lg.mid.transform = Transform3D.IDENTITY.interpolate_with(Rbx.ang((-0.12 - 1.35 * up) * (1 - rlv) - 1.1 * rlv, 0, 0), lay)
-			Lg.fin.transform = Transform3D.IDENTITY.interpolate_with(Rbx.ang((-0.25 + 0.3 * up) * (1 - rlv) + 0.45 * rlv, sgn * 0.25 * (1 - rlv), 0), lay)
-		# fase de rodilla: pose arrodillada por ángulos directos (rodilla izquierda al suelo, pie derecho plantado)
-		var kw := minf(1, kneel * (1 - lay) * 1.6)
-		if kw > 0.01:
-			var kneel_pose := {
-				"L": [Rbx.ang(0.25, 0, -0.08), Rbx.ang(-1.75, 0, 0), Rbx.ang(0.6, 0, 0)],
-				"R": [Rbx.ang(1.35, 0, 0.1), Rbx.ang(-1.45, 0, 0), Rbx.ang(0.15, 0, 0)],
-			}
-			for s in ["L", "R"]:
-				var Lg2: Limb = leg[s]
-				var kp: Array = kneel_pose[s]
-				Lg2.top.transform = Lg2.top.transform.interpolate_with(kp[0], kw)
-				Lg2.mid.transform = Lg2.mid.transform.interpolate_with(kp[1], kw)
-				Lg2.fin.transform = Lg2.fin.transform.interpolate_with(kp[2], kw)
+			var f: Dictionary = feet[s]
+			var hip_s := (pelvis_cf * Lg.top.c0).origin
+			var gy_s: float = ground(Vector3(hip_s.x, root_cf.origin.y, hip_s.z) + atras * 1.2)[0]
+			# 1) plantado
+			var fc_pl := foot_cf(f, yaw)
+			var an_pl := (fc_pl * Rbx.cfp(ankle_in_foot[s])).origin
+			# 2) arrodillado / tumbado
+			# giro del pie: de puntillas (arrodillado) -> con el empeine en el suelo (tumbado); el tobillo a la altura
+			# justa para que la esquina más baja del pie toque el suelo
+			var th := lerpf(-1.75, -2.45, lay)
+			var h_a := 0.0
+			for cz in [-0.5, 0.5]:
+				for cy in [-0.15, 0.15]:
+					h_a = maxf(h_a, -(Basis(Vector3.RIGHT, th) * (Vector3(0, cy, cz) - (ankle_in_foot[s] as Vector3))).y)
+			var knee_y := gy_s + 0.36
+			var dzk := sqrt(maxf(0.0, 1.69 - pow(hip_s.y - knee_y, 2)))
+			var knee_p := Vector3(hip_s.x, knee_y, hip_s.z) + atras * dzk + dcha * (sgn * 0.08)
+			var dza := sqrt(maxf(0.0, 1.5625 - pow(h_a - 0.36, 2)))
+			var an_k := knee_p + atras * dza + Vector3(0, h_a - 0.36, 0)
+			var pole_s := hip_s - atras * 4.0 + Vector3(0, -2.0, 0)
+			# reptando: la rodilla sube por el costado (el pie se acerca y sale hacia fuera)
+			var up_r := Movimientos.reptar("rodilla_sube", ph / TAU + (0.5 if s == "L" else 0.0)) * ca
+			if up_r > 0.001:
+				var base_c := Vector3(hip_s.x, gy_s + h_a, hip_s.z)
+				var an_c := base_c + dcha * (sgn * lerpf(0.25, 0.75, up_r)) + atras * lerpf(2.4, 1.6, up_r)
+				an_k = an_k.lerp(an_c, minf(1.0, up_r * 3.0))
+				pole_s = pole_s.lerp(hip_s + dcha * (sgn * 3.0) + atras * 0.8 + Vector3(0, 1.6, 0), up_r)
+			var kk := Movimientos.tumbar(s + "_rodilla", pb)
+			var an := an_pl.lerp(an_k, kk) + Vector3(0, sin(PI * kk) * 0.6, 0)
+			# el pie: plano (plantado) -> de puntillas / con el empeine en el suelo
+			var fb_k := Basis(Vector3.UP, yaw) * Basis(Vector3.RIGHT, th)
+			var q_pie := Quaternion(fc_pl.basis.orthonormalized()).slerp(Quaternion(fb_k.orthonormalized()), kk)
+			var F := Transform3D(Basis(q_pie), an) * Rbx.cfp(-(ankle_in_foot[s] as Vector3))
+			var res_p := solve(Lg, pelvis_cf, an, pole_s)
+			set_end(Lg, res_p[1], F)
+			if rlv > 0.001:
+				# boca arriba: rodillas flexionadas hacia arriba y pies apoyados
+				var hip_up := Rbx.ang(0.55 + (0.15 if s == "L" else 0.0), 0, sgn * 0.18)
+				Lg.top.transform = Lg.top.transform.interpolate_with(hip_up, rlv)
+				Lg.mid.transform = Lg.mid.transform.interpolate_with(Rbx.ang(-1.1, 0, 0), rlv)
+				Lg.fin.transform = Lg.fin.transform.interpolate_with(Rbx.ang(0.45, 0, 0), rlv)
+		# (sin suavizar: van por IK a sitios fijos del suelo; suavizadas se quedaban atrás y se metían en el suelo)
 		for s in ["L", "R"]:
 			var Lg3: Limb = leg[s]
-			smooth_j(Lg3.top, s + "Hip", 7, dt)
-			smooth_j(Lg3.mid, s + "Knee", 7, dt)
-			smooth_j(Lg3.fin, s + "Ankle", 7, dt)
+			for pair in [[Lg3.top, "Hip"], [Lg3.mid, "Knee"], [Lg3.fin, "Ankle"]]:
+				if rlv > 0.001:
+					smooth_j(pair[0], s + pair[1], 14, dt)
+				else:
+					anota_j(pair[0], s + pair[1], dt)
 		waistR += roll * 0.5 * lay
 		waistY -= sway * 1.2 * lay
 		# boca abajo: cabeza levantada. Boca arriba: barbilla al pecho para apuntar por encima de los pies,
@@ -1617,8 +1703,8 @@ func update_rig(dt: float) -> void:
 		if over_head:
 			sup_neck = 0.55
 			sup_waist = 0.15
-		waistP += (0.18 * (1 - rlv) + sup_waist * rlv) * lay - 0.35 * lean * (1 - lay)
-		neckP += (1.3 * (1 - rlv) + sup_neck * rlv) * lay + 0.3 * lean * (1 - lay)
+		waistP += Movimientos.tumbar("cintura_p", pb) * (1 - rlv) + sup_waist * rlv * lay
+		neckP += Movimientos.tumbar("cuello_p", pb) * (1 - rlv) + sup_neck * rlv * lay
 		# a mitad del giro la cabeza se mantiene mirando hacia la mira
 		neckY -= sin(PI * rlv) * 0.6 * side
 		rl = rlv
@@ -1677,14 +1763,27 @@ func update_rig(dt: float) -> void:
 		var land: float = S.land.step(dt)
 		crouch += maxf(0, -land) * 0.12
 
-		# rebote, giro y caída de cadera con cada paso
-		for s in feet:
-			var f: Dictionary = feet[s]
-			if f.get("u") != null:
-				var sw := sin(PI * f.u)
-				bob += sw * (0.05 + speed_f * 0.1)
-				pelvis_yaw += f.side * -0.16 * speed_f * sw
-				pelvis_roll += f.side * 0.05 * sw
+		# MARCHA (ciclos hechos en Blender, Movimientos): la pelvis sube y baja, se desplaza sobre el pie de apoyo, gira
+		# con la pierna que avanza y cae del lado de la pierna en el aire; los hombros giran al revés y la cabeza se
+		# queda estable. Mezcla andar / correr / agachado según la velocidad; amplitud según lo deprisa que va
+		mez_run = Rbx.damp(mez_run, clampf((speed - 7.0) / 6.0, 0, 1), 6.0, dt)
+		var v_nom := lerpf(lerpf(6.5, 18.5, mez_run), 3.5, crouch_b)
+		amp_ciclo = gait_amp * clampf(speed / v_nom, 0.45, 1.15) if grounded else Rbx.damp(amp_ciclo, 0.0, 8.0, dt)
+		ph01 = gait_ph / TAU
+		if amp_ciclo > 0.001 and va == null:
+			var ac := amp_ciclo
+			bob += _ciclo("raiz_y", ph01) * ac
+			cic_x = _ciclo("raiz_x", ph01) * ac
+			cic_z = _ciclo("raiz_z", ph01) * ac
+			cic_p = _ciclo("pelvis_p", ph01) * ac
+			cic_y = _ciclo("pelvis_y", ph01) * ac
+			cic_r = _ciclo("pelvis_r", ph01) * ac
+			waistP += _ciclo("cintura_p", ph01) * ac
+			waistY += _ciclo("cintura_y", ph01) * ac
+			waistR += _ciclo("cintura_r", ph01) * ac
+			neckP += _ciclo("cuello_p", ph01) * ac
+			neckY += _ciclo("cuello_y", ph01) * ac
+			neckR += _ciclo("cuello_r", ph01) * ac
 		# cojera con poca vida
 		if hp_frac < 0.35 and speed > 1.5:
 			var rf: Dictionary = feet.R
@@ -1731,7 +1830,15 @@ func update_rig(dt: float) -> void:
 				var dy := hip.y - ankle.y
 				if dh * dh + dy * dy > reach * reach:
 					need = maxf(need, dy - sqrt(maxf(reach * reach - dh * dh, 0.0)))
-		pelvis_drop = Rbx.damp(pelvis_drop, clampf(need, 0, 0.6), 20.0 if need > pelvis_drop else 12.0, dt)
+		# (muelle críticamente amortiguado: la cadera baja y sube sin tirones; antes la bajada era casi instantánea y
+		# corriendo daba un golpe en cada apoyo)
+		var obj_d := clampf(need, 0, 0.6)
+		var w_d := 17.0 if obj_d > pelvis_drop else 11.0
+		pelvis_drop_v += (w_d * w_d * (obj_d - pelvis_drop) - 2.0 * w_d * pelvis_drop_v) * dt
+		pelvis_drop += pelvis_drop_v * dt
+		if pelvis_drop < 0.0:
+			pelvis_drop = 0.0
+			pelvis_drop_v = maxf(pelvis_drop_v, 0.0)
 		# preparación del salto: flexiona las rodillas y adelanta el torso
 		crouch += 0.38 * prep_k
 		# recoger: flexiona rodillas y cadera, el torso se inclina sobre el objeto
@@ -1757,6 +1864,7 @@ func update_rig(dt: float) -> void:
 			# delantera arriba y pierna trasera atrás; parado: las dos rodillas recogidas) y
 			# caída (las piernas bajan y se adelantan para recibir el suelo)
 			pelvis_drop = Rbx.damp(pelvis_drop, 0, 6, dt)
+			pelvis_drop_v = 0.0
 			if was_grounded != false:
 				air_start = now
 				jump_lead = "R" if feet.R.swing != null else ("L" if feet.L.swing != null else ("R" if randf() < 0.5 else "L"))
@@ -1765,15 +1873,19 @@ func update_rig(dt: float) -> void:
 			var run := jump_run
 			var fall := clampf((3 - vel.y) / 16, 0, 1)
 			var ext := clampf((now - air_start) / 0.13, 0, 1)
+			# poses del salto hechas en Blender (Movimientos.SALTOS), por la fase del salto: despegue -> subiendo con las
+			# rodillas recogidas -> bajando -> recibiendo el suelo (parado y corriendo, mezclados según la carrera)
+			air_tj = 0.3 * Rbx.smooth(ext) + 0.7 * fall
+			var abre := lerpf(Movimientos.salto("parado", "abre", air_tj), Movimientos.salto("corriendo", "abre", air_tj), run)
 			for s in feet:
 				var f: Dictionary = feet[s]
 				var is_lead: bool = s == jump_lead
-				var upY := -leg_len * ((0.6 - 0.06 * run) if is_lead else (0.66 + 0.18 * run))
-				var upZ := (-0.3 - 0.45 * run) if is_lead else (-0.1 + 0.95 * run)
-				var dnY := -leg_len * (0.84 if is_lead else 0.9)
-				var dnZ := -0.4 if is_lead else -0.05
-				var y := upY + (dnY - upY) * fall
-				var z := upZ + (dnZ - upZ) * fall
+				var k_p := "pa_" if is_lead else "pb_"
+				var y := leg_len * lerpf(Movimientos.salto("parado", k_p + "y", air_tj), Movimientos.salto("corriendo", k_p + "y", air_tj), run)
+				var z := lerpf(Movimientos.salto("parado", k_p + "z", air_tj), Movimientos.salto("corriendo", k_p + "z", air_tj), run)
+				# (pose para recibir el suelo: la del final del salto)
+				var dnY := leg_len * lerpf(Movimientos.salto("parado", k_p + "y", 1.0), Movimientos.salto("corriendo", k_p + "y", 1.0), run)
+				var dnZ := lerpf(Movimientos.salto("parado", k_p + "z", 1.0), Movimientos.salto("corriendo", k_p + "z", 1.0), run)
 				if air_runoff and run > 0.3:
 					# salir corriendo de un borde: las piernas siguen la zancada (una delante y otra
 					# detrás, alternando) en vez de juntarse; al caer mucho se preparan para aterrizar
@@ -1783,17 +1895,20 @@ func update_rig(dt: float) -> void:
 					var w_dn := clampf((fall - 0.55) / 0.45, 0, 1) * 0.6
 					y = lerpf(ry, dnY, w_dn)
 					z = lerpf(rz, dnZ, w_dn)
-				elif ext < 1:
-					y = -leg_len * 0.96 + (y + leg_len * 0.96) * Rbx.smooth(ext)
 				# caída larga: pedalea en el aire
 				if vel.y < -18:
 					var ph2 := now * 9 + (PI if s == "L" else 0.0)
 					y += sin(ph2) * 0.35
 					z += cos(ph2) * 0.45
-				leg_targets[s] = (yaw_only * Rbx.cf(f.side * hip_x * (1 + 0.35 * fall), y - 0.1, z)).origin
-			pelvis_pitch += 0.1 * run * (1 - fall) - 0.06 * fall
-			waistP += -0.14 * run * (1 - fall) + 0.08 * (1 - fall) * (1 - run) - 0.1 * fall
-			neckP += 0.1 * fall
+				leg_targets[s] = (yaw_only * Rbx.cf(f.side * hip_x * (abre if not (air_runoff and run > 0.3) else 1.0 + 0.35 * fall), y - 0.1, z)).origin
+			var k_s := 0.0 if (air_runoff and run > 0.3) else 1.0
+			pelvis_pitch += lerpf(Movimientos.salto("parado", "pelvis_p", air_tj), Movimientos.salto("corriendo", "pelvis_p", air_tj), run) * k_s
+			waistP += lerpf(Movimientos.salto("parado", "cintura_p", air_tj), Movimientos.salto("corriendo", "cintura_p", air_tj), run) * k_s
+			neckP += lerpf(Movimientos.salto("parado", "cuello_p", air_tj), Movimientos.salto("corriendo", "cuello_p", air_tj), run) * k_s
+			if k_s < 1.0:
+				pelvis_pitch += 0.1 * run * (1 - fall) - 0.06 * fall
+				waistP += -0.14 * run * (1 - fall) - 0.1 * fall
+				neckP += 0.1 * fall
 			air_fall = fall
 		was_grounded = grounded or va != null
 		# pelvis al sortear: gira y se ladea (vault) o se inclina hacia la pared (encaramarse)
@@ -1811,6 +1926,7 @@ func update_rig(dt: float) -> void:
 				waistP -= 0.45 * va.pull
 				neckP += 0.5 * va.pull
 			pelvis_drop = Rbx.damp(pelvis_drop, 0, 8, dt)
+			pelvis_drop_v = 0.0
 		pelvis_pitch += leanP * 0.35
 		# ladeo: la cadera compensa hacia el lado contrario, el torso se inclina y la cabeza se
 		# endereza un poco (como al asomarse por una esquina)
@@ -1818,7 +1934,7 @@ func update_rig(dt: float) -> void:
 		waistR -= ln * 0.4
 		neckR += ln * 0.24
 		# acometida del golpe: la cadera avanza, baja un poco y gira con los hombros
-		Mr.transform = Rbx.cf(-ln * 0.14, -pelvis_drop + bob - crouch - absf(ln) * 0.06 - mel_lunge * 0.22, -mel_lunge * 0.35) * Rbx.ang(pelvis_pitch, pelvis_yaw + mel_twist * 0.35, pelvis_roll + leanR * 0.3)
+		Mr.transform = Rbx.cf(-ln * 0.14 + cic_x, -pelvis_drop + bob - crouch - absf(ln) * 0.06 - mel_lunge * 0.22, -mel_lunge * 0.35 + cic_z) * Rbx.ang(pelvis_pitch + cic_p, pelvis_yaw + mel_twist * 0.35 + cic_y, pelvis_roll + leanR * 0.3 + cic_r)
 		smooth_j(Mr, "Root", 16, dt)
 		pelvis_cf = fk(root_cf, Mr)
 		# con la pelvis ya colocada (con su inercia), el pie apoyado rueda lo justo para que la
@@ -1855,8 +1971,8 @@ func update_rig(dt: float) -> void:
 			var Y := Vector3.UP
 			if va.kind == "vault":
 				# las piernas se recogen hacia un lado y pasan por encima; al final bajan para aterrizar
-				var wT := Rbx.smooth(clampf(p / 0.2, 0, 1))
-				var wL := Rbx.smooth(clampf((p - 0.66) / 0.26, 0, 1))
+				var wT := Movimientos.sortear("valla_recoge", p)
+				var wL := Movimientos.sortear("valla_aterriza", p)
 				var tuck := {
 					"R": hip_p + rv * 0.95 + d * 0.55 - Y * (leg_len * 0.42),
 					"L": hip_p + rv * 0.5 + d * 0.2 - Y * (leg_len * 0.6),
@@ -1877,15 +1993,14 @@ func update_rig(dt: float) -> void:
 				var face_p: Vector3 = va.edge - d * 0.3
 				# los pies siguen en el suelo mientras las manos agarran el borde; solo cuando el cuerpo
 				# empieza a subir, los pies pasan a apoyarse en la pared
-				var wS := Rbx.smooth(clampf((p - 0.12) / 0.2, 0, 1))
+				var wS := Movimientos.sortear("trepar_pared", p)
 				for s in ["L", "R"]:
 					var sgn := -1.0 if s == "L" else 1.0
 					var scr := maxf(0, sin(p * 22 + (PI if s == "L" else 0.0))) * 0.45 * (1 - clampf((p - 0.4) / 0.2, 0, 1))
 					var wall_f := Vector3(face_p.x, 0, face_p.z) + rv * (sgn * 0.4)
 					var wy := minf(hip_p.y - leg_len * 0.78 + scr, va.topY - 0.2)
 					wall_f = Vector3(wall_f.x, maxf(wy, va.feetY + 0.15), wall_f.z)
-					var t0 := 0.42 if s == "R" else 0.6
-					var w_up := Rbx.smooth(clampf((p - t0) / 0.24, 0, 1))
+					var w_up := Movimientos.sortear("trepar_sube_" + s, p)
 					var top_p: Vector3 = va.edge + d * (0.45 if s == "R" else 0.9) + rv * (sgn * hip_x)
 					top_p = Vector3(top_p.x, va.topY + 0.35 + sin(PI * w_up) * 0.5, top_p.z)
 					var base2: Vector3 = leg_targets.get(s, wall_f)
@@ -1901,26 +2016,31 @@ func update_rig(dt: float) -> void:
 		var hip_c := pelvis_cf.origin
 		var mv_h: float = hg.mv
 		var ph_h: float = hg.ph
+		# (diseño de Blender, Movimientos.COLGADO: quieto se mece despacio y busca apoyo con una rodilla y luego la otra;
+		# moviéndose, las piernas siguen a las manos con retraso y la cadera se balancea hacia donde va)
+		var am := clampf(absf(mv_h), 0.0, 1.0)
+		var dir_m := signf(mv_h) if absf(mv_h) > 0.01 else 1.0
+		var fq := now / 2.8
+		var fm := ph_h / TAU
 		for s in ["L", "R"]:
 			var sgn := -1.0 if s == "L" else 1.0
-			var off_s := 0.0 if s == "L" else PI
-			var paso_h := sin(ph_h + off_s)
-			# quieto: las piernas no cuelgan rígidas; una rodilla algo más doblada que la otra y un
-			# pequeño vaivén lento (buscando apoyo con la punta del pie en la pared)
-			var reposo := sin(now * 0.8 + off_s * 0.7) * 0.5 + 0.5
-			var lat_h := sgn * hip_x * 1.1 + mv_h * 0.35 * paso_h + sin(now * 0.6 + off_s) * 0.06
-			var alto_h := -leg_len * (0.84 - 0.1 * reposo * (1.0 - absf(mv_h))) + maxf(0.0, -paso_h) * 0.45 * absf(mv_h)
-			var hacia_pared := 0.55 + 0.2 * reposo * (1.0 - absf(mv_h)) + 0.15 * maxf(0.0, paso_h) * absf(mv_h)
-			leg_targets[s] = hip_c + r_h * lat_h - n_h * hacia_pared + Vector3(0, alto_h, 0)
+			var fq_s := fq + (0.0 if s == "R" else 0.37)
+			var fm_s := fm + (0.0 if s == "R" else 0.5)
+			var lado_h := lerpf(Movimientos.colgado("q_lado", fq_s), Movimientos.colgado("m_lado", fm_s) * dir_m, am)
+			var alto_x := lerpf(Movimientos.colgado("q_alto", fq_s), Movimientos.colgado("m_alto", fm_s), am)
+			var pared_h := lerpf(Movimientos.colgado("q_pared", fq_s), Movimientos.colgado("m_pared", fm_s), am)
+			var lat_h := sgn * hip_x * 1.1 + lado_h + Movimientos.colgado("m_cadera_lado", fm) * dir_m * am
+			leg_targets[s] = hip_c + r_h * lat_h - n_h * pared_h + Vector3(0, -leg_len * 0.84 + alto_x, 0)
 		leg_targets.poleL = hip_c - n_h * 3.0 - r_h * hip_x + Vector3(0, 0.5, 0)
 		leg_targets.poleR = hip_c - n_h * 3.0 + r_h * hip_x + Vector3(0, 0.5, 0)
 		# torso: cuelga de los brazos (algo arqueado hacia la pared), respira con esfuerzo y se mece
 		var resp_h := sin(now * 2.6) * 0.03
-		waistP += 0.08 + resp_h
-		waistR += sin(now * 0.7) * 0.04 - mv_h * 0.06
-		waistY += sin(now * 0.5) * 0.05
-		neckP += 0.22 - resp_h
-		neckY += sin(now * 0.37) * 0.12 + mv_h * 0.25 # mira hacia donde va
+		var fq2 := now / 2.8
+		waistP += Movimientos.colgado("q_cintura_p", fq2) + resp_h
+		waistR += lerpf(Movimientos.colgado("q_cintura_r", fq2), Movimientos.colgado("m_cintura_r", hg.ph / TAU) * signf(mv_h + 1e-6), clampf(absf(mv_h), 0, 1)) - mv_h * 0.04
+		waistY += Movimientos.colgado("q_cintura_y", fq2) * (1.0 - clampf(absf(mv_h), 0, 1))
+		neckP += Movimientos.colgado("q_cuello_p", fq2) - resp_h
+		neckY += Movimientos.colgado("q_cuello_y", fq2) * (1.0 - clampf(absf(mv_h), 0, 1)) + mv_h * 0.25 # mira hacia donde va
 
 
 	# seguridad: si un pie apoyado quedó a la altura de la cadera (aterrizaje raro), se vuelve a apoyar
@@ -2111,12 +2231,41 @@ func update_rig(dt: float) -> void:
 			swing += sin(now * 18 + (1.5 if s == "L" else 0.0)) * flail * 0.6
 		if speed < 0.5:
 			swing = 0.04 + sin(breath_t) * 0.02
+			# agachado y quieto: brazos algo adelantados y doblados, listos (como en el ciclo de Blender)
+			if grounded and va == null:
+				swing += 0.4 * crouch_b
+				elbow += 0.75 * crouch_b
 		run_arm = maxf(run_arm, run_k)
 		# por delante la mano cruza un poco hacia el centro del pecho (sin pasar de la línea media)
 		arm_t[s] = {"sh": Rbx.ang(swing + 0.06 * run_k, -sgn_a * 0.28 * run_k * maxf(0.0, a_run), abd), "el": Rbx.ang(elbow, 0, 0)}
-	# torso de carrera: los hombros giran con los brazos (contrarios a la pelvis), el pecho se
-	# inclina hacia delante y la cabeza se mantiene estable mirando al frente
-	if run_arm > 0.0 and grounded and va == null:
+		# en el aire (salto): los brazos de las poses de Blender (el del lado de la pierna adelantada y el otro)
+		if not grounded and va == null and mt == null and pb < 0.01 and not (air_runoff and jump_run > 0.3) and flail < 0.05:
+			var k_b := "ba_" if s == jump_lead else "bb_"
+			var r_j := jump_run
+			var bp := lerpf(Movimientos.salto("parado", k_b + "p", air_tj), Movimientos.salto("corriendo", k_b + "p", air_tj), r_j)
+			var br := lerpf(Movimientos.salto("parado", k_b + "r", air_tj), Movimientos.salto("corriendo", k_b + "r", air_tj), r_j)
+			var bc := lerpf(Movimientos.salto("parado", k_b + "codo", air_tj), Movimientos.salto("corriendo", k_b + "codo", air_tj), r_j)
+			arm_t[s] = {"sh": Rbx.ang(bp, 0, sgn_a * br), "el": Rbx.ang(bc, 0, 0)}
+		# andando o corriendo por el suelo: los brazos del ciclo de Blender (con su retraso y el codo que acompaña)
+		if grounded and va == null and amp_ciclo > 0.001 and prep_k <= 0.0 and flail < 0.05:
+			var cb := _brazo_ciclo(s, ph01)
+			var bx: float = cb[0]
+			# con fatiga los brazos cuelgan pesados (menos balanceo, algo adelantados)
+			bx = bx * (1.0 - 0.55 * fat) + 0.1 * fat
+			if bx > 0.0:
+				bx *= wall_k
+			var sh_c := Rbx.ang(bx, cb[1], cb[2])
+			var el_c := Rbx.ang(float(cb[3]) * (1.0 - 0.3 * fat), 0, 0)
+			var k_c := clampf(amp_ciclo * 1.6, 0.0, 1.0)
+			arm_t[s] = {"sh": (arm_t[s].sh as Transform3D).interpolate_with(sh_c, k_c), "el": (arm_t[s].el as Transform3D).interpolate_with(el_c, k_c),
+				"wr": Rbx.ang(float(cb[4]) * k_c, 0, 0)}
+			run_arm = maxf(run_arm, mez_run * k_c)
+	# torso de carrera: (desde 2026-11-02 el giro de hombros, el balanceo del pecho y la cabeza estable salen del
+	# ciclo de Blender; aquí solo queda la inclinación del pecho hacia delante al correr)
+	if run_arm > 0.0 and grounded and va == null and amp_ciclo > 0.001:
+		waistP -= 0.1 * run_arm
+		neckP += 0.08 * run_arm
+	elif run_arm > 0.0 and grounded and va == null:
 		var tw: float = 0.2 * run_arm * (float(arm_a.R) - float(arm_a.L)) * 0.5
 		waistY += tw
 		neckY -= tw * 0.85
@@ -2126,7 +2275,7 @@ func update_rig(dt: float) -> void:
 		# el pecho se mece con cada zancada (dos veces por ciclo) y la cabeza lo compensa
 		waistP += 0.035 * run_arm * cos(2.0 * gait_ph)
 		neckP -= 0.03 * run_arm * cos(2.0 * gait_ph)
-	elif gait_amp > 0.05 and grounded and va == null:
+	elif gait_amp > 0.05 and grounded and va == null and amp_ciclo <= 0.001:
 		# andando: un poco de giro de hombros con los brazos
 		var tw2: float = 0.08 * gait_amp * (float(arm_a.R) - float(arm_a.L)) * 0.5
 		waistY += tw2
@@ -2603,7 +2752,9 @@ func update_rig(dt: float) -> void:
 				var gy3: float = ground(base3)[0]
 				# la mano se levanta un poco al avanzar
 				var lift2 := maxf(0, cos(crawl + (0.0 if s == "L" else PI))) * 0.18 * ca2
-				hand_ik[s] = {"pos": Vector3(base3.x, gy3 + 0.18 + lift2, base3.z), "pole": (chest_yaw_base * Rbx.cf(sgn * 1.5, -0.3, 0.4)).origin, "w": hands_down}
+				# (con el pecho aún alto el brazo baja casi vertical y la mano cuelga por debajo de la muñeca: más arriba)
+				var alto_m := 0.65 * (1.0 - Rbx.smooth(clampf((pb - 0.62) / 0.33, 0, 1)))
+				hand_ik[s] = {"pos": Vector3(base3.x, gy3 + 0.18 + lift2 + alto_m, base3.z), "pole": (chest_yaw_base * Rbx.cf(sgn * 1.5, -0.3, 0.4)).origin, "w": hands_down}
 		left_free = false
 		right_free = false
 
@@ -2732,7 +2883,7 @@ func update_rig(dt: float) -> void:
 		var Lm: Limb = arm[s]
 		Lm.top.transform = arm_t[s].sh
 		Lm.mid.transform = arm_t[s].el
-		Lm.fin.transform = Transform3D.IDENTITY
+		Lm.fin.transform = arm_t[s].get("wr", Transform3D.IDENTITY)
 		if s == "R" and correr_libre:
 			# muñeca: la pistola apunta al suelo por delante; el cuchillo y el machete, hacia abajo
 			var wp := -1.15 if Armas.base(tool) == "Pistola" else (-0.6 if tool == "Cuchillo" else -1.25)

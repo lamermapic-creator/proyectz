@@ -663,7 +663,7 @@ func _process(dt: float) -> void:
 			for a in OS.get_cmdline_user_args():
 				if a.begins_with("--arma="):
 					arma_e = a.split("=")[1]
-			if _una("arma", t > 1.0):
+			if _una("arma", t > 1.0) and arma_e != "ninguna":
 				j.arsenal.select_slot(0 if arma_e == "Pistola" else 1)
 			j.yaw = 0.0
 			j.pitch = 0.0

@@ -36,6 +36,12 @@ const ESC := {
 	"reptar": [Vector3(-100, 3.2, 100), 0.0, 5.0, [[0.2, KEY_Z, true], [0.25, KEY_Z, false], [1.8, KEY_W, true]]],
 	"reptar_c": [Vector3(-100, 3.2, 100), 0.0, 5.0, [[0.2, KEY_Z, true], [0.25, KEY_Z, false], [1.8, KEY_W, true], [1.8, KEY_SHIFT, true]]],
 	"fatiga": [Vector3(-100, 3.2, 100), 0.0, 5.0, [[0.3, KEY_W, true]]],
+	# 2026-11-02: marcha agachado y transiciones (andar -> correr -> andar -> parar)
+	"agachado_andar": [Vector3(-100, 3.2, 100), 0.0, 5.0, [[0.2, KEY_C, true], [0.25, KEY_C, false], [1.0, KEY_W, true]]],
+	"agachado_correr": [Vector3(-100, 3.2, 100), 0.0, 5.0, [[0.2, KEY_C, true], [0.25, KEY_C, false], [1.0, KEY_W, true], [1.0, KEY_SHIFT, true]]],
+	"salto_parado": [Vector3(-100, 3.2, 100), 0.0, 3.5, [[0.8, KEY_SPACE, true], [0.85, KEY_SPACE, false], [2.2, KEY_SPACE, true], [2.25, KEY_SPACE, false]]],
+	"salto_correr": [Vector3(-100, 3.2, 100), 0.0, 4.5, [[0.3, KEY_W, true], [0.3, KEY_SHIFT, true], [1.6, KEY_SPACE, true], [1.65, KEY_SPACE, false], [3.0, KEY_SPACE, true], [3.05, KEY_SPACE, false]]],
+	"transiciones": [Vector3(-100, 3.2, 100), 0.0, 7.0, [[0.3, KEY_W, true], [1.8, KEY_SHIFT, true], [3.6, KEY_SHIFT, false], [5.0, KEY_W, false]]],
 	"correr_rifle": [Vector3(-100, 3.2, 100), 0.0, 5.0, [[1.4, KEY_W, true], [1.4, KEY_SHIFT, true]]],
 	"andar_pistola": [Vector3(-100, 3.2, 100), 0.0, 5.0, [[1.4, KEY_W, true]]],
 	"tumbado_rifle": [Vector3(-100, 3.2, 100), 0.0, 6.0, [[1.4, KEY_Z, true], [1.45, KEY_Z, false], [3.6, KEY_W, true], [4.6, KEY_W, false]]],
@@ -185,6 +191,8 @@ func _process(dt: float) -> void:
 		var fr: Dictionary = an.feet.R
 		var hp: Vector3 = j.rig.P.LowerTorso.global_position
 		print("LOG t=%.2f v=%.1f drop=%.2f yr=%.2f L=%s R=%s dL=%.2f dR=%.2f hipy=%.2f bodyy=%.2f" % [t, j.cur_move, an.pelvis_drop, an.yaw_rate, "sw%.2f" % fl.u if fl.swing != null else "pl", "sw%.2f" % fr.u if fr.swing != null else "pl", (j.rig.P.LeftFoot.global_position - hp).length(), (j.rig.P.RightFoot.global_position - hp).length(), hp.y, j.global_position.y])
+	_registrar()
+	_contactos()
 	var p := j.global_position + Vector3(0, -0.8, 0)
 	var r := Basis(Vector3.UP, j.yaw) * (Vector3(1, 0, -1).normalized() if OS.get_cmdline_user_args().has("--cam34") else Vector3(1, 0, 0))
 	var alto := 7.0 if esc in ["trepar", "saltar", "borde", "correr_girar", "correr_girar_d", "trepar_lejos", "trepar_lejos_c", "trepar_c", "saltar_pared", "colgar", "colgar_d", "colgar_salto", "colgar_corre"] else 1.0
@@ -229,3 +237,49 @@ func _process(dt: float) -> void:
 		cam.look_at(j.global_position + Vector3(0, 1.0, 0), Vector3.UP)
 	if t > e[2]:
 		get_tree().quit()
+
+
+## --registro=<ruta>: cada fotograma, la posición de las piezas principales (respecto al cuerpo, en el marco de su
+## rumbo, y en el mundo), para medir lo suave que es el movimiento (tests/fluidez.py)
+var _reg: FileAccess = null
+func _registrar() -> void:
+	var ruta := ""
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--registro="):
+			ruta = a.split("=")[1]
+	if ruta == "":
+		return
+	if _reg == null:
+		_reg = FileAccess.open(ruta, FileAccess.WRITE)
+		_reg.store_line("t,v,pieza,lx,ly,lz,wx,wy,wz")
+	var rc := j.root_cf()
+	var marco := Transform3D(Basis(Vector3.UP, Rbx.yaw_of(rc)), rc.origin)
+	var v := Vector2(j.vel_real.x, j.vel_real.z).length()
+	for n in ["Head", "UpperTorso", "LowerTorso", "LeftHand", "RightHand", "LeftFoot", "RightFoot", "LeftLowerArm", "RightLowerArm"]:
+		var w: Vector3 = (j.rig.P[n] as Node3D).global_position
+		var l := marco.affine_inverse() * w
+		_reg.store_line("%.4f,%.3f,%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f" % [t, v, n, l.x, l.y, l.z, w.x, w.y, w.z])
+	_reg.flush()
+
+
+## --contactos: cuánto se mete en el suelo (o flota) cada pieza de las piernas y las manos (studs; < 0 = dentro)
+var _cont_max := {}
+func _contactos() -> void:
+	if not OS.get_cmdline_user_args().has("--contactos"):
+		return
+	var linea := ""
+	for n in ["LeftFoot", "RightFoot", "LeftLowerLeg", "RightLowerLeg", "LeftHand", "RightHand", "LowerTorso", "Head"]:
+		var nd: Node3D = j.rig.P[n]
+		var sz: Vector3 = nd.get_meta("size")
+		var hit := j.raycast(nd.global_position + Vector3(0, 3, 0), Vector3(0, -12, 0))
+		if hit.is_empty():
+			continue
+		var gy: float = (hit.position as Vector3).y
+		var mn := 99.0
+		for c in 8:
+			var lp := Vector3(sz.x * (0.5 if c & 1 else -0.5), sz.y * (0.5 if c & 2 else -0.5), sz.z * (0.5 if c & 4 else -0.5))
+			mn = minf(mn, (nd.global_transform * lp).y - gy)
+		linea += " %s=%.2f" % [n, mn]
+		_cont_max[n] = minf(_cont_max.get(n, 99.0), mn)
+	if Engine.get_process_frames() % 3 == 0:
+		print("CONT t=%.2f pb=%.2f%s" % [t, float(j.L.proneP), linea])

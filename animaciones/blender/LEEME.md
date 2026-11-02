@@ -56,3 +56,22 @@ blender -b -P personaje.py -- --nuevo --glb=../../../modelos/superviviente.glb
   impacto) y el ragdoll no cambian. Los zombis siguen con el muñeco clásico (lo tiñen ellos).
 - Si se mueve el equipo, respetar dónde van las armas enfundadas (`Armas.holster`): pistola en el muslo derecho,
   cuchillo en el pecho a la izquierda, rifle a la espalda detrás de la mochila (z ≈ 0,97), bate/machete en la mochila.
+
+## Movimiento del superviviente: andar, correr, agachado, saltar, tumbarse, reptar, vallas y trepar (2026-11-02)
+- `movimiento/diseno_mov.py`: **el diseño** (claves de animación, sin bpy):
+  - Ciclos de la marcha (`ANDAR`, `CORRER`, `AGACHADO`) por la fase de la marcha φ (0 = pie izquierdo pasando,
+    0,25 = apoya el izquierdo...): pelvis (sube/baja, se desplaza sobre el pie de apoyo, gira y cae del lado de la
+    pierna en el aire), torso (hombros al revés que la cadera), cabeza estable, brazos (con retraso y el codo que
+    acompaña) y la forma del paso (altura del pie, avance, giro sobre la punta/el talón, talón al glúteo corriendo).
+  - `SALTO` (parado / corriendo) por la fase del salto; `TUMBAR` por pb y `REPTAR` por la fase de reptar;
+    `SORTEAR` (vallas y encaramarse) por el progreso.
+- Ver en Blender (sobre el personaje montado desde el juego: `tests/moto.gd --modo=exportar_pie --arma=ninguna
+  --salida=cuerpo.json` y `blender -b -P montar.py -- cuerpo.json cuerpo.blend`):
+  `blender -b cuerpo.blend -P movimiento/ver_mov.py -- andar 6.5 1.0 24 "0,0.15,9;60,0.15,9" prueba` y
+  `blender -b cuerpo.blend -P movimiento/ver_tierra.py -- "t:0,0.3,0.5,0.7,1" "90,0.12,10" prueba --ik`
+  (este último imprime cuánto se meten en el suelo los pies, las rodillas y las manos).
+- Al juego: `python3 movimiento/a_gd_mov.py ../../scripts/jugador/movimientos.gd` (`Movimientos`, generado: no
+  editar a mano). Lo usa el Animador: `_ciclo`, `_brazo_ciclo`, `_curva_pie`, el salto (`air_tj`), las piernas al
+  tumbarse (IK a sitios del suelo) y las curvas de vallas/trepar. Los pies siguen anclados al suelo como antes.
+- Medir: `tests/visual.gd --registro=x.csv` + `python3 tests/fluidez.py x.csv` (tirón del cuerpo y de los pies) y
+  `--contactos` (cuánto se mete cada pieza en el suelo).

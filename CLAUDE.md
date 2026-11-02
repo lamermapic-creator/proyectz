@@ -315,7 +315,12 @@ Freesound (sonidos), Poly Haven y ambientCG (texturas/HDRI), Quaternius y Kenney
   `modelos/superviviente.glb` (ver `LEEME.md` de esa carpeta). `RigPersonaje.modelo = "superviviente"` (jugador y
   menú; los zombis y maniquíes siguen con el muñeco por código). Las cajas de impacto siguen siendo `PIEZAS`.
 - Pistola al 65 % (`ModelosArmas.ESCALA`, también escala sus puntos y `Armas.grip`).
-- Pendiente: recarga, sacar/guardar y golpes (grupo 1, parte 2) y los grupos 2-4.
+- **Movimiento (2026-11-02)**: andar/correr/agachado, salto, tumbarse/reptar, vallas, trepar y colgado salen de
+  `animaciones/blender/movimiento/diseno_mov.py` → `Movimientos` (generado). Animador: `_ciclo`, `_brazo_ciclo`,
+  `_curva_pie` (mezcla por `mez_run`, `crouch_b`; amplitud `amp_ciclo`), `air_tj` (salto), piernas al tumbarse por
+  IK a sitios del suelo, `pelvis_drop_v` (muelle). Los pies siguen anclados (update_feet). Medir: `tests/visual.gd
+  --registro=x.csv` + `tests/fluidez.py`, y `--contactos`.
+- Pendiente: recarga, sacar/guardar y golpes (grupo 1, parte 2) y el resto de la moto.
 
 ## Ruido y zombis v0 (2026-10-23, a pedido de Juan) — guía completa: `docs/RUIDO_Y_ZOMBIS.md`
 - **Sistema de ruido** (`scripts/ruido/ruido.gd`, clase estática `Ruido`, sin autoload): quien hace ruido llama a

@@ -13,6 +13,32 @@ en el mismo commit que el cambio. Formato:
 
 ---
 
+## 2026-11-02 — Andar, correr, agacharse, saltar, tumbarse, reptar, vallas y trepar hechos en Blender (KangooG)
+- KangooG: "haz las animaciones de correr, saltar, agacharse, acostarse, colgarse y trepar en Blender… que se vean
+  súper fluidas y naturales (ahora se ven rígidas, rústicas, con transiciones bruscas)", con los pies adaptándose al
+  suelo como hasta ahora. Todas a la vez.
+- Diseño en `animaciones/blender/movimiento/diseno_mov.py` (claves de animación, vistas en Blender sobre el
+  personaje nuevo con `ver_mov.py` / `ver_tierra.py`) → `scripts/jugador/movimientos.gd` (`Movimientos`, generado).
+- **Andar / correr / agachado**: ciclos por la fase de la marcha (`Animador._ciclo`, `_brazo_ciclo`): la pelvis sube
+  y baja (corriendo baja al apoyar, como de verdad; antes subía), se desplaza sobre el pie de apoyo, gira con la
+  pierna que avanza y cae del lado de la pierna en el aire; los hombros giran al revés y la cabeza se queda estable;
+  brazos con retraso y codo que acompaña (corriendo, a ~90° bombeando); agachado, brazos adelantados y listos.
+  Forma del paso (`_curva_pie`): el pie despega girando sobre la punta y apoya con el talón, empalmado con el apoyo
+  (antes daba un salto), corriendo el talón sube al glúteo y la pierna alcanza y "araña" antes de apoyar.
+  La fase de la marcha se corrige más suave y la bajada de la cadera es un muelle amortiguado (antes, un golpe en
+  cada apoyo al correr). Medido (`tests/fluidez.py`): tirón del cuerpo andando −60 %, agachado −40 %.
+- **Salto** parado y corriendo por fases (`Movimientos.SALTOS`, `air_tj`): los brazos salen desde atrás (de coger
+  impulso) y suben por delante; rodillas recogidas; al caer, piernas adelante y brazos abiertos.
+- **Tumbarse / levantarse**: se agacha, apoya la rodilla izquierda, la derecha, las manos y se estira; las piernas
+  van por IK a sitios del suelo (`Movimientos.TUMBAR`): antes las piernas iban por ángulos fijos y los pies y las
+  rodillas se metían en el suelo o flotaban. **Reptar**: la rodilla sube por el costado a ras de suelo (antes el pie
+  se levantaba hacia el cielo). Medido con `tests/visual.gd --contactos`.
+- **Vallas y trepar**: curvas suaves (`Movimientos.SORTEAR`) en vez de senos recortados (que daban tirones al
+  empezar y al acabar). **Colgado**: quieto se mece despacio y busca apoyo con una rodilla y luego la otra;
+  desplazándose, las piernas siguen a las manos con retraso y la cadera se balancea (`Movimientos.COLGADO`).
+- Pruebas nuevas: `tests/visual.gd --escenario=agachado_andar|agachado_correr|transiciones|salto_parado|salto_correr`,
+  `--registro=<csv>` (+ `tests/fluidez.py`) y `--contactos`. Suite completa: TODO BIEN.
+
 ## 2026-11-01 (8) — Personaje nuevo hecho en Blender y pistola a tamaño real (KangooG)
 - KangooG: "haz el modelo del personaje en Blender, el triple de mejorado manteniendo todo el arte" (más detalle,
   mismo estilo y "que parezca otro personaje"; guantes con dedos marcados).
