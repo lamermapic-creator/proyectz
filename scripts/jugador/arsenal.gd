@@ -168,6 +168,45 @@ func _desequipar_ya() -> void:
 	switching = null
 
 
+## trepar (encaramarse o colgarse): el arma se guarda para subir con las dos manos y al terminar se vuelve a sacar
+var rearmar := ""
+
+
+func recordar_para_trepar() -> void:
+	if armado() and rearmar == "":
+		rearmar = equipado if switching == null else String(switching.next)
+
+
+func guardar_para_trepar() -> void:
+	if not armado():
+		return
+	recordar_para_trepar()
+	if recargando > 0.0:
+		recargando = 0.0
+		anim.cancelar_recarga()
+	end_rest()
+	J.firing = false
+	J.aiming = false
+	if switching == null:
+		switching = {"t0": ahora(), "next": ""}
+		J.L.holster = {"name": equipado, "t0": ahora()}
+	else:
+		switching.next = ""
+
+
+func sacar_tras_trepar() -> void:
+	var w := rearmar
+	rearmar = ""
+	if w == "" or armado() or switching != null or not Armas.WEAPONS.has(w):
+		return
+	if arma_en_hueco(_hueco_de(w)) != w:
+		return
+	for i in Armas.SLOTS.size():
+		if Armas.SLOTS[i].Id == _hueco_de(w):
+			select_slot(i)
+			return
+
+
 ## teclas 1-4: guardar la de la mano y sacar la otra (o guardar si es la misma)
 ## guardar el arma de golpe (colgarse de una cornisa: hacen falta las dos manos)
 func guardar_ya() -> void:

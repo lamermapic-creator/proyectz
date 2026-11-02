@@ -98,7 +98,7 @@ var slow_until := 0.0
 var L := {
 	"pitch": 0.0, "aiming": false, "firing": false, "stamina": 1.0, "exhausted": false, "fatigue": 0.0,
 	"sprinting": false, "stance": 0, "stanceT": -10.0, "stanceFrom": 0, "proneP": 0.0,
-	"yaw": 0.0, "supine": false, "rollSide": 1.0, "lean": 0.0, "vault": null, "jumpPrep": null,
+	"yaw": 0.0, "supine": false, "levanta_arriba": null, "rollSide": 1.0, "lean": 0.0, "vault": null, "jumpPrep": null,
 	"knocked": false, "gettingUp": false, "hang": null, "restGap": null, "rested": false, "holster": null,
 	"moto": null, "levanta": null,
 }
@@ -465,6 +465,21 @@ func set_stance(n: int) -> void:
 			return
 	if n == 2 and not en_suelo:
 		return
+	# levantarse estando BOCA ARRIBA (2026-11-02): ya no rueda a boca abajo para levantarse (se veía girar el cuerpo
+	# de forma extraña); se sienta, mete los pies y se levanta hacia donde tiene los pies. Para eso el cuerpo gira
+	# 180° y avanza hasta los pies (el Animador lo compensa en el primer fotograma: no se ve ningún salto)
+	L.levanta_arriba = null
+	if stance == 2 and n < 2 and supine and prone_p > 0.98:
+		var desp := 1.3
+		var adelante := -Rbx.look(root_cf())   # boca arriba, los pies quedan detrás del cuerpo
+		var bajo := global_position - Vector3(0, center_cur - 0.35, 0)
+		var hit := raycast(bajo, adelante * (desp + 0.6))
+		if not hit.is_empty():
+			desp = clampf(bajo.distance_to(hit.position) - 0.7, 0.0, desp)
+		rotation.y += PI
+		global_position += adelante * desp
+		L.levanta_arriba = {"desp": desp, "t0": ahora()}
+		supine = false
 	stance_from = stance
 	stance = n
 	stance_change_t = ahora()
@@ -604,6 +619,9 @@ func start_vault(v: Dictionary) -> bool:
 	v.t0 = ahora()
 	v.prev = p0
 	Ruido.emitir(self, e, C.RUIDO.Sortear if v.kind == "vault" else C.RUIDO.Encaramarse, Ruido.SORTEAR, self)
+	# encaramarse a algo alto (2026-11-02): se guarda el arma para subir con las dos manos y al terminar se vuelve a sacar
+	if v.kind != "vault":
+		arsenal.guardar_para_trepar()
 	vaulting = v
 	L.vault = v
 	collision_layer = 0
@@ -648,6 +666,8 @@ func step_vault(dt: float) -> void:
 		vel_real = velocity
 		_set_estado("Freefall" if v.kind == "vault" else "Running")
 		cur_move = (v.exitVel as Vector3).length()
+		if v.kind != "vault":
+			arsenal.sacar_tras_trepar()
 
 
 func jump_or_vault() -> void:
@@ -776,7 +796,8 @@ func colgarse(c: Dictionary) -> void:
 	Ruido.emitir(self, c.edge, C.RUIDO.Colgarse, Ruido.SORTEAR, self)
 	if not estamina_infinita:
 		stamina = maxf(0.0, stamina - 3.0)
-	# las manos hacen falta: se guarda el arma
+	# las manos hacen falta: se guarda el arma (y se vuelve a sacar al subir o al soltarse)
+	arsenal.recordar_para_trepar()
 	arsenal.guardar_ya()
 	shake = minf(1.0, shake + 0.25)
 
@@ -798,6 +819,7 @@ func soltar_cornisa(msg := "") -> void:
 	vel_real = velocity
 	_set_estado("Freefall")
 	en_suelo = false
+	arsenal.sacar_tras_trepar()
 	if msg != "":
 		notify(msg)
 
@@ -1428,6 +1450,8 @@ func update_character(dt: float) -> void:
 	L.proneP = prone_p
 	L.yaw = yaw
 	L.supine = supine
+	if L.levanta_arriba != null and (stance == 2 or prone_p <= 0.001):
+		L.levanta_arriba = null
 	L.rollSide = roll_side
 	L.lean = lean_cur
 

@@ -13,6 +13,25 @@ en el mismo commit que el cambio. Formato:
 
 ---
 
+## 2026-11-02 (2) — Pasos siempre en orden, levantarse del suelo y guardar el arma para trepar (KangooG)
+- KangooG: "arregla las piernas, que los pasos se hagan en orden; cuando corre las dos piernas se van adelante".
+  Los pasos ya no se deciden "cuando un pie se queda atrás": un **reloj de la marcha** avanza con la distancia
+  recorrida y cada pie despega y apoya en su momento, SIEMPRE alternando (la izquierda apoya en φ = 0,25 y la derecha
+  en 0,75). Ritmo diseñado en Blender (`diseno_mov.RITMO` → `Movimientos.ZANCADA` / `FRACCION_AIRE`): zancada según
+  la velocidad (como personas reales a escala) y fracción del ciclo en el aire (andando 0,40, con apoyo doble;
+  corriendo 0,70, con vuelo). Acelerando o frenando, pasos más cortos y seguidos; en el aire el reloj se para y al
+  aterrizar arranca con el pie que quedó atrás; un pie al que la pierna ya no llega despega antes (sin repetir pie).
+  La fase del cuerpo es ese mismo reloj. Parado, los pasos de ajuste como antes. Medido: 0 pasos repetidos con el
+  mismo pie andando, corriendo, agachado, girando y de lado.
+- **Levantarse boca arriba**: ya no rueda a boca abajo (el cuerpo giraba raro); se sienta con la mano derecha
+  apoyada detrás, mete los pies, echa el peso adelante y se levanta hacia los pies (`Jugador.set_stance` gira el
+  cuerpo 180° y lo avanza hasta los pies, `L.levanta_arriba`; el Animador lo compensa: no se ve el giro).
+  **Boca abajo**: flexión (el pecho sube con los brazos), a cuatro patas, adelanta el pie derecho, se incorpora
+  apoyando la mano en la rodilla y de pie (`Movimientos.LEVANTAR`). También al levantarse tras un ragdoll boca abajo.
+- **Trepar con las dos manos**: al encaramarse a algo alto se guarda el arma (`Arsenal.guardar_para_trepar`) y al
+  terminar se vuelve a sacar (`sacar_tras_trepar`); también tras colgarse de una cornisa (al subir o al soltarse).
+- Pruebas: `tests/visual.gd --escenario=trepar_rifle|levantarse_boca_arriba|levantarse_boca_abajo`, `--logarma`.
+
 ## 2026-11-02 — Andar, correr, agacharse, saltar, tumbarse, reptar, vallas y trepar hechos en Blender (KangooG)
 - KangooG: "haz las animaciones de correr, saltar, agacharse, acostarse, colgarse y trepar en Blender… que se vean
   súper fluidas y naturales (ahora se ven rígidas, rústicas, con transiciones bruscas)", con los pies adaptándose al

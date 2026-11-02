@@ -320,6 +320,10 @@ Freesound (sonidos), Poly Haven y ambientCG (texturas/HDRI), Quaternius y Kenney
   `_curva_pie` (mezcla por `mez_run`, `crouch_b`; amplitud `amp_ciclo`), `air_tj` (salto), piernas al tumbarse por
   IK a sitios del suelo, `pelvis_drop_v` (muelle). Los pies siguen anclados (update_feet). Medir: `tests/visual.gd
   --registro=x.csv` + `tests/fluidez.py`, y `--contactos`.
+- **Pasos por reloj** (2026-11-02, 2): en marcha (`speed >= 0.6`) `update_feet` usa `gait01` (avanza con la distancia;
+  `Movimientos.ZANCADA`/`FRACCION_AIRE`), `reloj_activo`, `ultimo_pie`; parado, el código de pasos de ajuste de
+  siempre. Levantarse: `Movimientos.LEVANTAR` (boca abajo por pb; boca arriba por 1 - pb con `L.levanta_arriba`).
+  Trepar con arma: `Arsenal.guardar_para_trepar` / `sacar_tras_trepar` / `rearmar`.
 - Pendiente: recarga, sacar/guardar y golpes (grupo 1, parte 2) y el resto de la moto.
 
 ## Ruido y zombis v0 (2026-10-23, a pedido de Juan) — guía completa: `docs/RUIDO_Y_ZOMBIS.md`

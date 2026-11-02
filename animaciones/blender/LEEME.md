@@ -64,7 +64,9 @@ blender -b -P personaje.py -- --nuevo --glb=../../../modelos/superviviente.glb
     pierna en el aire), torso (hombros al revés que la cadera), cabeza estable, brazos (con retraso y el codo que
     acompaña) y la forma del paso (altura del pie, avance, giro sobre la punta/el talón, talón al glúteo corriendo).
   - `SALTO` (parado / corriendo) por la fase del salto; `TUMBAR` por pb y `REPTAR` por la fase de reptar;
-    `SORTEAR` (vallas y encaramarse) por el progreso.
+    `SORTEAR` (vallas y encaramarse) por el progreso; `COLGADO`; `LEVANTAR` (boca abajo / boca arriba).
+  - `RITMO`: zancada según la velocidad y fracción del ciclo en el aire: marca cuándo despega y apoya cada pie
+    (los pasos siempre alternan).
 - Ver en Blender (sobre el personaje montado desde el juego: `tests/moto.gd --modo=exportar_pie --arma=ninguna
   --salida=cuerpo.json` y `blender -b -P montar.py -- cuerpo.json cuerpo.blend`):
   `blender -b cuerpo.blend -P movimiento/ver_mov.py -- andar 6.5 1.0 24 "0,0.15,9;60,0.15,9" prueba` y

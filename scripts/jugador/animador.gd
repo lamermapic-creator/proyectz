@@ -126,6 +126,10 @@ var gait_amp := 0.0
 var mez_run := 0.0     # 0 andar, 1 correr (según la velocidad, como run01 de los pasos)
 var mez_pie_run := 0.0 # lo mismo, para la forma del paso (sin suavizar: el de update_feet)
 var amp_ciclo := 0.0   # 0 quieto, 1 a la velocidad para la que está hecho el ciclo
+var gait01 := 0.0       # reloj de la marcha (0..1): marca cuándo despega y apoya cada pie (ver update_feet)
+var reloj_activo := false
+var ultimo_pie := ""     # el último pie que dio un paso con el reloj (el siguiente siempre es el otro)
+var ritmo_periodo := 1.0
 var air_tj := 0.0      # fase del salto (0 despegue .. 1 a punto de aterrizar), para Movimientos.SALTOS
 var sw_prev := {"L": false, "R": false}
 var last_step_t := -9.0
@@ -642,7 +646,7 @@ func update_feet(root_cf: Transform3D, vel: Vector3, speed: float, dt: float, gr
 		if sw != null:
 			sw.t += dt
 			var u := clampf(sw.t / sw.dur, 0, 1)
-			var idl := _ideal(frame, f, vel_h, lead, sw.dur - sw.t)
+			var idl := _ideal(frame, f, vel_h, float(sw.get("lead", lead)), sw.dur - sw.t)
 			var to: Vector3 = idl[0]
 			# trayectoria del paso: el pie rodea por su lado, sin pasar por delante de la otra pierna.
 			# Subiendo (escalón, cuesta) el pie gana la altura al principio para librar el borde;
@@ -694,8 +698,69 @@ func update_feet(root_cf: Transform3D, vel: Vector3, speed: float, dt: float, gr
 				f.yaw = body_yaw
 				f.swingYaw = null
 	if not grounded:
+		# (en el aire el reloj se para; al aterrizar vuelve a arrancar con el pie que quedó más atrás)
+		reloj_activo = false
+		ultimo_pie = ""
 		return
-	# decidir el siguiente paso
+	# PASOS POR EL RELOJ DE LA MARCHA (2026-11-02, v2; ritmo diseñado en Blender: Movimientos.ZANCADA y
+	# FRACCION_AIRE). En marcha, los pasos ya no se deciden "cuando un pie se queda atrás" (corriendo, eso hacía que
+	# a veces las dos piernas fueran a la vez hacia delante): un reloj avanza con la distancia recorrida y cada pie
+	# despega y apoya en su momento, SIEMPRE alternando (la izquierda apoya en φ = 0,25 y la derecha en φ = 0,75).
+	# Dónde apoya sigue saliendo de _ideal (suelo real, escalones, paredes). Parado, como antes (pasos de ajuste).
+	if speed >= 0.6:
+		idle_t = 0
+		var zan := lerpf(Movimientos.zancada("andar", speed), Movimientos.zancada("correr", speed), run01)
+		var fr: float = lerpf(Movimientos.FRACCION_AIRE.andar, Movimientos.FRACCION_AIRE.correr, run01)
+		if crouch_b > 0.001:
+			zan = lerpf(zan, Movimientos.zancada("agachado", speed), crouch_b)
+			fr = lerpf(fr, Movimientos.FRACCION_AIRE.agachado, crouch_b)
+		# de lado, con fatiga, en escaleras y cuestas o tropezando: pasos más cortos
+		zan *= (1.0 - 0.35 * lat_f) * (1.0 - 0.2 * fw_k) * clampf(1.0 - 0.4 * absf(jugador.pendiente), 0.55, 1.0)
+		if stumble_until > ahora():
+			zan *= 0.7
+		# acelerando, pasos más rápidos (como al arrancar a correr: pasos cortos y seguidos); si no, los pies se
+		# quedaban atrás mientras el cuerpo ya iba deprisa
+		var lv_d := Rbx.vec_to_obj(frame, vel_h).normalized() if speed > 0.1 else Vector3.FORWARD
+		var acel := absf(Vector3(acc.x, 0, acc.z).dot(lv_d))   # (frenando, igual: pasos cortos y seguidos)
+		var periodo := maxf(zan / (speed + acel * 0.35), 0.3)
+		if not reloj_activo:
+			# arranca: da el primer paso el pie que se quedó más atrás respecto a hacia donde va
+			reloj_activo = true
+			var dir_v := vel_h.normalized() if vel_h.length() > 0.05 else Rbx.look(frame)
+			var atras_L := -(Vector3(L.pos) - root_cf.origin).dot(dir_v)
+			var atras_R := -(Vector3(R.pos) - root_cf.origin).dot(dir_v)
+			var primero := "L" if atras_L >= atras_R else "R"
+			gait01 = fposmod((0.25 if primero == "L" else 0.75) - fr - 0.02, 1.0)
+		# red de seguridad: un pie apoyado al que la pierna ya no llega (giro brusco, empujón) despega ya si el otro está
+		# apoyado (el reloj se adelanta hasta su despegue: sigue alternando)
+		for k in ["L", "R"]:
+			var f2: Dictionary = feet[k]
+			var otro: Dictionary = feet["R" if k == "L" else "L"]
+			if f2.swing == null and bool(f2.get("overreach", false)) and k != ultimo_pie:
+				var desp := fposmod((0.25 if k == "L" else 0.75) - fr, 1.0)
+				if otro.swing == null:
+					if fposmod(desp - gait01, 1.0) > 0.12:
+						gait01 = fposmod(desp - 0.001, 1.0)
+				elif otro.get("u") != null and float(otro.u) > 0.7 and fposmod(desp - gait01, 1.0) < 0.3:
+					# el otro pie está a punto de apoyar: este despega ya (un instante de vuelo, como al correr)
+					gait01 = fposmod(desp - 0.001, 1.0)
+		var antes := gait01
+		gait01 += dt / periodo
+		for k in ["L", "R"]:
+			var f: Dictionary = feet[k]
+			var despega := fposmod((0.25 if k == "L" else 0.75) - fr, 1.0)
+			var d_c := fposmod(despega - antes, 1.0)
+			if f.swing == null and d_c > 0.0 and d_c <= gait01 - antes and k != ultimo_pie:
+				ultimo_pie = k
+				_registrar_paso(k, run01)
+				f.swing = {"from": f.pos, "t": 0.0, "dur": fr * periodo, "fromYaw": f.get("yaw") if f.get("yaw") != null else body_yaw,
+					"idle": false, "roll0": f.get("roll", 0.0), "lead": periodo * (1.0 - fr) * 0.5 * lerpf(1.0, 0.7, run01)}
+		gait01 = fposmod(gait01, 1.0)
+		ritmo_periodo = periodo
+		return
+	reloj_activo = false
+	ultimo_pie = ""
+	# decidir el siguiente paso (parado: pasos de ajuste)
 	var iL: Vector3 = _ideal(frame, L, vel_h, lead, 0)[0]
 	var iR: Vector3 = _ideal(frame, R, vel_h, lead, 0)[0]
 	var dL := (Vector3(L.pos.x, 0, L.pos.z) - Vector3(iL.x, 0, iL.z)).length()
@@ -1041,6 +1106,13 @@ func _curva_pie(canal: String, u: float, run01: float) -> float:
 
 func _fase_marcha(speed: float, dt: float) -> void:
 	var now := ahora()
+	if reloj_activo:
+		# en marcha, la fase del cuerpo ES el reloj de los pasos (siempre a la par, sin tirones)
+		gait_ph = gait01 * TAU
+		gait_rate = TAU / ritmo_periodo
+		last_step_t = now
+		gait_amp = Rbx.damp(gait_amp, clampf(speed / 3.0, 0.0, 1.0) if speed > 0.6 else 0.0, 4, dt)
+		return
 	for s in ["L", "R"]:
 		var f: Dictionary = feet[s]
 		var sw: bool = f.swing != null
@@ -1609,9 +1681,19 @@ func update_rig(dt: float) -> void:
 		var sweep := clampf(-yaw_rate * 0.18, -0.25, 0.25) * pb
 		var ph := crawl
 		crawl_amt = Rbx.damp(crawl_amt, 1.0 if crawling else 0.0, 3, dt)
+		# LEVANTARSE (2026-11-02, Movimientos.LEVANTAR): boca abajo, con su propia secuencia (flexión, a cuatro patas,
+		# un pie adelante, de pie); boca arriba, sentándose y levantándose hacia los pies (el Jugador giró el cuerpo
+		# 180° y lo avanzó hasta los pies: aquí la cadera se queda donde estaba y no se ve el giro)
+		var subiendo: bool = (stance != 2 and pb < 0.999) or (stance != 2 and L.get("levanta_arriba") != null) or (levantarse != null and gu_rueda <= 0.0)
+		var lev_up = L.get("levanta_arriba") if stance != 2 else null
+		var q_up := 1.0 - pb
+		if lev_up != null and not (lev_up as Dictionary).has("visto"):
+			lev_up["visto"] = true
+			prev_t.erase("Root")
+			roll_t = 0.0
 		# boca arriba: rodar sobre el eje de la columna (0 = boca abajo, 1 = boca arriba)
 		var sup: bool = L.supine
-		if pb < 0.98:
+		if pb < 0.98 or lev_up != null:
 			sup = false
 		roll_t = roll_t + clampf((1.0 if sup else 0.0) - roll_t, -dt / 0.75, dt / 0.75)
 		if gu_rueda >= 0.0:
@@ -1628,10 +1710,18 @@ func update_rig(dt: float) -> void:
 		# pelvis: de inclinada a horizontal y bajando hasta el suelo (curvas de Blender, Movimientos.TUMBAR)
 		var tilt := Movimientos.tumbar("inclina", pb)
 		drop = (pelvis_stand_y - (gy + 0.4)) * Movimientos.tumbar("baja", pb)
+		var zoff := 0.0
+		if lev_up != null:
+			tilt = Movimientos.levantar("arriba_inclina", q_up)
+			drop = (pelvis_stand_y - (gy + 0.4)) * Movimientos.levantar("arriba_baja", q_up)
+			zoff = float(lev_up.desp) * Movimientos.levantar("arriba_z", q_up)
+		elif subiendo:
+			tilt = Movimientos.levantar("abajo_inclina", pb)
+			drop = (pelvis_stand_y - (gy + 0.4)) * Movimientos.levantar("abajo_baja", pb)
 		# al rodar, a mitad del giro el cuerpo queda de costado (el centro sube un poco)
 		var lift := sin(PI * rlv) * 0.3
-		Mr.transform = Rbx.cf(0, -drop + lift, 0) * Rbx.ang(tilt, sway * lay + sweep * (1 - rlv), roll * lay) * Rbx.ang(0, PI * rlv * side, 0)
-		smooth_j(Mr, "Root", 9, dt)
+		Mr.transform = Rbx.cf(0, -drop + lift, zoff) * Rbx.ang(tilt, sway * lay + sweep * (1 - rlv), roll * lay) * Rbx.ang(0, PI * rlv * side, 0)
+		smooth_j(Mr, "Root", 9 if lev_up == null else 30, dt)
 		waistY -= sweep * 1.3 # el pecho se queda apuntando mientras la cadera barre
 		pelvis_cf = fk(root_cf, Mr)
 		# PIERNAS (2026-11-02, diseño de Blender: Movimientos.TUMBAR y REPTAR): por IK a sitios del suelo, así los pies
@@ -1648,13 +1738,17 @@ func update_rig(dt: float) -> void:
 			var f: Dictionary = feet[s]
 			var hip_s := (pelvis_cf * Lg.top.c0).origin
 			var gy_s: float = ground(Vector3(hip_s.x, root_cf.origin.y, hip_s.z) + atras * 1.2)[0]
-			# 1) plantado
+			# 1) plantado (al levantarse, debajo del cuerpo: el pie derecho un poco adelantado, es el primero que se apoya)
 			var fc_pl := foot_cf(f, yaw)
+			if subiendo:
+				var pp := (yaw_p * Rbx.cf(sgn * hip_x, 0, -0.18 - (0.45 if s == "R" else 0.0) * (1.0 - Rbx.smooth(clampf(q_up / 0.85, 0, 1))))).origin
+				var gq: float = ground(pp)[0]
+				fc_pl = Transform3D(Basis(Vector3.UP, yaw + sgn * -0.1), Vector3(pp.x, gq + foot_half, pp.z))
 			var an_pl := (fc_pl * Rbx.cfp(ankle_in_foot[s])).origin
 			# 2) arrodillado / tumbado
 			# giro del pie: de puntillas (arrodillado) -> con el empeine en el suelo (tumbado); el tobillo a la altura
 			# justa para que la esquina más baja del pie toque el suelo
-			var th := lerpf(-1.75, -2.45, lay)
+			var th := lerpf(-1.75, -2.45, lay) if lev_up == null else 1.25   # (boca arriba: punta arriba, el talón en el suelo)
 			var h_a := 0.0
 			for cz in [-0.5, 0.5]:
 				for cy in [-0.15, 0.15]:
@@ -1673,7 +1767,16 @@ func update_rig(dt: float) -> void:
 				an_k = an_k.lerp(an_c, minf(1.0, up_r * 3.0))
 				pole_s = pole_s.lerp(hip_s + dcha * (sgn * 3.0) + atras * 0.8 + Vector3(0, 1.6, 0), up_r)
 			var kk := Movimientos.tumbar(s + "_rodilla", pb)
-			var an := an_pl.lerp(an_k, kk) + Vector3(0, sin(PI * kk) * 0.6, 0)
+			if subiendo:
+				kk = Movimientos.levantar("abajo_" + s + "_rodilla", pb)
+			if lev_up != null:
+				# boca arriba: de las piernas estiradas hacia delante (talón en el suelo) a los pies metidos bajo el cuerpo
+				var w_p := Movimientos.levantar("arriba_pies", q_up)
+				var hip_g := Vector3(hip_s.x, gy_s, hip_s.z)
+				an_k = hip_g - atras * 2.35 + Vector3(0, 0.42, 0)
+				kk = 1.0 - w_p
+				pole_s = hip_s + Vector3(0, 3.0, 0) - atras * 3.0
+			var an := an_pl.lerp(an_k, kk) + Vector3(0, sin(PI * kk) * (0.6 if lev_up == null else 0.35), 0)
 			# el pie: plano (plantado) -> de puntillas / con el empeine en el suelo
 			var fb_k := Basis(Vector3.UP, yaw) * Basis(Vector3.RIGHT, th)
 			var q_pie := Quaternion(fc_pl.basis.orthonormalized()).slerp(Quaternion(fb_k.orthonormalized()), kk)
@@ -1703,8 +1806,15 @@ func update_rig(dt: float) -> void:
 		if over_head:
 			sup_neck = 0.55
 			sup_waist = 0.15
-		waistP += Movimientos.tumbar("cintura_p", pb) * (1 - rlv) + sup_waist * rlv * lay
-		neckP += Movimientos.tumbar("cuello_p", pb) * (1 - rlv) + sup_neck * rlv * lay
+		if lev_up != null:
+			waistP += Movimientos.levantar("arriba_cintura_p", q_up)
+			neckP += Movimientos.levantar("arriba_cuello_p", q_up)
+		elif subiendo:
+			waistP += Movimientos.levantar("abajo_cintura_p", pb)
+			neckP += Movimientos.levantar("abajo_cuello_p", pb)
+		else:
+			waistP += Movimientos.tumbar("cintura_p", pb) * (1 - rlv) + sup_waist * rlv * lay
+			neckP += Movimientos.tumbar("cuello_p", pb) * (1 - rlv) + sup_neck * rlv * lay
 		# a mitad del giro la cabeza se mantiene mirando hacia la mira
 		neckY -= sin(PI * rlv) * 0.6 * side
 		rl = rlv
@@ -1833,7 +1943,7 @@ func update_rig(dt: float) -> void:
 		# (muelle críticamente amortiguado: la cadera baja y sube sin tirones; antes la bajada era casi instantánea y
 		# corriendo daba un golpe en cada apoyo)
 		var obj_d := clampf(need, 0, 0.6)
-		var w_d := 17.0 if obj_d > pelvis_drop else 11.0
+		var w_d := 32.0 if obj_d > pelvis_drop else 11.0
 		pelvis_drop_v += (w_d * w_d * (obj_d - pelvis_drop) - 2.0 * w_d * pelvis_drop_v) * dt
 		pelvis_drop += pelvis_drop_v * dt
 		if pelvis_drop < 0.0:
@@ -2729,6 +2839,26 @@ func update_rig(dt: float) -> void:
 
 	## ------------------------------------------------ cuerpo a tierra: manos al suelo, antebrazos apoyados, reptar
 	var hands_down := clampf((pb - 0.3) / 0.3, 0, 1) * (1 - rl_now)
+	# levantándose (Movimientos.LEVANTAR): boca abajo, las manos empujan el suelo debajo de los hombros (flexión) y se
+	# sueltan al adelantar el pie; boca arriba, la derecha apoyada detrás de la cadera y la izquierda en la rodilla
+	var sube_h: bool = pb > 0.001 and L.stance != 2
+	var lev_h = L.get("levanta_arriba") if sube_h else null
+	if lev_h != null:
+		hands_down = 0.0
+		var q_h := 1.0 - pb
+		var w_at := Movimientos.levantar("arriba_mano_atras", q_h)
+		var w_ro := Movimientos.levantar("arriba_mano_rodilla", q_h)
+		if right_free and w_at > 0.001:
+			var pel := (P.LowerTorso as Node3D).global_position
+			var pm := pel - Rbx.look(root_cf) * 0.75 + Rbx.right(root_cf) * 0.6
+			var gm: float = ground(pm)[0]
+			hand_ik.R = {"pos": Vector3(pm.x, gm + 0.2, pm.z), "pole": (chest_yaw_base * Rbx.cf(1.6, 0.4, 1.2)).origin, "w": w_at}
+			right_free = false
+		if left_free and w_ro > 0.001:
+			hand_ik.L = {"pos": ((P.LeftUpperLeg as Node3D).global_transform * Rbx.cf(0, -0.55, -0.35)).origin, "pole": (chest_yaw_base * Rbx.cf(-1.6, -0.6, 0.5)).origin, "w": w_ro}
+			left_free = false
+	elif sube_h:
+		hands_down = Movimientos.levantar("abajo_manos", pb) * (1 - rl_now)
 	# boca arriba sin arma: manos sobre el abdomen (con arma, las manos siguen al arma)
 	if rl_now > 0.5:
 		for s in ["L", "R"]:
@@ -2747,6 +2877,8 @@ func update_rig(dt: float) -> void:
 				var off := sin(crawl + (0.0 if s == "L" else PI)) * 0.5 * ca2
 				# la mano nunca vuelve por debajo del pecho: se queda delante de los hombros
 				var reach2 := (-1.05 - off * 0.7) if pb > 0.95 else -0.85
+				if sube_h:
+					reach2 = Movimientos.levantar("abajo_manos_z", pb)
 				var lat := 0.62 + 0.3 * clampf((reach2 + 1.0) / 0.3, 0, 1)
 				var base3 := (chest_yaw_base * Rbx.cf(sgn * lat, 0, reach2)).origin
 				var gy3: float = ground(base3)[0]

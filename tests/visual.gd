@@ -39,6 +39,9 @@ const ESC := {
 	# 2026-11-02: marcha agachado y transiciones (andar -> correr -> andar -> parar)
 	"agachado_andar": [Vector3(-100, 3.2, 100), 0.0, 5.0, [[0.2, KEY_C, true], [0.25, KEY_C, false], [1.0, KEY_W, true]]],
 	"agachado_correr": [Vector3(-100, 3.2, 100), 0.0, 5.0, [[0.2, KEY_C, true], [0.25, KEY_C, false], [1.0, KEY_W, true], [1.0, KEY_SHIFT, true]]],
+	"trepar_rifle": [Vector3(0, 3.2, -15), 0.0, 6.0, [[1.4, KEY_W, true], [1.4, KEY_SHIFT, true], [2.05, KEY_SPACE, true], [2.1, KEY_SPACE, false]]],
+	"levantarse_boca_arriba": [Vector3(-100, 3.2, 100), 0.0, 8.0, [[0.2, KEY_Z, true], [0.25, KEY_Z, false], [4.6, KEY_SPACE, true], [4.65, KEY_SPACE, false], [6.2, KEY_SPACE, true], [6.25, KEY_SPACE, false]]],
+	"levantarse_boca_abajo": [Vector3(-100, 3.2, 100), 0.0, 7.0, [[0.2, KEY_Z, true], [0.25, KEY_Z, false], [2.6, KEY_SPACE, true], [2.65, KEY_SPACE, false], [4.4, KEY_SPACE, true], [4.45, KEY_SPACE, false]]],
 	"salto_parado": [Vector3(-100, 3.2, 100), 0.0, 3.5, [[0.8, KEY_SPACE, true], [0.85, KEY_SPACE, false], [2.2, KEY_SPACE, true], [2.25, KEY_SPACE, false]]],
 	"salto_correr": [Vector3(-100, 3.2, 100), 0.0, 4.5, [[0.3, KEY_W, true], [0.3, KEY_SHIFT, true], [1.6, KEY_SPACE, true], [1.65, KEY_SPACE, false], [3.0, KEY_SPACE, true], [3.05, KEY_SPACE, false]]],
 	"transiciones": [Vector3(-100, 3.2, 100), 0.0, 7.0, [[0.3, KEY_W, true], [1.8, KEY_SHIFT, true], [3.6, KEY_SHIFT, false], [5.0, KEY_W, false]]],
@@ -115,7 +118,7 @@ func _process(dt: float) -> void:
 	cam.current = not OS.get_cmdline_user_args().has("--camjuego")
 	if not cam.current:
 		j.camara.current = true
-	var armas_esc := {"recoger_pistola": 0, "boca_arriba_rifle": 1, "pistola_correr": 0, "bate_correr": 3, "pistola_andar": 0, "correr_rifle": 1, "andar_pistola": 0, "tumbado_rifle": 1, "cuchillo_correr": 2, "strafe_rifle": 1, "strafe_pistola": 0, "strafe_rifle_apunta": 1, "pared_rifle": 1, "pared_pistola": 0, "tiro_campo": 1}
+	var armas_esc := {"recoger_pistola": 0, "boca_arriba_rifle": 1, "pistola_correr": 0, "bate_correr": 3, "pistola_andar": 0, "correr_rifle": 1, "andar_pistola": 0, "tumbado_rifle": 1, "cuchillo_correr": 2, "strafe_rifle": 1, "strafe_pistola": 0, "strafe_rifle_apunta": 1, "pared_rifle": 1, "pared_pistola": 0, "tiro_campo": 1, "trepar_rifle": 1}
 	if armas_esc.has(esc) and t > 0.1 and j.arsenal.equipado == "" and j.arsenal.switching == null and not get_meta("eq", false):
 		set_meta("eq", true)
 		j.arsenal.select_slot(armas_esc[esc])
@@ -136,6 +139,11 @@ func _process(dt: float) -> void:
 		j.aiming = t > 3.0 and t < 3.6 or t > 4.8
 	if OS.get_cmdline_user_args().has("--logcam") and Engine.get_process_frames() % 15 == 0:
 		print("CAM t=%.2f z=%.3f fov=%.1f dist=%.2f vel=%.1f ws=%.1f md=%.1f camy=%.3f camrot=%s" % [t, j.global_position.z, j.camara.fov, j.cam_dist, Vector2(j.vel_real.x, j.vel_real.z).length(), j.walk_speed, j.move_direction.length(), j.camara.global_position.y, str(j.camara.global_rotation)])
+	if esc == "levantarse_boca_arriba" and t > 1.8 and t < 4.4:
+		# mira hacia atrás para quedar boca arriba
+		j.yaw = PI
+	if OS.get_cmdline_user_args().has("--logarma") and Engine.get_process_frames() % 6 == 0:
+		print("ARMA t=%.2f equipado=%s switching=%s vault=%s rearmar=%s" % [t, j.arsenal.equipado, str(j.arsenal.switching != null), str(j.vaulting != null), j.arsenal.rearmar])
 	if esc == "tiro_campo":
 		j.aiming = t > 1.5
 		j.pitch = -0.08

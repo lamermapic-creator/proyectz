@@ -327,3 +327,68 @@ COLGADO = {
 def colgado(canal, phi):
 	v = per(COLGADO[canal], phi)
 	return R(v) if ("cintura" in canal or "cuello" in canal) else v
+
+
+# ================================================================= RITMO DE LOS PASOS (2026-11-02, v2)
+# Los pasos los marca un reloj de la marcha (φ avanza con la distancia recorrida: dφ = velocidad / zancada · dt), así
+# las piernas SIEMPRE se alternan: apoya la izquierda en φ = 0,25 y la derecha en φ = 0,75, y cada pie está en el aire
+# la "fraccion" del ciclo antes de apoyar (andando 0,40: hay apoyo doble; corriendo 0,62: hay vuelo, los dos pies
+# en el aire un momento, pero nunca a la vez hacia delante). Zancada = distancia de un ciclo (dos pasos), en studs,
+# según la velocidad (studs/s). Valores de personas reales a escala del personaje (1,76 m; 1 stud = 0,31 m).
+RITMO = {
+	"andar_zancada": [(0.0, 1.6), (2.0, 2.84), (4.0, 4.08), (6.5, 5.63), (9.0, 7.2)],
+	"correr_zancada": [(7.0, 7.0), (10.0, 8.2), (14.0, 9.8), (18.5, 11.6), (22.0, 13.0)],
+	"agachado_zancada": [(0.0, 1.4), (2.0, 2.6), (3.5, 3.6), (6.0, 5.1), (9.0, 6.6)],
+	"andar_fraccion": 0.40,
+	"correr_fraccion": 0.70,
+	"agachado_fraccion": 0.42,
+}
+
+
+def zancada(tipo, v):
+	ks = RITMO[tipo + "_zancada"]
+	if v <= ks[0][0]:
+		return ks[0][1] + (v - ks[0][0]) * (ks[1][1] - ks[0][1]) / (ks[1][0] - ks[0][0])
+	for i in range(len(ks) - 1):
+		if v <= ks[i + 1][0]:
+			t = (v - ks[i][0]) / (ks[i + 1][0] - ks[i][0])
+			return ks[i][1] + t * (ks[i + 1][1] - ks[i][1])
+	a, b = ks[-2], ks[-1]
+	return b[1] + (v - b[0]) * (b[1] - a[1]) / (b[0] - a[0])
+
+
+# ================================================================= LEVANTARSE del suelo (2026-11-02)
+# BOCA ABAJO (por pb, de 1 tumbado a 0 de pie): flexión (los brazos estiran, el pecho sube, la cadera aún en el
+# suelo) -> a cuatro patas (las rodillas debajo de la cadera) -> adelanta el pie derecho -> se incorpora apoyándose en
+# la rodilla -> el izquierdo -> de pie. "manos" = peso de las manos en el suelo; "manos_z" = dónde (respecto al pecho,
+# < 0 = delante; en la flexión, debajo de los hombros).
+# BOCA ARRIBA (por q = 1 - pb; el juego gira el cuerpo 180°: la cabeza queda detrás y los pies delante): se sienta
+# (con la mano derecha apoyada detrás y la cabeza hacia las rodillas), mete los pies, echa el peso adelante sobre los
+# pies y se levanta. "z" = cuánto queda la cadera detrás de los pies (fracción de lo que el juego avanzó el cuerpo);
+# "pies" = de piernas estiradas a pies metidos bajo el cuerpo.
+LEVANTAR = {
+	"abajo_inclina": [(0.0, 0.0), (0.25, -14.0), (0.42, -20.0), (0.58, -34.0), (0.72, -62.0), (0.88, -84.0), (1.0, -88.0)],
+	"abajo_baja": [(0.0, 0.0), (0.4, 0.03), (0.58, 0.08), (0.72, 0.45), (0.88, 0.95), (1.0, 1.0)],
+	"abajo_L_rodilla": [(0.0, 0.0), (0.28, 0.0), (0.36, 0.5), (0.45, 1.0), (1.0, 1.0)],
+	"abajo_R_rodilla": [(0.0, 0.0), (0.45, 0.0), (0.52, 0.5), (0.6, 1.0), (1.0, 1.0)],
+	"abajo_cintura_p": [(0.0, 0.0), (0.25, -10.0), (0.42, -16.0), (0.58, -14.0), (0.72, 4.0), (0.88, 34.0), (1.0, 10.0)],
+	"abajo_cuello_p": [(0.0, 0.0), (0.25, 6.0), (0.42, 12.0), (0.58, 18.0), (0.72, 30.0), (0.88, 40.0), (1.0, 72.0)],
+	"abajo_manos": [(0.0, 0.0), (0.42, 0.0), (0.5, 0.4), (0.6, 1.0), (1.0, 1.0)],
+	"abajo_manos_z": [(0.0, -0.8), (0.6, -0.8), (0.72, -0.6), (0.88, -0.42), (1.0, -1.05)],
+	"arriba_inclina": [(0.0, 88.0), (0.25, 40.0), (0.4, 12.0), (0.55, -20.0), (0.7, -28.0), (0.85, -14.0), (1.0, 0.0)],
+	"arriba_baja": [(0.0, 1.0), (0.4, 1.0), (0.55, 0.62), (0.7, 0.3), (0.85, 0.08), (1.0, 0.0)],
+	"arriba_z": [(0.0, 1.0), (0.4, 1.0), (0.55, 0.55), (0.7, 0.2), (0.85, 0.05), (1.0, 0.0)],
+	"arriba_pies": [(0.0, 0.0), (0.1, 0.06), (0.3, 0.88), (0.38, 1.0), (1.0, 1.0)],
+	"arriba_cintura_p": [(0.0, 0.0), (0.25, -30.0), (0.4, -38.0), (0.55, -30.0), (0.7, -22.0), (0.85, -10.0), (1.0, 0.0)],
+	"arriba_cuello_p": [(0.0, -30.0), (0.25, -10.0), (0.4, 5.0), (0.7, 10.0), (1.0, 0.0)],
+	"arriba_mano_atras": [(0.0, 0.0), (0.12, 0.6), (0.25, 1.0), (0.48, 1.0), (0.6, 0.0), (1.0, 0.0)],
+	"arriba_mano_rodilla": [(0.0, 0.0), (0.3, 0.0), (0.42, 0.8), (0.65, 0.8), (0.82, 0.0), (1.0, 0.0)],
+}
+LEVANTAR_GRADOS = lambda c: c.endswith("inclina") or c.endswith("_p")
+
+
+def levantar(canal, x):
+	v = cur(LEVANTAR[canal], x)
+	if canal.endswith(("_rodilla", "baja", "manos", "_z", "pies", "mano_atras", "mano_rodilla")) and not canal.endswith("manos_z"):
+		v = max(0.0, min(1.0, v))
+	return R(v) if LEVANTAR_GRADOS(canal) else v
