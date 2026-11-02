@@ -1086,6 +1086,35 @@ func _arma_fuera_del_cuerpo(h: Transform3D, tool: String, pelvis_cf: Transform3D
 	return h
 
 
+## recorrido por claves (sacar/guardar el arma): curva suave (cúbica) por las posiciones y giros de las claves
+## [[u, Transform3D], ...] (u de 0 a 1, en orden)
+static func _por_claves(k: Array, u: float) -> Transform3D:
+	var n := k.size()
+	if u <= float(k[0][0]):
+		return k[0][1]
+	for i in n - 1:
+		var u0: float = k[i][0]
+		var u1: float = k[i + 1][0]
+		if u > u1 and i < n - 2:
+			continue
+		var a: Transform3D = k[i][1]
+		var b: Transform3D = k[i + 1][1]
+		var pa: Transform3D = k[maxi(i - 1, 0)][1]
+		var pb2: Transform3D = k[mini(i + 2, n - 1)][1]
+		var upa: float = k[maxi(i - 1, 0)][0] if i > 0 else u0 - (u1 - u0)
+		var upb: float = k[mini(i + 2, n - 1)][0] if i + 2 < n else u1 + (u1 - u0)
+		var s := clampf((u - u0) / maxf(1e-4, u1 - u0), 0.0, 1.0)
+		var d := u1 - u0
+		var pos := a.origin.cubic_interpolate_in_time(b.origin, pa.origin, pb2.origin, s, d, upa - u0, upb - u0)
+		var qa := Quaternion(a.basis.orthonormalized())
+		var qb := Quaternion(b.basis.orthonormalized())
+		var qpa := Quaternion(pa.basis.orthonormalized())
+		var qpb := Quaternion(pb2.basis.orthonormalized())
+		var q := qa.spherical_cubic_interpolate_in_time(qb, qpa, qpb, s, d, upa - u0, upb - u0)
+		return Transform3D(Basis(q.normalized()), pos)
+	return k[n - 1][1]
+
+
 ## armas de fuego: puntos de muestra del modelo (centro de cada pieza y, en las largas, sus dos extremos) en el marco
 ## de la empuñadura, que es el del propio modelo. Se calculan una vez por arma
 var _puntos_arma_cache := {}
@@ -2279,14 +2308,27 @@ func update_rig(dt: float) -> void:
 		if spot_part and not D.is_empty():
 			var holster_w: Transform3D = spot_part.global_transform * spot.CF
 			var mid_w: Transform3D = chest_yaw_base * D.mid
+			# recorrido por claves (armas largas a la espalda): respecto al pecho, para que vaya siempre por fuera
+			var camino_w: Array = []
+			for kc in D.get("camino", []):
+				camino_w.append([kc[0], (P.UpperTorso as Node3D).global_transform * (kc[1] as Transform3D)])
 			if holster_t != null:
 				draw_st = null
 				var back := 0.72
 				if holster_t < back:
 					var u := Rbx.smooth(clampf(holster_t / back, 0, 1))
-					handle_cf = handle_cf.interpolate_with(mid_w, u).interpolate_with(mid_w.interpolate_with(holster_w, u), u)
+					if camino_w.size() > 0:
+						# por el mismo camino que al sacarla, al revés
+						var kk: Array = [[0.0, handle_cf]]
+						for i in range(camino_w.size() - 1, -1, -1):
+							kk.append([1.0 - float(camino_w[i][0]), camino_w[i][1]])
+						kk.append([1.0, holster_w])
+						handle_cf = _por_claves(kk, u)
+						fuera_saca = 1.0 - Rbx.smooth(clampf(u / 0.18, 0, 1))
+					else:
+						handle_cf = handle_cf.interpolate_with(mid_w, u).interpolate_with(mid_w.interpolate_with(holster_w, u), u)
+						fuera_saca = 1.0 - Rbx.smooth(clampf(u / 0.5, 0, 1))
 					support_w = 1.0 - Rbx.smooth(clampf(u / 0.35, 0, 1))
-					fuera_saca = 1.0 - Rbx.smooth(clampf(u / 0.5, 0, 1))
 				else:
 					# ya enfundada: la mano vuelve a su sitio
 					var u2 := Rbx.smooth(clampf((holster_t - back) / (1 - back), 0, 1))
@@ -2310,9 +2352,16 @@ func update_rig(dt: float) -> void:
 					else:
 						# la saca y la lleva a la posición de uso
 						var u3 := Rbx.smooth((t3 - float(D.reach)) / (1.0 - float(D.reach)))
-						handle_cf = holster_w.interpolate_with(mid_w, u3).interpolate_with(mid_w.interpolate_with(handle_cf, u3), u3)
+						if camino_w.size() > 0:
+							var kk: Array = [[0.0, holster_w]]
+							kk.append_array(camino_w)
+							kk.append([1.0, handle_cf])
+							handle_cf = _por_claves(kk, u3)
+							fuera_saca = Rbx.smooth(clampf((u3 - 0.8) / 0.18, 0, 1))
+						else:
+							handle_cf = holster_w.interpolate_with(mid_w, u3).interpolate_with(mid_w.interpolate_with(handle_cf, u3), u3)
+							fuera_saca = Rbx.smooth(clampf((u3 - 0.1) / 0.45, 0, 1))
 						support_w = Rbx.smooth(clampf((u3 - 0.7) / 0.3, 0, 1))
-						fuera_saca = Rbx.smooth(clampf((u3 - 0.1) / 0.45, 0, 1))
 
 		# apuntando o disparando, el cañón se orienta hacia lo que marca la mira (la cámara va al hombro,
 		# así que sin esto el arma iba paralela a la mira y la bala salía con otra inclinación). La bala
@@ -2345,7 +2394,7 @@ func update_rig(dt: float) -> void:
 		var fuera_t := 1.0 if kind == "Gun" and tool_shown and mdl and pb < 0.5 and mt == null else 0.0
 		if draw_st != null or holster_t != null:
 			fuera_t *= fuera_saca
-			fuera_w = minf(Rbx.damp(fuera_w, fuera_t, 8.0, dt), fuera_t)
+			fuera_w = fuera_t   # (fuera_saca ya es suave)
 		else:
 			fuera_w = Rbx.damp(fuera_w, fuera_t, 8.0, dt)
 		if kind == "Gun" and mdl and fuera_w > 0.001:
@@ -2730,7 +2779,8 @@ func update_rig(dt: float) -> void:
 			if mel_t >= 0.0:
 				arm_rate = 60.0
 			elif draw_st != null or L.holster != null:
-				arm_rate = 30.0
+				# (la derecha lleva el arma: con retraso, el arma larga atajaba por dentro del pecho)
+				arm_rate = 60.0 if s == "R" else 30.0
 		smooth_j(Lm.top, s + "Sh", arm_rate, dt)
 		smooth_j(Lm.mid, s + "El", arm_rate, dt)
 		smooth_j(Lm.fin, s + "Wr", arm_rate if tool != "" else 9.0, dt)

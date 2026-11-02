@@ -33,6 +33,15 @@ const Z := Vector3.ZERO
 
 static var _cache := {}
 
+## escala de cada modelo respecto a como está dibujado (2026-11-01, KangooG: "la pistola es muy grande"): la pistola
+## medía ~1 stud (31 cm); al 65 % mide ~20 cm, como una real al lado de un superviviente de 1,76 m. Se escalan las
+## piezas, los puntos de referencia y la empuñadura (Armas.grip), todo alrededor del Handle (la mano no se mueve)
+const ESCALA := {"Pistola": 0.65}
+
+
+static func escala(nombre: String) -> float:
+	return ESCALA.get(nombre, 1.0)
+
 
 static func piezas(nombre: String) -> Array:
 	if _cache.has(nombre):
@@ -50,12 +59,26 @@ static func piezas(nombre: String) -> Array:
 		"Bate": _bate(a)
 		"Hacha": _hacha(a)
 		"Palanca": _palanca(a)
+	var k := escala(nombre)
+	if k != 1.0:
+		for d in a:
+			d[2] = (d[2] as Vector3) * k
+			d[3] = (d[3] as Vector3) * k
 	_cache[nombre] = a
 	return a
 
 
 ## puntos de referencia (Attachments), relativos al Handle. "Grupo/Nombre" = dentro de un grupo móvil
 static func puntos(nombre: String) -> Dictionary:
+	var pts := _puntos(nombre)
+	var k := escala(nombre)
+	if k != 1.0:
+		for n in pts:
+			pts[n] = (pts[n] as Vector3) * k
+	return pts
+
+
+static func _puntos(nombre: String) -> Dictionary:
 	match nombre:
 		"Pistola":
 			return {"SupportGrip": Vector3(-0.132, -0.033, 0.033), "Muzzle": Vector3(0, 0.37, -0.805),

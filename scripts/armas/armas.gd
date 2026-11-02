@@ -146,7 +146,7 @@ static func holster(nombre: String) -> Dictionary:
 ## Tool.Grip (GripPos con orientación identidad en todas las armas)
 static func grip(nombre: String) -> Transform3D:
 	match nombre:
-		"Pistola": return cf(0, -0.066, 0.066)
+		"Pistola": return cf(0, -0.066 * ModelosArmas.escala("Pistola"), 0.066 * ModelosArmas.escala("Pistola"))
 		"Rifle": return cf(0, -0.049, 0.049)
 		"Machete": return cf(0, 0, 0.05)
 		"Bate": return cf(0, 0, 0.18)
@@ -257,7 +257,16 @@ static func pose_holster() -> Transform3D:
 static func draw(nombre: String) -> Dictionary:
 	match nombre:
 		"Pistola": return {"reach": 0.35, "mid": cf(0.75, -0.5, -0.45) * ang(-70, 0, 0)}
-		"Rifle": return {"reach": 0.4, "mid": cf(1.05, 0.15, 0.2) * ang(-10, 70, -30)}
+		# rifle (y escopeta y fusil): de la espalda sale por el costado derecho, por FUERA del cuerpo (2026-11-01, "el
+		# arma larga atraviesa el pecho al desenfundar"): primero se pone vertical detrás del hombro, baja el cañón
+		# hacia delante junto al costado (el cargador hacia delante, nunca hacia el cuerpo; culata atrás) y, ya delante, se endereza hacia la posición de uso.
+		# "camino" = claves [u, Handle respecto al UpperTorso] entre la funda (u = 0) y la posición de uso (u = 1);
+		# al guardarla se recorre al revés
+		"Rifle": return {"reach": 0.4, "mid": cf(1.05, 0.15, 0.2) * ang(-10, 70, -30),
+			"camino": [
+				[0.3, at(Vector3(1.4, -0.45, 0.75), Vector3(0, 1, 0.2), Vector3(0, 0, 1))],
+				[0.6, at(Vector3(1.4, -0.35, -0.3), Vector3(0, 0.45, -0.89), Vector3(0, 0.89, 0.45))],
+				[0.82, at(Vector3(0.85, -0.3, -1.05), Vector3(-0.35, -0.35, -0.87), Vector3(0.3, 0.9, -0.3))]]}
 		"Cuchillo": return {"reach": 0.42, "mid": cf(-0.1, -0.2, -0.75) * ang(-40, 0, 0)}
 		"Bate": return {"reach": 0.36, "mid": cf(0.85, 1.5, 0.05) * ang(80, 0, 0)}
 		"Machete": return {"reach": 0.36, "mid": cf(0.85, 1.45, 0.05) * ang(80, 0, 0)}

@@ -122,6 +122,10 @@ func ahora() -> float:
 
 func _ready() -> void:
 	add_to_group("jugador") # así lo encuentran los zombis (y sus ruidos llevan esta marca)
+	# el superviviente hecho en Blender (el Rig de la escena se construye con el muñeco clásico; se rehace aquí, antes
+	# de que el animador lea sus piezas)
+	rig.modelo = "superviviente"
+	rig.construir()
 	motion_mode = MOTION_MODE_FLOATING
 	camara.top_level = true
 	yaw = rotation.y

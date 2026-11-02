@@ -309,6 +309,12 @@ Freesound (sonidos), Poly Haven y ambientCG (texturas/HDRI), Quaternius y Kenney
 - Las armas de fuego no atraviesan el torso: `_arma_de_fuego_fuera` (empuja HACIA DELANTE lo que quede dentro del
   pecho/barriga, con el pecho final del fotograma; peso `fuera_w`). Comprobar con `tests/combate.gd --choque_arma`
   (y `--pitch=`); vista cercana con `--video --cam_az=<grados>`.
+- Sacar/guardar armas largas: `Armas.draw(...).camino` (claves [u, Handle respecto al UpperTorso], por fuera del
+  cuerpo; al guardar, al revés) + `Animador._por_claves`. Comprobar con `--choque_arma --todo_cuerpo` (`--modo=cambiar`).
+- **Modelo del superviviente en Blender** (2026-11-01): `animaciones/blender/personaje/personaje.py` →
+  `modelos/superviviente.glb` (ver `LEEME.md` de esa carpeta). `RigPersonaje.modelo = "superviviente"` (jugador y
+  menú; los zombis y maniquíes siguen con el muñeco por código). Las cajas de impacto siguen siendo `PIEZAS`.
+- Pistola al 65 % (`ModelosArmas.ESCALA`, también escala sus puntos y `Armas.grip`).
 - Pendiente: recarga, sacar/guardar y golpes (grupo 1, parte 2) y los grupos 2-4.
 
 ## Ruido y zombis v0 (2026-10-23, a pedido de Juan) — guía completa: `docs/RUIDO_Y_ZOMBIS.md`

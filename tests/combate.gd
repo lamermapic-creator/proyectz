@@ -101,6 +101,20 @@ func _process(dt: float) -> void:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--pitch="):
 			j.pitch = float(arg.split("=")[1])
+	if OS.get_cmdline_user_args().has("--info_arma") and _una("info", t > 1.6):
+		var an3: Animador = j.get_node("Animador")
+		var pts: Array = an3._puntos_arma(a.modelo_mano, a.equipado)
+		var zmin := 99.0
+		var zmax := -99.0
+		var ymin := 99.0
+		var ymax := -99.0
+		for p in pts:
+			zmin = minf(zmin, p.z)
+			zmax = maxf(zmax, p.z)
+			ymin = minf(ymin, p.y)
+			ymax = maxf(ymax, p.y)
+		print("INFO_ARMA %s z=[%.2f, %.2f] y=[%.2f, %.2f] torso=%s barriga=%s cuello=%s" % [a.equipado, zmin, zmax, ymin, ymax,
+			j.rig.P.UpperTorso.get_meta("size"), j.rig.P.LowerTorso.get_meta("size"), (j.rig.P.UpperTorso as Node3D).global_transform.affine_inverse() * (j.rig.P.Head as Node3D).global_position])
 	if OS.get_cmdline_user_args().has("--choque_arma") and a.modelo_mano and a.modelo_mano.visible and Armas.WEAPONS.get(a.equipado, {}).get("Kind", "") == "Gun":
 		var an2: Animador = j.get_node("Animador")
 		var peor2 := ""
@@ -112,14 +126,14 @@ func _process(dt: float) -> void:
 				pts.append(ab.get_endpoint(c))
 			for pl in pts:
 				var pt: Vector3 = (mi as MeshInstance3D).global_transform * (pl as Vector3)
-				for n in ["UpperTorso", "LowerTorso"]:
+				for n in (["UpperTorso", "LowerTorso", "Head", "LeftUpperArm", "LeftUpperLeg", "RightUpperLeg"] if OS.get_cmdline_user_args().has("--todo_cuerpo") else ["UpperTorso", "LowerTorso"]):
 					var nd: Node3D = j.rig.P[n]
 					var sz: Vector3 = nd.get_meta("size")
 					var lp: Vector3 = nd.global_transform.affine_inverse() * pt
 					var pen := minf(minf(sz.x * 0.5 - absf(lp.x), sz.y * 0.5 - absf(lp.y)), sz.z * 0.5 - absf(lp.z))
 					if pen > pmax2:
 						pmax2 = pen
-						peor2 = "%s en %s" % [mi.name, n]
+						peor2 = "%s en %s lp=(%.2f,%.2f,%.2f) h=%s" % [mi.name, n, lp.x, lp.y, lp.z, (j.rig.P.UpperTorso as Node3D).global_transform.affine_inverse() * a.modelo_mano.global_position]
 		if pmax2 > 0.03:
 			var est := "AIM" if j.aiming else ("HIP" if j.firing or t - an2.last_shot_t < 0.8 else "LOW")
 			if an2.reload_st != null:

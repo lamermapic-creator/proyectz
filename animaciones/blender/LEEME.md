@@ -39,3 +39,20 @@ pose actual → pose recogida → pose final.
   la inclinación, la cabeza y hacia dónde van los codos. `viejo()` reproduce las posturas de antes, para comparar.
 - Ver: `blender -b pie_Rifle.blend -P ver_pie.py -- Rifle nuevo "AIM,0;LOW,0" "-40,0.1,6.5;-95,0.05,6.5" prueba`
 - Pasar al juego: `python3 a_gd_pie.py diseno_pie.py ../../scripts/jugador/posturas_pie.gd` (`PosturasPie`).
+
+## El superviviente (modelo del personaje, 2026-11-01)
+- `personaje/personaje.py`: **el modelo entero, pieza a pieza** (~200 piezas biseladas, estilo muñeco cuadrado R15):
+  gorro de lana, barba, pañuelo, chaqueta, chaleco porta-placas con portacargadores, radio y vaina del cuchillo,
+  guantes con dedos, cinturón con bolsas, pantalón de carga con rodilleras, funda de la pistola en el muslo derecho,
+  botas con cordones y mochila con esterilla y botella. Todo en coordenadas de Godot (studs, posición de reposo).
+  Cada pieza del R15 es un vacío con su nombre; al exportar las mallas se juntan por pieza y material.
+- Exportar al juego (Godot lo importa solo):
+```
+blender -b -P personaje.py -- --nuevo --glb=../../../modelos/superviviente.glb
+```
+- Renders para revisar (5 vistas): `blender -b -P personaje.py -- --nuevo --render=prueba` (`--viejo` = el muñeco
+  de antes, leído de `rig_personaje.gd`, para comparar). `--blend=x.blend` guarda el archivo para abrirlo en Blender.
+- En el juego: `RigPersonaje.modelo = "superviviente"` (el jugador y el menú). Las piezas, sus tamaños (cajas de
+  impacto) y el ragdoll no cambian. Los zombis siguen con el muñeco clásico (lo tiñen ellos).
+- Si se mueve el equipo, respetar dónde van las armas enfundadas (`Armas.holster`): pistola en el muslo derecho,
+  cuchillo en el pecho a la izquierda, rifle a la espalda detrás de la mochila (z ≈ 0,97), bate/machete en la mochila.

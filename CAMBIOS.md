@@ -13,6 +13,33 @@ en el mismo commit que el cambio. Formato:
 
 ---
 
+## 2026-11-01 (8) — Personaje nuevo hecho en Blender y pistola a tamaño real (KangooG)
+- KangooG: "haz el modelo del personaje en Blender, el triple de mejorado manteniendo todo el arte" (más detalle,
+  mismo estilo y "que parezca otro personaje"; guantes con dedos marcados).
+- **Superviviente nuevo** (`animaciones/blender/personaje/personaje.py` → `modelos/superviviente.glb`): mismo estilo
+  de muñeco cuadrado R15 con bordes biselados y ~200 piezas (antes 48): gorro de lana, barba, ojos con iris, pañuelo
+  al cuello, chaqueta gris azulada, chaleco porta-placas coyote (portacargadores, radio con antena, vaina del
+  cuchillo, parche naranja), coderas, guantes con dedos y nudillos, cinturón con bolsas (botiquín, cantimplora),
+  pantalón de carga verde oliva con rodilleras, funda de pistola en el muslo derecho, botas con cordones y puntera y
+  mochila con esterilla, botella y mosquetón. Las mallas se juntan por pieza y material (~45 mallas).
+- `RigPersonaje.modelo` ("" = el muñeco clásico por código; "superviviente" = el de Blender). Lo usan el jugador
+  (`Jugador._ready` rehace el rig) y el menú principal. Mismo esqueleto, mismas piezas y tamaños (cajas de impacto,
+  ragdoll, animaciones). **Los zombis no cambian** (siguen con el muñeco clásico y lo tiñen en `Zombi._aspecto`).
+- **Pistola al 65 %** (`ModelosArmas.ESCALA`): medía ~31 cm al lado de un personaje de 1,76 m; ahora ~20 cm, como una
+  real. Se escalan las piezas, los puntos (boca, apoyo de la izquierda, cargador) y la empuñadura (`Armas.grip`).
+
+## 2026-11-01 (7) — El arma larga ya no atraviesa el pecho al sacarla ni al guardarla (KangooG)
+- KangooG: "el arma larga atraviesa el pecho cuando se desenfunda". El rifle (y escopeta y fusil) iba de la espalda a
+  la posición de uso girando por dentro del pecho (hasta 0,37 studs), y el brazo, que lo sigue con suavizado, atajaba
+  aún más por dentro.
+- Recorrido nuevo por claves (`Armas.draw("Rifle").camino`, respecto al UpperTorso): sale de la espalda por el costado
+  derecho, vertical detrás del hombro, baja el cañón hacia delante junto al costado (cargador hacia delante, culata
+  atrás) y ya delante se endereza hasta la posición de uso. Al guardarla, el mismo camino al revés. Curva suave
+  (cúbica) por las claves: `Animador._por_claves`. Mientras saca/guarda, el brazo derecho sigue al arma sin retraso
+  (`arm_rate` 60). El empuje fuera del torso solo actúa en el último tramo, delante del cuerpo.
+- Medido (`tests/combate.gd --choque_arma --todo_cuerpo`, con `--arma=Escopeta|Francotirador` y `--modo=cambiar`):
+  0 al sacar y al guardar el rifle, la escopeta y el fusil.
+
 ## 2026-11-01 (6) — Las armas de fuego ya no atraviesan el torso (KangooG)
 - KangooG: "el arma atraviesa el torso". Medido con `tests/combate.gd --choque_arma [--pitch=<rad>]` (nuevo: mira
   las piezas del arma contra el pecho y la barriga): la culata del rifle se metía hasta 0,37 studs en el pecho con el

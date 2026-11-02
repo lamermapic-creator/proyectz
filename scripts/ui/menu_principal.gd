@@ -31,6 +31,7 @@ func _ready() -> void:
 	add_child(nivel)
 	# el superviviente, de pie con el rifle
 	rig = RigPersonaje.new()
+	rig.modelo = "superviviente"
 	add_child(rig)
 	rig.position = Vector3(0, 3.1, 0)
 	rig.rotation.y = deg_to_rad(-25)
