@@ -192,9 +192,6 @@ func select_slot(i: int) -> void:
 	if J.moto != null and target != "" and target != equipado and not Armas.en_moto(target):
 		J.notify("En la moto solo puedes usar armas de una mano")
 		return
-	if J.cuesta != null and target != "" and target != equipado and not Armas.en_moto(target):
-		J.notify("En la cuesta solo puedes usar armas de una mano")
-		return
 	# tumbado solo se puede sacar el cuchillo como arma blanca
 	if target != "" and target != equipado and (J.stance == 2 or J.prone_p > 0.001) and Armas.es_larga_blanca(target):
 		J.notify("Tumbado solo puedes usar el arma blanca corta")
@@ -451,7 +448,10 @@ func aim_check() -> Array:
 	var bl := Rbx.look(J.root_cf())
 	var flat_body := Vector3(bl.x, 0, bl.z)
 	if J.moto != null:
-		# en la moto se dispara libre hacia cualquier lado: el torso gira y la bala va a la mira
+		# en la moto (2026-10-30) se dispara en cualquier dirección: hacia la izquierda y detrás por la izquierda
+		# el arma pasa a la mano izquierda (Animador). Solo mientras se cambia de mano no se puede disparar
+		if anim != null and anim.moto_cambiando():
+			return [false, "cambio"]
 		return [true, ""]
 	if flat_cam.length() > 0.05 and flat_body.length() > 0.05:
 		var rel := acos(clampf(flat_cam.normalized().dot(flat_body.normalized()), -1, 1))
@@ -933,14 +933,14 @@ func actualizar(dt: float) -> void:
 		shoot()
 	# disparo pendiente: el arma se está alineando con la mira (si tarda demasiado, se cancela)
 	if pending_shot != null:
-		if now - float(pending_shot) > 0.35 or w.is_empty() or w.Kind != "Gun":
+		if now - float(pending_shot) > (0.75 if J.moto != null else 0.35) or w.is_empty() or w.Kind != "Gun":
 			pending_shot = null
 		elif not (J.firing and w.Auto):
 			shoot()
 	aim_blocked = false
 	if not w.is_empty() and w.Kind == "Gun" and (J.aiming or J.firing or pending_shot != null):
 		var ac := aim_check()
-		aim_blocked = not ac[0]
+		aim_blocked = not ac[0] and ac[1] != "cambio" # (pasar el arma de mano es un instante: sin mira roja)
 		aim_block_reason = ac[1]
 	spread_bloom = maxf(0.0, spread_bloom - dt * (2.0 if J.firing else 7.0))
 	# armas en el suelo: aviso al acercarse

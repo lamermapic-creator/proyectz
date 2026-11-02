@@ -196,7 +196,7 @@ Freesound (sonidos), Poly Haven y ambientCG (texturas/HDRI), Quaternius y Kenney
   (`en_moto`). F = subir/bajar (Arsenal solo recoge si no hay moto cerca).
 - **Animador:** rama `if mt != null` (antes de "cuerpo a tierra"): pelvis sentada, piernas por IK a los estribos (pie
   al suelo parado, pierna por encima del asiento al subir), torso inclinado, manos en los puños (`Moto.puno`), torso
-  girado hacia la cámara al apuntar/golpear (`rel_aim`, límites en `Arsenal.aim_check`).
+  girado hacia la cámara al apuntar/golpear (`rel_aim`; golpes hasta `GOLPE_MOTO_IZQ/DER`, disparos en 360°).
 - **Armas en la moto:** `Armas.en_moto()` (fuego con `UnaMano`, blancas sin `DosManos`).
 - **Armas v0.4:** `scripts/armas/modelos_armas.gd` (`ModelosArmas.piezas/puntos`, ~3x piezas; grupos "Mag", "Pump",
   "Bolt" que se mueven), armas nuevas Revólver, Subfusil, Escopeta (perdigones, cartucho a cartucho), Francotirador
@@ -260,14 +260,56 @@ Freesound (sonidos), Poly Haven y ambientCG (texturas/HDRI), Quaternius y Kenney
   escalón no se toma por cuesta. Arreglado: `_tantear` suponía suelo plano si no había punto de contacto (la moto
   trepaba bloques de 40 cm). `Moto._paso_fisica` recorta cambios de velocidad bruscos con el jugador al lado (el
   jugador, cinemático, la lanzaba por los aires). `Jugador.levantar_moto`: desde el lado en que está el jugador.
-- **Cuestas (35°–60°):** `Jugador._paso_cuesta` (estado `cuesta`, `L.cuesta` para el Animador): trepa con las manos;
-  quieto, la postura sale de la cámara (arriba: tumbado, lado: de costado, abajo: sentado); sentado + W resbala;
-  tumbado + clic der./S repta y cerca de lo alto se asoma; posturas sin gasto (recuperan a la mitad); sin estamina
-  resbala un poco; >60° resbala; solo armas de una mano. Animador: rama `elif cu != null` (pelvis, pies por IK sobre
-  la cuesta) y manos apoyadas (`cu_manos`). Cámara separada de la cuesta (`_cuesta_cam`). Diseño en el doc del
-  proyecto `mecanica-pendientes.md`. Zona en F1.
-- **Pruebas nuevas:** `tests/moto.gd --modo=eyecta --obst=<muro|bloque10..40> --vel=N`, `tests/ragdoll.gd --modo=j_moto`,
-  `tests/recorrido.gd --escenario=cuesta|cuesta_pistola|cuesta_cansado|cuesta_arriba` (`--cuesta` traza, `--cam_lado`).
+- **Cuestas: mecánica de trepar ELIMINADA (2026-10-30, a pedido de KangooG: "demasiado tortuosa, muchos fallos").**
+  Se quitaron `Jugador._paso_cuesta` y todo el estado `cuesta`, la rama de la cuesta del Animador, la tecla C/Espacio
+  de la cuesta, la cámara especial y la zona de F1. Las cuestas vuelven a ser como antes (se suben andando). Quedan
+  arreglos generales que salieron de ella: `Ragdoll._paso_mezcla` (al levantarse ya no salta a mitad de rodar),
+  `_brazo_sin_choque` suave y pies que no se quedan sobre una cuesta muy empinada al replantar (`smooth_j2`/`muelle_*`
+  quedan sin uso). Prueba: `tests/recorrido.gd --escenario=derribo_llano` (auditor de tirones).
+- **Moto, atascos y suspensión (2026-10-29):** la rueda que toca el CANTO de un escalón que puede subir (≤ `_escalon()`,
+  ahora 22-24 cm) rueda por encima (antes la normal del canto, muy inclinada, la paraba: se quedaba a medio subir un
+  bloque de 20 cm). Suspensión visible: `sus_d`/`sus_t` (muelles con amortiguación: peso, baches y aterrizajes por el
+  cambio de velocidad vertical de cada eje, frenar hunde delante, acelerar agacha detrás); `_susp_cf()` mueve el cuerpo
+  (y al piloto) sobre las ruedas, `_susp_ruedas()` desliza las botellas de la horquilla (`ModeloMoto` "Deslizante") y
+  gira el basculante ("Basculante", eje `PIVOTE_BASC`) con los amortiguadores (`ModeloMoto.amortiguador`).
+- **Moto (2026-10-29, 3):** subirse y levantarla solo DE LADO (`Moto.de_lado`). (Lo de limitar el disparo
+  desde la moto quedó sustituido el 2026-10-30: ver "Apuntado libre en la moto".) El motor no empuja más de lo que agarra la
+  rueda (`AGARRE_RUEDA`): cuestas de más de ~40° ya no se suben acelerando. Marcha atrás más fuerte y el piloto aguanta
+  casi todo el peso en cuesta (salía del hueco entre bloques). `_pose_de_pie` busca dónde cabe de pie (antes, tumbada
+  en el hueco, se levantaba con una rueda dentro de un bloque, daba vueltas y atravesaba el suelo);
+  `_no_atravesar_suelo` = red de seguridad. Bajarse marcha atrás la deja en la pata.
+- **Apuntado libre en la moto (2026-10-30; 2026-11-01 con UN SOLO BRAZO y POSES HECHAS EN BLENDER, a pedido de
+  KangooG):** con arma de fuego se apunta y dispara en 360° (detrás incluido) y con cualquier cabeceo, siempre con el
+  brazo DERECHO; la izquierda nunca suelta el manillar. **Las poses salen de Blender** (`animaciones/blender/`, ver su
+  `LEEME.md`): el piloto montado en Blender (`piloto.blend`, a partir de `tests/moto.gd --modo=exportar`), las poses
+  diseñadas en `poses.py` (antebrazo y pistola en la línea de tiro con la muñeca neutra, codo algo flexionado y abajo,
+  cruzando por delante del pecho a la izquierda, por fuera del hombro hacia atrás) y exportadas a
+  `scripts/jugador/poses_moto.gd` (`PosesMoto`, generado: no editar a mano): rejilla de 28 ángulos x 7 cabeceos con
+  las rotaciones de Waist, Neck y del brazo derecho, más la pose RECOGIDA. Animador: `_pose_moto` mezcla la rejilla
+  (`_muestrear`, interpolación esférica) según `rel_aim` (muelle con velocidad y aceleración máximas: `_muelle_lim`,
+  `GIRO_W/VMAX/ACEL`) y la aplica por FK en "aplicar torso, cuello y brazos" (cintura y cuello como giro sobre la pose
+  de conducir; el brazo mezclado con la IK del arma baja por `moto_apunta_k`); la muñeca lleva `moto_corr_q` (≤ 25°)
+  para que el cañón vaya exacto a la mira. Ramas (`moto_rama`): "L" delante/derecha/izquierda cruzando, "B" detrás por
+  encima del hombro derecho; costura detrás a la izquierda (`COSTURA_IZQ`/`COSTURA_ATRAS`): al cruzarla desde el lado
+  cruzado (`moto_cambio`, 0,7-1,3 s según el recorrido, `_dur_cambio`; sin disparar el 70 % del tiempo) curva suave
+  pose actual → RECOGIDA → pose final (`spherical_cubic_interpolate`). La cámara va al hombro que deja ver el brazo
+  (`lado_camara_moto`). Pruebas: `tests/moto.gd --modo=apuntar360 [--mover] [--detalle]` y `--modo=giros`.
+- **Pruebas nuevas:** `tests/moto.gd --modo=fila --vel --lado`, `--modo=levantar_hueco --x --ang`, `--trazav`;
+  `tests/moto.gd --modo=atasco --bloque=0..6 --vel --ang --lado` y `--modo=suspension`;
+  `tests/moto.gd --modo=eyecta --obst=<muro|bloque10..40> --vel=N`, `tests/ragdoll.gd --modo=j_moto`.
+
+## Animaciones hechas en Blender (2026-11-01, a pedido de KangooG: "haz todas las animaciones en Blender")
+- Plan por grupos, en este orden: (1) armas a pie, (2) andar/correr/agacharse, (3) saltos/vallas/cornisas/levantarse,
+  (4) resto de la moto. Todo en `animaciones/blender/` (Godot la ignora: `.gdignore`; ver su `LEEME.md`). Blender 4.2
+  LTS. Lo que no puede ser una animación fija sigue con código encima (pies sobre el terreno, ragdoll, puntería exacta).
+- Hecho: apuntado en la moto (`PosesMoto`, ver arriba) y **posturas de pie con armas de fuego** (`PosturasPie`,
+  generado desde `diseno_pie.py`): por arma base (Pistola, Rifle) y estado (LOW/HIP/AIM/SPRINT), giro del pecho, inclinación,
+  cabeza y polos de los codos; el arma va donde dice `Armas.pose` y las manos por IK. Animador: `_paso_postura_pie`
+  (`pie_k`, `pie_w`, `pie_n`, `pie_polo_r/l`; solo de pie, no tumbado ni en la moto); sustituye al antiguo "blade".
+- Las armas de fuego no atraviesan el torso: `_arma_de_fuego_fuera` (empuja HACIA DELANTE lo que quede dentro del
+  pecho/barriga, con el pecho final del fotograma; peso `fuera_w`). Comprobar con `tests/combate.gd --choque_arma`
+  (y `--pitch=`); vista cercana con `--video --cam_az=<grados>`.
+- Pendiente: recarga, sacar/guardar y golpes (grupo 1, parte 2) y los grupos 2-4.
 
 ## Ruido y zombis v0 (2026-10-23, a pedido de Juan) — guía completa: `docs/RUIDO_Y_ZOMBIS.md`
 - **Sistema de ruido** (`scripts/ruido/ruido.gd`, clase estática `Ruido`, sin autoload): quien hace ruido llama a

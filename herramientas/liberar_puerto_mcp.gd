@@ -17,7 +17,7 @@ foreach ($id in $ids) {
   $pp = Get-CimInstance Win32_Process -Filter ("ProcessId=" + $w.ParentProcessId)
   if ($pp) {
     Write-Output ('  PADRE pid=' + $pp.ProcessId + ' ' + $pp.Name + ' | ' + $pp.CommandLine)
-    $ab = Get-CimInstance Win32_Process -Filter ("ProcessId=" + $pp.ParentProcessId)
+	$ab = Get-CimInstance Win32_Process -Filter ("ProcessId=" + $pp.ParentProcessId)
     if ($ab) { Write-Output ('  ABUELO pid=' + $ab.ProcessId + ' ' + $ab.Name + ' | ' + $ab.CommandLine) }
   }
   if ($w.CommandLine -match '-m godot_ai' -and $w.CommandLine -notmatch 'attach') {

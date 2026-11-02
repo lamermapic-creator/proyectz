@@ -13,6 +13,176 @@ en el mismo commit que el cambio. Formato:
 
 ---
 
+## 2026-11-01 (6) — Las armas de fuego ya no atraviesan el torso (KangooG)
+- KangooG: "el arma atraviesa el torso". Medido con `tests/combate.gd --choque_arma [--pitch=<rad>]` (nuevo: mira
+  las piezas del arma contra el pecho y la barriga): la culata del rifle se metía hasta 0,37 studs en el pecho con el
+  arma baja, al apuntar y al recargar (con las posturas nuevas el pecho gira más, y el arma no lo seguía).
+- `Animador._arma_de_fuego_fuera`: lo que quede dentro del pecho o la barriga sale siempre HACIA DELANTE, hasta la
+  cara delantera del torso (la culata queda apoyada en el hombro, sin saltos), usando el pecho tal y como quedará en
+  ese fotograma. Puntos de muestra por arma en `_puntos_arma` (se calculan una vez). No se aplica tumbado ni en la
+  moto; al sacar/guardar el arma solo en el tramo de delante del cuerpo. Ahora: ≤ 0,05 studs en pose (≤ 0,11 un
+  instante al pasar a apuntar mirando muy arriba).
+- `tests/combate.gd`: también `--cam_az=<grados> --cam_alt --cam_dist` para verlo de cerca desde cualquier lado.
+
+## 2026-11-01 (5) — Animaciones en Blender, grupo 1 (armas a pie), parte 1: posturas con armas de fuego (KangooG)
+- KangooG pidió hacer TODAS las animaciones en Blender, en este orden: armas a pie, andar/correr/agacharse,
+  saltos/vallas/cornisas y el resto de la moto. Primera parte: las posturas de pie con pistola y rifle (arma baja,
+  desde la cadera, apuntando y corriendo).
+- Diseñadas en Blender sobre el superviviente (`animaciones/blender/pie_Rifle.blend`, `pie_Pistola.blend`,
+  `diseno_pie.py`): rifle con la culata en el hombro, el codo derecho más alto, el izquierdo bajo el guardamanos, el
+  cuerpo de perfil y la mejilla en la culata; pistola en isósceles con los dos brazos estirados y el pecho de frente.
+- Al juego: `scripts/jugador/posturas_pie.gd` (generado) y `Animador._paso_postura_pie` (pecho, cabeza y codos; las
+  manos siguen por IK sobre el arma). Sustituye al antiguo giro "blade". Suite completa: TODO BIEN.
+
+## 2026-11-01 (4) — Moto: poses de apuntado hechas en Blender (KangooG)
+- A pedido de KangooG ("el brazo se mueve rarísimo, ¿puedes hacer las animaciones en Blender?"): el piloto y la moto
+  se montan en Blender 4.2 (`animaciones/blender/piloto.blend`, ver `LEEME.md`) y las poses de apuntado con la pistola
+  se diseñan ahí (`poses.py`): antebrazo y pistola en la línea de tiro con la muñeca neutra, codo algo flexionado,
+  cruzando por delante del pecho a la izquierda, por fuera del hombro hacia atrás, cintura y cuello girando hacia la
+  mira; más la pose "recogida" para pasar el arma por delante del pecho.
+- Se exportan a `scripts/jugador/poses_moto.gd` (rejilla 28 ángulos x 7 cabeceos, generado) y el Animador las mezcla
+  según hacia dónde apuntas (interpolación entre articulaciones: el brazo describe arcos naturales en vez de ir en
+  línea recta); la muñeca corrige unos grados para que el cañón vaya exacto a la mira. La izquierda sigue en el manillar.
+- `tests/moto.gd --modo=exportar` vuelca el piloto y la moto para Blender. Suite completa: TODO BIEN.
+- La carpeta `animaciones/blender` tiene `.gdignore` (Godot no la importa). El .blend pesa ~5 MB.
+
+## 2026-11-01 (3) — Moto: el brazo gira con naturalidad al apuntar (KangooG)
+- Al girar la mira de un lado a otro la mano iba muy rápida y brusca (más de 70 studs/s de golpe). Ahora el ángulo,
+  la cintura y el cuello van con muelles con velocidad y aceleración máximas: arrancan y frenan con suavidad (media
+  vuelta ~0,7 s; la mano a ≤ 12 studs/s girando).
+- Hacia delante o desde la derecha el brazo barre por su camino natural; solo al cruzar por detrás a la izquierda pasa
+  el arma por delante del pecho, ahora más despacio (0,7-1,25 s según el recorrido) y sin cambios bruscos al final.
+- Prueba nueva `tests/moto.gd --modo=giros` (saltos bruscos de la mira; mide velocidad y aceleración de la mano), en
+  ejecutar_pruebas.sh.
+
+## 2026-11-01 (2) — Moto: apuntado con UN SOLO BRAZO (KangooG)
+- A pedido de KangooG ya no se pasa el arma a la mano izquierda: se apunta y dispara SIEMPRE con el brazo derecho
+  en 360° y la izquierda nunca suelta el manillar.
+- Hacia la izquierda el brazo derecho cruza por delante del pecho (la cintura gira más, hasta ~70°); hacia atrás va
+  por encima del hombro derecho. Por detrás a la izquierda, al pasar de una postura a otra, el arma pasa por delante
+  del pecho con el cañón arriba (0,34 s, sin disparar en ese instante).
+- Prueba `tests/moto.gd --modo=apuntar360 [--mover]` ahora comprueba también que la izquierda sigue en el manillar.
+
+## 2026-11-01 — Moto: apuntado libre en 360° (KangooG)
+- Desde la moto ya se apunta y dispara en CUALQUIER dirección (también hacia atrás y muy arriba/abajo); se quitan
+  los límites `Arsenal.MOTO_IZQ/DER/ARRIBA/ABAJO`.
+- Animaciones nuevas (Animador, "APUNTADO EN LA MOTO"): el brazo se estira desde su hombro hacia la mira, la cintura
+  gira y la cabeza mira por encima del hombro. Hacia la izquierda y detrás por la izquierda el arma pasa a la mano
+  IZQUIERDA (la derecha al acelerador): el torso se pone de frente, el arma rodea el cuerpo con el cañón arriba, la
+  otra mano la coge delante del pecho y la que la soltó vuelve al manillar (0,34 s, sin disparar en ese instante).
+- La cámara va al hombro del brazo que dispara (antes, apuntando atrás con la derecha, el cuerpo tapaba el arma).
+- Arreglado: con muchos disparos seguidos salía "Lambda capture ... was freed" (Efectos._borrar_en).
+- Prueba nueva `tests/moto.gd --modo=apuntar360 [--mover]` (en ejecutar_pruebas.sh). Suite completa: TODO BIEN.
+
+## 2026-10-30 (2) · KangooG · Claude — mecánica de trepar cuestas ELIMINADA
+
+Pedido: "elimina esa mecánica, es demasiado tortuoso, muchos fallos".
+
+- Quitada entera: trepar con las manos, posturas (tumbado, sentado, de costado, resbalar), Espacio para agarrarse,
+  C en la cuesta, la cámara especial de la cuesta, las armas a una mano en la cuesta y la zona "Cuesta de 50°" de F1.
+- Las cuestas vuelven a ser como antes: se suben andando.
+- Se quedan los arreglos generales que salieron de ella: al levantarse de una caída ya no da un salto a mitad de rodar;
+  el brazo se aparta de las paredes sin saltar; los pies no se quedan clavados en una cuesta muy empinada.
+- Pruebas de la cuesta quitadas; queda `recorrido --escenario=derribo_llano` (levantarse sin tirones). TODO BIEN.
+- El diseño queda guardado en el documento del proyecto `mecanica-pendientes.md` por si se retoma.
+- Archivos: scripts/jugador/jugador.gd, animador.gd, arsenal.gd, scripts/ui/menu_trucos.gd, tests/recorrido.gd,
+  tests/ejecutar_pruebas.sh, CLAUDE.md.
+
+## 2026-10-30 · KangooG · Claude — cuestas: prueba completa detalle por detalle y arreglos
+
+Pedido: "prueba la mecánica completa detalle por detalle y arréglala totalmente".
+
+Se probó con 22 recorridos automáticos (`tests/recorrido.gd --escenario=cu_*` y `cuesta*`) y un auditor que mide
+en cada fotograma: piezas del cuerpo metidas en el escenario, tirones, cuerpo separado, disparos que no van a la mira.
+Todos en verde, también a 30 FPS. Lo encontrado y arreglado:
+
+- **Disparos en la cuesta:** el arma quedaba torcida (hasta 75° de la mira): la mano que la lleva perdía la orientación
+  mientras llegaba a su sitio. Ahora apunta a la mira (≤ 3°).
+- **De costado no disparaba:** el cuerpo miraba al lado contrario de la cámara y el disparo se bloqueaba. Ahora mira
+  hacia el lado de la cámara y dispara hacia fuera.
+- **Manos y pies metidos en la cuesta:** muelles de las articulaciones demasiado blandos (se quedaban atrás) y apoyos
+  muy bajos. Ahora van firmes, más altos y nunca por dentro del suelo (−85 %).
+- **Bajar desde arriba:** el personaje se quedaba clavado en el borde (el canto de la rampa se tomaba por una cuesta
+  al revés). Ahora: si pisas la cuesta sin agarrarte, **resbalas sentado** hasta abajo; **Espacio te agarra**.
+- **Agarrarse desde arriba:** Espacio en lo alto te descuelga por el borde de cara a la cuesta para bajar.
+- **Agarrarse parado al pie:** el personaje va solo hasta la cuesta (antes se tumbaba en el suelo).
+- **Al pie sin agarrarse:** se para delante como ante una pared (antes subía un paso y andaba en el sitio).
+- **Cuestas de más de 62°:** avisa "Demasiado empinado" en vez de saltar.
+- **Derribado en la cuesta:** deja de estar agarrado y cae rodando de verdad.
+- **Al levantarse de cualquier caída (también en llano):** a mitad de rodar el cuerpo daba un salto; arreglado.
+- **Cuchillo en la cuesta:** la mano ya no se mete dentro de la cuesta.
+- **Al caer por el borde lateral:** sin saltos de la mano ni de la cámara.
+- **Ayuda (H)** actualizada con todos los controles de las cuestas.
+- Archivos: scripts/jugador/jugador.gd, animador.gd, arsenal.gd, scripts/fisica/ragdoll.gd, tests/recorrido.gd,
+  tests/ejecutar_pruebas.sh, CLAUDE.md.
+
+## 2026-10-29 (3) · KangooG · Claude — cuestas (bajar, entrar, Espacio, arma) y moto (disparo, atascos, levantarla)
+
+Pedido: "al bajar la cuesta se deforma; el arma no se mueve libre (tumbado, a una mano siguiendo la cámara y la otra
+en la estructura); bajando de frente las piernas no van con el cuerpo; al empezar a subir se mete bajo el piso (que
+primero se incline) y un poco más erguido"; "desde la moto el brazo traspasa el cuerpo y la bala sale rarísimo; la
+moto se trababa sin marcha atrás; al levantarla y montarme se caía al frente y caí al vacío; triplica su velocidad en
+cuestas"; "para montarse y levantarla, estar al lado; un botón para subir la cuesta, que no sea automático".
+
+- **Cuestas:** pasos nuevos por distancia, en pares diagonales: el par que se queda medio paso atrás da el paso. Va
+  sincronizado subiendo, bajando y de lado, y nunca se estira de más (se acabó la deformación al bajar).
+- **Entrar:** el cuerpo ya no se mete en el suelo (el plano de la cuesta se mide sobre la cuesta de verdad); parte de
+  la postura de pie y primero se inclina; un poco más erguido al trepar.
+- **Espacio para agarrarse:** las cuestas empinadas ya no se trepan solas. Sin pulsar Espacio no se suben andando
+  (aviso en pantalla). Espacio delante de la cuesta (o encima) = agarrarse.
+- **Arma en la cuesta:** quieto (tumbado, sentado, de costado) la pistola va a una mano y sigue a la cámara; la otra
+  mano se apoya en la cuesta.
+- **Moto, disparo:** solo se dispara donde el brazo llega de verdad (delante, derecha y algo atrás por la derecha;
+  poco a la izquierda; ni muy arriba ni muy abajo). Fuera de eso no dispara.
+- **Moto, atasco entre bloques:** marcha atrás ahora la saca (el piloto empuja con los pies y aguanta el peso).
+- **Moto, levantarla:** busca dónde cabe de pie (antes, en el hueco entre bloques, quedaba con una rueda dentro del
+  bloque, daba vueltas y atravesaba el suelo con el piloto). Red de seguridad si alguna vez atraviesa el suelo.
+- **Moto, cuestas:** la rueda no empuja más de lo que agarra: cuestas de más de ~40° ya no se suben acelerando.
+- **Moto, subirse/levantarla:** solo desde un lado (no delante ni detrás). Bajarse marcha atrás la deja en la pata.
+- Pruebas nuevas: moto `fila`, `levantar_hueco`; recorrido `cuesta_sin_espacio`, `cuesta_bajar`. TODO BIEN.
+- Archivos: scripts/jugador/animador.gd, jugador.gd, arsenal.gd, scripts/vehiculos/moto.gd, tests/moto.gd,
+  tests/recorrido.gd, tests/ejecutar_pruebas.sh, CLAUDE.md.
+
+## 2026-10-29 (2) · KangooG · Claude — cuestas: trepar erguido, cámara libre y tecla C
+
+Pedido: "trepar hacia el frente parece una araña, la cámara se bloquea horrible, que sea mucho más libre; que solo
+se cambie de postura con C para salir de la posición de frente; el resto con el ratón".
+
+- **Trepar:** erguido, como escalando: pies juntos bajo la cadera, rodillas hacia delante (nada abiertas), codos abajo
+  y la mano que sube estirada a por el siguiente apoyo.
+- **Tecla C:** al entrar en la cuesta estás DE FRENTE (trepas al moverte, te tumbas quieto) y girar la cámara ya no te
+  cambia la postura. C te saca: desde ahí la cámara elige (abajo = sentado, W resbala; a un lado o arriba = de
+  costado, A/D anda de lado). C otra vez: de frente.
+- **Cámara:** la normal de ir a pie. Gira alrededor del pecho del personaje (antes, de un punto separado de la cuesta:
+  "giraba alrededor de algo"), ya no se fuerza la vista hacia el personaje, al chocar con la cuesta se acerca rápido
+  pero sin saltos y la cuesta de detrás no vuelve transparente al personaje.
+- Prueba nueva `recorrido --escenario=cuesta_frente` (mirar a los lados de frente no cambia la postura). TODO BIEN.
+- Archivos: scripts/jugador/animador.gd, jugador.gd, tests/recorrido.gd, tests/ejecutar_pruebas.sh, CLAUDE.md.
+
+## 2026-10-29 · KangooG · Claude — animación de las cuestas rehecha, moto sin atascos y con suspensión
+
+Pedido: "la moto se queda estancada, no parece que tiene suspensión, las animaciones de la mecánica nueva son
+horribles y el personaje es muy tieso: reinventa la animación".
+
+- **Cuestas, animación nueva:** cada postura se diseña sobre la propia cuesta (cadera colocada en el mundo, columna
+  casi paralela a la cuesta). Trepar = a cuatro patas pegado a la cuesta, manos y pies en diagonal, con vaivén de
+  cadera, giro de hombros y respiración; tumbado = boca abajo sobre los antebrazos, piernas estiradas; sentado = de
+  espaldas, rodillas arriba y pies clavados; de costado = echado hacia la cuesta con la mano de arriba apoyada.
+  Pies y manos se apoyan en el suelo real (arriba del todo se agarra al borde).
+- **Por qué se veía tieso:** la corrección "la cabeza no entra en la pared" tomaba la cuesta por una pared y enderezaba
+  el torso hasta 40°. En la cuesta ya no se aplica.
+- **Cámara sentado mirando abajo:** antes no se veía al personaje (la cuesta de detrás pegaba la cámara a la nuca);
+  ahora sube por la cuesta y se le ve.
+- **Moto atascada:** contra el bloque de 20 cm, despacio o en diagonal, se quedaba con una rueda arriba y otra abajo
+  para siempre (el canto del bloque se tomaba por pared). Ahora sube bordillos de hasta ~22 cm despacio y ~24 deprisa;
+  los de 40 cm siguen siendo un muro (marcha atrás con S).
+- **Suspensión de la moto:** horquilla que se hunde (las botellas suben por las barras), basculante que gira con los
+  amortiguadores, el cuerpo y el piloto se mueven sobre las ruedas: se hunde al frenar, se agacha al acelerar, absorbe
+  baches, bordillos y aterrizajes y rebota un poco.
+- Pruebas nuevas: `moto --modo=atasco` (4 casos) y `--modo=suspension`. Todas: TODO BIEN.
+- Archivos: scripts/jugador/animador.gd, jugador.gd, scripts/vehiculos/moto.gd, modelo_moto.gd, tests/moto.gd,
+  tests/recorrido.gd, tests/ejecutar_pruebas.sh, CLAUDE.md.
+
 ## 2026-10-28 (3) · KangooG · Claude — versión V0.3.5
 
 Pedido: "pon en todos lados que estamos en la V0.3.5".

@@ -64,7 +64,12 @@ static func _mat_unshaded(c: Color, emit := false) -> StandardMaterial3D:
 
 
 static func _borrar_en(nodo: Node, t: float) -> void:
-	nodo.get_tree().create_timer(t).timeout.connect(func(): if is_instance_valid(nodo): nodo.queue_free())
+	# (referencia débil: si el nodo ya se borró antes, p. ej. el casquillo nº 31, la lambda no avisa de un error)
+	var ref: WeakRef = weakref(nodo)
+	nodo.get_tree().create_timer(t).timeout.connect(func():
+		var n = ref.get_ref()
+		if n != null:
+			(n as Node).queue_free())
 
 
 ## chispas / salpicaduras: count partículas en un cono alrededor de la normal

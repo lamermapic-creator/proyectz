@@ -67,18 +67,7 @@ var roll_t := 0.0
 var roll_side := 1.0
 var rl := 0.0
 var last_prone_t := -9.0
-## cuesta (2026-10-28): los puntos de apoyo de pies y manos se mueven suaves (al entrar, al cambiar de postura y al
-## trepar no saltan de un sitio a otro)
-var cu_suave := {}
-var cu_pasos := {}
-var cu_pie := {}     # orientación de cada pie en la cuesta (suavizada)
-var cu_mano_v := {}  # (velocidad de cada mano en la cuesta)
-var cu_mano := {}    # en la cuesta: dónde va de verdad cada mano (sigue a su sitio sin saltos: arma <-> cuesta)   # apoyos de pies y manos en la cuesta: {anc, vuela, desde, t, ult}
-var cu_post := ""
-var cu_cambio_t := -9.0
-var ultima_cuesta_t := -9.0
-var pies_ant := {}   # fuera de la cuesta: dónde estaba cada pie el fotograma anterior y a qué velocidad iba
-var pies_vel := {}
+## estado del suavizado "de muelle" (smooth_j2) de cada articulación
 var muelle_q := {}   # estado del muelle de cada articulación (giro), aparte de lo que se muestra
 var vel_j := {}
 var muelle_p := {}   # (posición, para la cadera)
@@ -90,6 +79,35 @@ var jump_run := 0.0
 var air_fall := 0.0
 var was_grounded = null
 var rel_aim := 0.0
+## ---- apuntado en la moto con arma de fuego (2026-10-30; 2026-11-01: SOLO el brazo derecho, la izquierda
+## nunca suelta el manillar). Dos "ramas" para cubrir las 360°: "L" = delante, a la derecha y a la izquierda (cruzando
+## el brazo por delante del pecho) y "B" = detrás por encima del hombro derecho. Entre ambas, por detrás a la
+## izquierda, hay una costura con margen: al cruzarla el brazo pasa el arma por delante del pecho (cañón arriba)
+const GOLPE_MOTO_IZQ := 1.15 # golpes en la moto (siempre con la derecha): hasta dónde gira el torso
+const GOLPE_MOTO_DER := 2.1
+const COSTURA_IZQ := 2.85    # rama "L": cruzando el pecho hasta ~163° a la izquierda...
+const COSTURA_ATRAS := 2.6   # ...rama "B": por encima del hombro derecho hasta ~149° a la izquierda (por detrás)
+## cuánto tarda el brazo en pasar por delante del pecho: 0,7-1,3 s según el recorrido (ver _dur_cambio)
+const MOTO_CAMBIO_DUR := 0.8
+const GIRO_W := 7.0          # muelle del giro de torso y brazo al apuntar en la moto (rad/s)
+const GIRO_VMAX := 4.5       # velocidad máxima de ese giro (rad/s, ~260°/s)
+const GIRO_ACEL := 30.0      # aceleración máxima (rad/s²): sin arranques ni frenazos bruscos
+var moto_giro_vel := 0.0
+## ---- posturas de pie con armas de fuego hechas en Blender (PosturasPie), suavizadas al cambiar de estado
+var pie_k := 0.0             # 0-1: cuánto manda la postura de Blender (de pie con arma de fuego)
+var pie_w := Vector3.ZERO    # giro de la cintura (Y, P, R) de la postura
+var pie_n := Vector3.ZERO    # giro del cuello (Y, P, R)
+var pie_polo_r := Vector3(1.9, -1.4, 0.9)  # polos de los codos (marco del pecho girado con el rumbo)
+var pie_polo_l := Vector3(-1.9, -1.5, 0.3)
+var moto_fuego := false      # en la moto con un arma de fuego en la mano (este fotograma)
+var moto_mano := "R"         # mano que lleva el arma en la moto (siempre la derecha)
+var moto_rama := "L"         # "L" por delante / izquierda, "B" por detrás sobre el hombro derecho
+var moto_cambio = null       # {t0, de, a, rel_de, dur}: pasando el brazo de una rama a la otra
+var moto_apunta_k := 0.0     # 0-1: brazo apuntando (pose de Blender) vs. arma baja (IK)
+var moto_rama_brazo := "L"   # rama en la que está el brazo este fotograma
+var moto_h_arma := "R"       # mano que sostiene el arma (siempre la derecha)
+var moto_pose: Array = []    # pose de Blender de este fotograma: Waist, Neck, RightShoulder, RightElbow, RightWrist
+var moto_corr_q := Quaternion.IDENTITY # pequeña corrección de la muñeca para que el cañón vaya a la mira
 var feet_aim := 0.0
 var prone_rel := 0.0
 var w_side := {"L": 0.0, "R": 0.0}
@@ -143,6 +161,212 @@ class Limb:
 
 func ahora() -> float:
 	return jugador.reloj # reloj del juego
+
+
+## ---------------------------------------------------------------- apuntado en la moto (360°)
+## mano que lleva el arma (siempre la derecha; se mantiene la función para quien la consulte)
+func moto_mano_obj() -> String:
+	return "R"
+
+
+## rama en la que acaba el brazo (la de destino si está pasando de una a otra)
+func moto_rama_obj() -> String:
+	return String(moto_cambio.a) if moto_cambio != null else moto_rama
+
+
+## pasando el brazo de una rama a otra (no se puede disparar hasta que el arma vuelve a salir hacia la mira)
+func moto_cambiando() -> bool:
+	return moto_cambio != null and ahora() - float(moto_cambio.t0) < float(moto_cambio.dur) * 0.7
+
+
+## ángulo de la mira respecto a la moto (+ = izquierda) tal y como lo sigue el brazo en la rama dada (sin saltos
+## dentro de la rama: en "B", detrás a la izquierda se cuenta como pasado de -180°)
+static func _angulo_en_rama(rama: String, rel: float) -> float:
+	if rama == "B" and rel > 0.0:
+		return rel - TAU
+	return rel
+
+
+func angulo_mira(rel: float) -> float:
+	return _angulo_en_rama(moto_rama_obj(), rel)
+
+
+func _paso_mano_moto(apunta: bool, rel: float, now: float) -> void:
+	if moto_cambio != null:
+		if now - float(moto_cambio.t0) < float(moto_cambio.dur):
+			return
+		moto_rama = String(moto_cambio.a)
+		moto_cambio = null
+	if not apunta:
+		if moto_rama == "B" and rel_aim >= -PI:
+			moto_rama = "L"
+		return
+	if moto_rama == "B":
+		# por encima del hombro derecho. En el lado derecho las dos ramas coinciden (se cambia sin que se note);
+		# si la mira se va a la izquierda por delante, sigue la rama normal (abajo)
+		if rel <= 0.0:
+			moto_rama = "L"
+			return
+		if rel >= COSTURA_ATRAS:
+			return
+		moto_rama = "L"
+	if rel > COSTURA_IZQ:
+		# detrás a la izquierda, más allá de lo que el brazo alcanza cruzando el pecho: por encima del hombro
+		# derecho. Si el brazo va por delante o por la derecha, barre hasta ahí por la derecha; si va cruzado hacia
+		# detrás a la izquierda, pasa el arma por delante del pecho (cambio animado) y el ángulo se cuenta desde el
+		# otro lado (mismo sitio)
+		if rel_aim > PI / 2:
+			# (rel_de: hacia donde apuntaba el brazo; sigue ahí mientras lleva el arma al centro)
+			moto_cambio = {"t0": now, "de": "L", "a": "B", "rel_de": rel_aim, "dur": _dur_cambio(rel_aim, rel - TAU)}
+			rel_aim -= TAU
+		else:
+			moto_rama = "B"
+		return
+	# la mira salta por detrás de un lado al otro (de detrás a la derecha a detrás a la izquierda): en vez de dar
+	# la vuelta entera con el brazo estirado, el arma pasa por delante del pecho. Hacia delante, en cambio, el
+	# brazo barre por su camino natural (el muelle de rel_aim limita la velocidad)
+	var viaje := rel - rel_aim
+	if absf(viaje) > PI + 0.3 and absf(rel) > PI / 2:
+		moto_cambio = {"t0": now, "de": "L", "a": "L", "rel_de": rel_aim, "dur": _dur_cambio(rel_aim, rel)}
+		rel_aim += TAU * signf(viaje)
+
+
+## duración del paso por delante del pecho: de donde apunta el brazo hasta delante, y de delante hasta la mira
+static func _dur_cambio(desde: float, hasta: float) -> float:
+	return clampf(0.27 * (absf(Rbx.wrap_a(desde)) + absf(Rbx.wrap_a(hasta))), 0.7, 1.3)
+
+
+## hombro de la cámara al apuntar desde la moto (1 derecha, -1 izquierda de la pantalla). Apuntando hacia atrás
+## por encima del hombro derecho, ese brazo queda a la izquierda de la pantalla. Con margen en el costado derecho
+var _lado_cam := 1.0
+func lado_camara_moto(rel: float) -> float:
+	var a := angulo_mira(rel)
+	if a < -(PI / 2 + 0.3):
+		_lado_cam = -1.0
+	elif a > -(PI / 2 - 0.3):
+		_lado_cam = 1.0
+	return _lado_cam
+
+
+func _soltar_mano_moto() -> void:
+	moto_cambio = null
+	moto_rama = "L"
+	moto_mano = "R"
+
+
+## postura de pie de Blender para el arma y el estado: se acerca a ella con suavidad (ritmo del arma)
+func _paso_postura_pie(tool: String, estado: String, pc: float, activa: bool, ritmo: float, dt: float) -> void:
+	var b := Armas.base(tool)
+	var tabla: Dictionary = PosturasPie.DATOS.get(b, {})
+	if not activa or tabla.is_empty() or not tabla.has(estado):
+		pie_k = Rbx.damp(pie_k, 0.0, 8.0, dt)
+		return
+	var d: Dictionary = tabla[estado]
+	var k := 1.0 if estado in ["AIM", "HIP"] else (0.35 if estado == "LOW" else 0.0)
+	var w_obj := Vector3(-float(d.blade), float(d.lean) + PosturasPie.PC_CINTURA * pc * k, 0.0)
+	var n_obj := Vector3(float(d.blade) * 0.9, float(d.nP) + PosturasPie.PC_CUELLO * pc * k - float(d.lean) * 0.6, float(d.nR))
+	var r := minf(ritmo, 9.0)
+	pie_w = pie_w.lerp(w_obj, 1.0 - exp(-r * dt))
+	pie_n = pie_n.lerp(n_obj, 1.0 - exp(-r * dt))
+	pie_polo_r = pie_polo_r.lerp(d.polo_r, 1.0 - exp(-r * dt))
+	pie_polo_l = pie_polo_l.lerp(d.polo_l, 1.0 - exp(-r * dt))
+	pie_k = Rbx.damp(pie_k, 1.0, 8.0, dt)
+
+
+## ---- poses de Blender (PosesMoto): muestreo de la rejilla ángulo x cabeceo (interpolación esférica bilineal)
+static func _q_hacia(q: Quaternion, ref: Quaternion) -> Quaternion:
+	return -q if q.dot(ref) < 0.0 else q
+
+
+static func _muestrear(a: float, p: float) -> Array:
+	var A: Array = PosesMoto.ANGULOS
+	var PP: Array = PosesMoto.CABECEOS
+	a = clampf(a, float(A[0]), float(A[A.size() - 1]))
+	p = clampf(p, float(PP[0]), float(PP[PP.size() - 1]))
+	var fa := (a - float(A[0])) / (float(A[1]) - float(A[0]))
+	var ia := clampi(int(floor(fa)), 0, A.size() - 2)
+	var ta := clampf(fa - ia, 0.0, 1.0)
+	var ip := 0
+	while ip < PP.size() - 2 and p > float(PP[ip + 1]):
+		ip += 1
+	var tp := clampf((p - float(PP[ip])) / (float(PP[ip + 1]) - float(PP[ip])), 0.0, 1.0)
+	var f0: Array = PosesMoto.REJILLA[ip]
+	var f1: Array = PosesMoto.REJILLA[ip + 1]
+	var res := []
+	for j in PosesMoto.ARTICULACIONES.size():
+		var q00: Quaternion = f0[ia][j]
+		var q01: Quaternion = _q_hacia(f0[ia + 1][j], q00)
+		var q10: Quaternion = _q_hacia(f1[ia][j], q00)
+		var q11: Quaternion = _q_hacia(f1[ia + 1][j], q00)
+		var qa := q00.slerp(q01, ta)
+		var qb := q10.slerp(q11, ta)
+		res.append(qa.slerp(_q_hacia(qb, qa), tp).normalized())
+	return res
+
+
+## pose de apuntado de este fotograma: la de la rejilla, o al cruzar por detrás a la izquierda (moto_cambio) el paso
+## por la pose RECOGIDA (arma delante del pecho, cañón arriba) con una curva suave que no se para en medio
+func _pose_moto(a: float, p: float, now: float) -> Array:
+	var fin := _muestrear(a, p)
+	moto_rama_brazo = moto_rama
+	if moto_cambio == null:
+		return fin
+	var u := clampf((now - float(moto_cambio.t0)) / float(moto_cambio.dur), 0.0, 1.0)
+	moto_rama_brazo = String(moto_cambio.de) if u < 0.5 else String(moto_cambio.a)
+	var ini := _muestrear(float(moto_cambio.rel_de), p)
+	var mid: Array = PosesMoto.RECOGIDA[-1 if String(moto_cambio.a) == "B" else 1]
+	var e := Rbx.smooth(u)
+	var res := []
+	for j in fin.size():
+		var q0: Quaternion = ini[j]
+		var q1: Quaternion = _q_hacia(mid[j], q0)
+		var q2: Quaternion = _q_hacia(fin[j], q1)
+		var q: Quaternion
+		if e < 0.5:
+			q = q0.spherical_cubic_interpolate(q1, q0, q2, e * 2.0)
+		else:
+			q = q1.spherical_cubic_interpolate(q2, q0, q2, e * 2.0 - 1.0)
+		res.append(q.normalized())
+	return res
+
+
+## corrección de la muñeca: el cañón real (fotograma anterior) hacia la mira; poco a poco y como mucho ~25°
+func _paso_correccion_moto(mdl: Node3D, dt: float) -> void:
+	var activa := moto_fuego and moto_apunta_k > 0.9 and moto_cambio == null and mdl != null and mdl.has_node("Muzzle")
+	if activa:
+		var mz := (mdl.get_node("Muzzle") as Node3D).global_transform
+		var cano := (-mz.basis.z).normalized()
+		var obj: Vector3 = jugador.arsenal.punto_mira() - mz.origin
+		if obj.length() > 3.0 and cano.angle_to(obj) < deg_to_rad(40):
+			var err := Quaternion(cano, obj.normalized())
+			var mano := (P.RightHand as Node3D).global_transform.basis.orthonormalized()
+			var local := Quaternion(mano.inverse() * Basis(err) * mano)
+			moto_corr_q = (moto_corr_q * Quaternion.IDENTITY.slerp(local, 1.0 - exp(-12.0 * dt))).normalized()
+			if moto_corr_q.get_angle() > deg_to_rad(25):
+				moto_corr_q = Quaternion.IDENTITY.slerp(moto_corr_q, deg_to_rad(25) / moto_corr_q.get_angle())
+			return
+	moto_corr_q = moto_corr_q.slerp(Quaternion.IDENTITY, 1.0 - exp(-6.0 * dt))
+
+
+## muelle críticamente amortiguado con velocidad y aceleración máximas: [valor, velocidad]
+static func _muelle_lim(x: float, v: float, obj: float, w: float, vmax: float, amax: float, dt: float) -> Array:
+	var v2 := (v + (obj - x) * w * w * dt) / (1.0 + 2.0 * w * dt + w * w * dt * dt)
+	v2 = clampf(v2, v - amax * dt, v + amax * dt)
+	v2 = clampf(v2, -vmax, vmax)
+	return [x + v2 * dt, v2]
+
+
+## el modelo del arma va en la mano que la sostiene
+func _arma_a_mano(mdl: Node3D, tool: String, h: String) -> void:
+	if mdl == null:
+		return
+	var mano: Node3D = P.RightHand if h == "R" else P.LeftHand
+	if mano == null or mdl.get_parent() == mano:
+		return
+	if mdl.get_parent() != null:
+		mdl.get_parent().remove_child(mdl)
+	mano.add_child(mdl)
+	mdl.transform = Armas.handle_en_mano(tool)
 
 
 ## ---------------------------------------------------------------- IK analítica
@@ -377,6 +601,16 @@ func update_feet(root_cf: Transform3D, vel: Vector3, speed: float, dt: float, gr
 		for s in feet:
 			var f: Dictionary = feet[s]
 			f.pos = _ideal(frame, f, vel_h, lead, -lead)[0]
+			# (2026-10-30) un pie no se queda apoyado sobre una cuesta muy empinada (se metía dentro):
+			# se recoge hacia el cuerpo hasta pisar llano
+			for _i in 3:
+				var gq := ground(f.pos)
+				if (gq[1] as Vector3).y > 0.8:
+					break
+				var hacia: Vector3 = Rbx.flat(frame.origin - (f.pos as Vector3))
+				var p2: Vector3 = (f.pos as Vector3) + hacia.limit_length(0.5)
+				var g2 := ground(p2)
+				f.pos = Vector3(p2.x, g2[0], p2.z)
 			f.swing = null
 			f.yaw = body_yaw
 			f.cur = null
@@ -680,7 +914,7 @@ func _anota_vel_j(key: String, ant: Transform3D, nuevo: Transform3D, dt: float) 
 
 
 ## Suavizado "de muelle" (amortiguado crítico): la articulación acelera y frena hacia su pose sin tirones,
-## aunque la pose objetivo salte (cambio de postura, entrar o salir de la cuesta). Conserva el giro que llevaba.
+## aunque la pose objetivo salte. Conserva el giro que llevaba.
 func smooth_j2(m: RigPersonaje.Motor, key: String, omega: float, dt: float, a_directo := 0.0) -> void:
 	var qt := Quaternion(m.transform.basis.orthonormalized())
 	var orig := m.transform.origin
@@ -743,9 +977,17 @@ func _brazo_sin_choque(Lm: Limb, s: String, chest: Transform3D) -> void:
 	if hit.position.distance_to(sh) < 0.4:
 		target = sh + n * 0.8 + Vector3(0, -1.2, 0)
 	var sg := -1.0 if s == "L" else 1.0
+	var top0 := Lm.top.transform
+	var mid0 := Lm.mid.transform
 	solve(Lm, chest, target, (chest * Rbx.cf(sg * 1.8, -1.4, 0.8)).origin, 1.0)
+	# (2026-10-30) el brazo se aparta deprisa pero sin saltar de golpe (antes, al pasar junto a una pared, la mano
+	# daba un salto de hasta 3 studs en un fotograma)
+	Lm.top.transform = top0.interpolate_with(Lm.top.transform, 0.4)
+	Lm.mid.transform = mid0.interpolate_with(Lm.mid.transform, 0.4)
 	prev_t[s + "Sh"] = Lm.top.transform
 	prev_t[s + "El"] = Lm.mid.transform
+	muelle_q.erase(s + "Sh")
+	muelle_q.erase(s + "El")
 
 
 ## Fase continua de la marcha: un oscilador que avanza al ritmo de los pasos y se sincroniza con el
@@ -841,6 +1083,66 @@ func _arma_fuera_del_cuerpo(h: Transform3D, tool: String, pelvis_cf: Transform3D
 		if empuje.length() < 0.005:
 			break
 		h.origin += empuje * 1.05
+	return h
+
+
+## armas de fuego: puntos de muestra del modelo (centro de cada pieza y, en las largas, sus dos extremos) en el marco
+## de la empuñadura, que es el del propio modelo. Se calculan una vez por arma
+var _puntos_arma_cache := {}
+
+
+func _puntos_arma(mdl: Node3D, tool: String) -> Array:
+	if _puntos_arma_cache.has(tool):
+		return _puntos_arma_cache[tool]
+	var pts: Array = []
+	var inv := mdl.global_transform.affine_inverse()
+	for mi in mdl.find_children("*", "MeshInstance3D", true, false):
+		var ab: AABB = (mi as MeshInstance3D).get_aabb()
+		var t: Transform3D = inv * (mi as MeshInstance3D).global_transform
+		pts.append(t * ab.get_center())
+		var eje := ab.get_longest_axis()
+		if ab.size[ab.get_longest_axis_index()] > 0.3:
+			pts.append(t * (ab.get_center() + eje * ab.size[ab.get_longest_axis_index()] * 0.5))
+			pts.append(t * (ab.get_center() - eje * ab.size[ab.get_longest_axis_index()] * 0.5))
+	_puntos_arma_cache[tool] = pts
+	return pts
+
+
+## las armas de fuego tampoco atraviesan el pecho ni la barriga: lo que quede dentro (la culata en el hombro, el
+## guardamanos al llevarla cruzada, la pistola pegada a la tripa) sale siempre HACIA DELANTE, hasta la cara delantera
+## del torso (así la culata queda apoyada en el hombro, y nunca da saltos de un lado a otro)
+var fuera_w := 0.0
+
+
+func _arma_de_fuego_fuera(h: Transform3D, pts: Array, pelvis_cf: Transform3D, chest_cf: Transform3D, w: float) -> Transform3D:
+	if w < 0.001 or pts.is_empty():
+		return h
+	var cajas := [
+		[chest_cf, (P.UpperTorso as Node3D).get_meta("size") as Vector3, 0.04],
+		[pelvis_cf, (P.LowerTorso as Node3D).get_meta("size") as Vector3, 0.03],
+	]
+	for _it in 2:
+		var empuje := Vector3.ZERO
+		for c in cajas:
+			var cf: Transform3D = c[0]
+			var half: Vector3 = (c[1] as Vector3) * 0.5
+			var m: float = c[2]
+			var inv := cf.affine_inverse()
+			var adel := -cf.basis.z.normalized()
+			var dz_max := 0.0
+			for pl in pts:
+				var lp: Vector3 = inv * (h * (pl as Vector3))
+				if absf(lp.x) >= half.x or absf(lp.y) >= half.y or lp.z >= half.z or lp.z <= -half.z - m:
+					continue
+				# cuánto le falta para quedar delante de la cara delantera (con un pequeño margen); los puntos que
+				# están justo en el borde (de lado, arriba o detrás) empujan menos, para que entrar y salir sea suave
+				var borde := minf(minf(half.x - absf(lp.x), half.y - absf(lp.y)), half.z - lp.z)
+				dz_max = maxf(dz_max, (lp.z + half.z + m) * clampf(borde / 0.08, 0.0, 1.0))
+			if dz_max * adel.length() > empuje.length():
+				empuje = adel * dz_max
+		if empuje.length() < 0.005:
+			break
+		h.origin += empuje * w
 	return h
 
 
@@ -1044,20 +1346,6 @@ func update_rig(dt: float) -> void:
 	var mt = L.get("moto")
 	if mt != null:
 		speed = 0.0
-	# EN UNA CUESTA EMPINADA (L.cuesta, ver Jugador._paso_cuesta): postura propia, sin pasos de andar
-	var cu = L.get("cuesta")
-	if cu != null:
-		speed = 0.0
-	elif not cu_suave.is_empty() or not cu_pasos.is_empty():
-		cu_suave.clear()
-		cu_pasos.clear()
-		cu_pie.clear()
-		cu_post = ""
-	if cu == null:
-		for s in ["L", "R"]:
-			var pf: Vector3 = ((P.LeftFoot if s == "L" else P.RightFoot) as Node3D).global_transform.origin
-			pies_vel[s] = (pf - (pies_ant.get(s, pf) as Vector3)) / maxf(dt, 1e-3)
-			pies_ant[s] = pf
 	acc = acc.lerp((lv - prev_lv) / maxf(dt, 1e-3), minf(1, dt * 6))
 	prev_lv = lv
 	var dyaw := Rbx.wrap_a(yaw - prev_yaw)
@@ -1072,7 +1360,7 @@ func update_rig(dt: float) -> void:
 		var gy_r: float = ground(root_cf.origin)[0]
 		if root_cf.origin.y - gy_r > J.hip_height + J.root_size.y / 2 + 0.7:
 			grounded = false
-	if mt != null or cu != null:
+	if mt != null:
 		grounded = false
 
 	var pitch: float = L.pitch
@@ -1178,7 +1466,6 @@ func update_rig(dt: float) -> void:
 	breath_t += dt * (1.5 + exertion * 3)
 	var breath := sin(breath_t) * (0.012 + exertion * 0.045)
 	var leg_targets := {}
-	var cu_manos := {}   # en la cuesta: dónde apoya cada mano (si la tiene libre)
 	var pelvis_cf: Transform3D
 	var Mr: RigPersonaje.Motor = M.Root
 
@@ -1216,188 +1503,6 @@ func update_rig(dt: float) -> void:
 					t_m = t_m.lerp((mt.pie_suelo as Vector3) + Vector3(0, 0.32, 0), 1.0 - Rbx.smooth(k_sub))
 			leg_targets[s] = t_m
 			leg_targets["pole" + s] = (pelvis_cf * Rbx.cf(sgn * (hip_x + 0.9), 0.4, -5.0)).origin
-		pelvis_drop = 0.0
-		replant = true
-	elif cu != null:
-		## -------- CUESTA EMPINADA (2026-10-28): trepa con las manos, o quieto en una postura
-		var post: String = cu.postura
-		var n_c: Vector3 = cu.n
-		var a_c: float = cu.ang
-		var fz: float = cu.fase
-		var mk: float = cu.mov
-		var g_c := Vector3(root_cf.origin.x, ground(root_cf.origin)[0], root_cf.origin.z)
-		var fw := Rbx.look(root_cf)
-		fw = Vector3(fw.x, 0, fw.z).normalized()
-		var rr := Rbx.right(root_cf)
-		rr = Vector3(rr.x, 0, rr.z).normalized()
-		var arriba_c: Vector3 = cu.arriba
-		var en_c := func(o: Vector3, alto: float) -> Vector3:
-			# punto de la cuesta a un desplazamiento horizontal "o" del pie del cuerpo, "alto" por encima
-			return g_c + o + Vector3(0, -(n_c.x * o.x + n_c.z * o.z) / maxf(n_c.y, 0.3), 0) + n_c * alto
-		var p_pitch := 0.0
-		var p_roll := 0.0
-		var lado_alto := signf(rr.dot(arriba_c)) # 1 = la cuesta sube hacia la derecha del cuerpo
-		# sitio de reposo de cada apoyo según la postura: [desplazamiento horizontal, altura sobre la cuesta, cuánto se
-		# levanta al dar el paso, desfase en el ciclo]. Pies "L"/"R", manos "mL"/"mR". Mano izquierda con pie derecho.
-		var apoyos := {}
-		var vuelo := 0.35 # parte del ciclo que cada apoyo va por el aire (siempre hay dos apoyados)
-		var fijo := false # sentado/resbalando: no da pasos, los apoyos van con el cuerpo
-		var poles := {}
-		match post:
-			"trepa":
-				# inclinado hacia la cuesta, el pie sube hasta debajo del cuerpo y la mano se planta arriba
-				p_pitch = -0.35 - 0.1 * clampf(a_c / 1.05, 0.0, 1.0)
-				waistP -= 0.3 + 0.1 * mk
-				neckP += 0.85
-				apoyos = {"L": [rr * -0.6 + fw * 0.3, 0.3, 0.6, 0.0], "R": [rr * 0.6 + fw * 0.3, 0.3, 0.6, PI],
-					"mL": [rr * -0.85 + fw * 1.75, 0.15, 0.45, PI], "mR": [rr * 0.85 + fw * 1.75, 0.15, 0.45, 0.0]}
-				poles = {"L": en_c.call(fw * 3.0 + rr * -1.2, 2.2), "R": en_c.call(fw * 3.0 + rr * 1.2, 2.2)}
-			"tumbado":
-				# tumbado a lo largo de la cuesta, la cabeza arriba; repta (codo y rodilla contraria); se asoma arriba
-				var asm: float = cu.asoma
-				p_pitch = -(PI * 0.5 - a_c) * (1.0 - 0.45 * asm) - 0.12
-				waistP += 0.08 + 0.35 * asm
-				neckP += 1.0 - 0.4 * asm
-				vuelo = 0.45
-				apoyos = {"L": [fw * -2.5 + rr * -0.55, 0.3, 0.35, PI], "R": [fw * -2.5 + rr * 0.55, 0.3, 0.35, 0.0],
-					"mL": [fw * 1.45 + rr * -0.75, 0.18, 0.25, 0.0], "mR": [fw * 1.45 + rr * 0.75, 0.18, 0.25, PI]}
-				poles = {"L": en_c.call(fw * -1.2 + rr * -2.6, 1.4), "R": en_c.call(fw * -1.2 + rr * 2.6, 1.4)}
-			"sentado", "resbala":
-				# sentado de espaldas a la cuesta, los pies clavados cuesta abajo y las manos atrás apoyadas
-				var desl := mk if post == "sentado" else 1.0
-				p_pitch = 0.25 + (PI * 0.5 - a_c) * 0.2
-				waistP += (PI * 0.5 - a_c) * 0.3 - 0.1
-				neckP -= 0.2
-				fijo = true
-				var vib := sin(now * 31.0) * 0.05 * desl
-				apoyos = {"L": [fw * (2.0 + 0.4 * desl) + rr * -0.65, 0.3 + 0.25 * desl + vib, 0.0, 0.0],
-					"R": [fw * (2.0 + 0.4 * desl) + rr * 0.65, 0.3 + 0.25 * desl - vib, 0.0, 0.0],
-					"mL": [fw * -0.35 + rr * -1.05, 0.15, 0.0, 0.0], "mR": [fw * -0.35 + rr * 1.05, 0.15, 0.0, 0.0]}
-				poles = {"L": en_c.call(fw * 1.6 + rr * -0.9, 3.0), "R": en_c.call(fw * 1.6 + rr * 0.9, 3.0)}
-			"lado":
-				# de costado: el hombro y la mano del lado alto contra la cuesta, la cadera hacia ella
-				p_roll = -lado_alto * 0.25
-				waistR -= lado_alto * 0.25
-				neckR += lado_alto * 0.15
-				apoyos = {"L": [rr * -0.6, 0.3, 0.4, 0.0], "R": [rr * 0.6, 0.3, 0.4, PI]}
-				apoyos["mR" if lado_alto > 0.0 else "mL"] = [rr * (lado_alto * 1.05) + fw * 0.3, 0.2, 0.3, PI * 0.5]
-				poles = {"L": en_c.call(fw * 3.0 + rr * -0.8, 2.0), "R": en_c.call(fw * 3.0 + rr * 0.8, 2.0)}
-		if post != cu_post:
-			cu_post = post
-			cu_cambio_t = now
-		var en_cambio := now - cu_cambio_t < 0.5
-		ultima_cuesta_t = now
-		# PASOS: cada apoyo se queda CLAVADO en la cuesta mientras el cuerpo avanza y, en su parte del ciclo, vuela en
-		# arco hasta su sitio nuevo un poco por delante (hacia donde se mueve): nada patina. Quieto, si un apoyo quedó
-		# lejos de su sitio (al pararse o cambiar de postura), va hasta él con un pasito.
-		var dir_m: Vector3 = cu.get("dir", Vector3.ZERO)
-		var adel := 0.75 * mk
-		var actuales := {"L": ((P.LeftFoot as Node3D).global_transform * Rbx.cfp(ankle_in_foot.L)).origin,
-			"R": ((P.RightFoot as Node3D).global_transform * Rbx.cfp(ankle_in_foot.R)).origin,
-			"mL": (P.LeftHand as Node3D).global_position, "mR": (P.RightHand as Node3D).global_position}
-		for k in ["L", "R", "mL", "mR"]:
-			if not apoyos.has(k):
-				cu_pasos.erase(k)
-				continue
-			var ap: Array = apoyos[k]
-			var ideal: Vector3 = en_c.call((ap[0] as Vector3) + dir_m * adel, float(ap[1]))
-			var st: Dictionary = cu_pasos.get(k, {})
-			if st.is_empty():
-				st = {"anc": actuales[k], "vuela": false, "desde": actuales[k], "t": 0.0}
-				if k == "L" or k == "R":
-					cu_pie[k] = ((P.LeftFoot if k == "L" else P.RightFoot) as Node3D).global_transform.basis.orthonormalized()
-					# (al entrar andando, el pie que iba por el aire no se para en seco: termina su paso hasta la cuesta)
-					var v0: Vector3 = pies_vel.get(k, Vector3.ZERO)
-					if v0.length() * dt > 0.12 or (ideal - (actuales[k] as Vector3)).length() > 1.2:
-						st.entra = true
-						st.t = 0.0
-						st.v0 = v0.limit_length(30.0)
-						st.dur = clampf(0.25 + (ideal - (actuales[k] as Vector3)).length() * 0.08, 0.25, 0.5)
-			var pos_k: Vector3
-			if st.get("entra", false):
-				# paso de entrada: curva que sale con la velocidad que llevaba el pie y llega parada a su sitio
-				st.t = float(st.t) + dt / float(st.dur)
-				var x := minf(1.0, float(st.t))
-				var h00 := 2.0 * x * x * x - 3.0 * x * x + 1.0
-				var h10 := x * x * x - 2.0 * x * x + x
-				var h01 := -2.0 * x * x * x + 3.0 * x * x
-				pos_k = (st.desde as Vector3) * h00 + (st.v0 as Vector3) * (float(st.dur) * h10) + ideal * h01
-				if x >= 1.0:
-					st.entra = false
-					st.anc = ideal
-					st.modo = ""
-					pos_k = ideal
-			elif fijo:
-				# (sentado los apoyos van con el cuerpo; al cambiar de postura llegan sin saltar)
-				var hacia_f: Vector3 = st.anc
-				pos_k = hacia_f + (ideal - hacia_f).limit_length((5.0 if en_cambio else 40.0) * dt)
-				st.anc = pos_k
-				st.vuela = false
-			elif mk > 0.05:
-				if st.get("modo", "") != "anda":
-					# (empieza a moverse: el que estaba a medio pasito lo termina desde donde está)
-					st.modo = "anda"
-					st.anc = st.get("ult", st.anc)
-					st.vuela = false
-				var u := fposmod(fz + float(ap[3]), TAU) / TAU
-				# (un paso solo empieza al principio de su parte del ciclo: si no, el pie "saltaba" al sitio nuevo)
-				if u < vuelo and (st.vuela or u < vuelo * 0.4):
-					if not st.vuela:
-						st.vuela = true
-						st.desde = st.anc
-						st.u0 = u
-					var u0: float = st.get("u0", 0.0)
-					var kv := Rbx.smooth((u - u0) / maxf(vuelo - u0, 0.05))
-					pos_k = (st.desde as Vector3).lerp(ideal, kv) + n_c * (float(ap[2]) * sin(PI * kv))
-				else:
-					if st.vuela:
-						st.vuela = false
-						st.anc = st.get("ult", st.anc)
-					pos_k = st.anc
-			else:
-				# quieto: un pasito si quedó lejos de su sitio (como quien se recoloca); más largo, más lento
-				if st.get("modo", "") != "quieto":
-					st.modo = "quieto"
-					st.anc = st.get("ult", st.anc)
-					st.vuela = false
-				var lejos := (ideal - (st.anc as Vector3)).length()
-				if st.vuela or lejos > 0.3:
-					if not st.vuela:
-						st.vuela = true
-						st.desde = st.anc
-						st.t = 0.0
-						st.dur = clampf(0.3 + lejos * 0.16, 0.3, 0.85)
-					st.t = float(st.t) + dt / float(st.get("dur", 0.4))
-					var kq := Rbx.smooth(minf(1.0, float(st.t)))
-					pos_k = (st.desde as Vector3).lerp(ideal, kq) + n_c * (0.25 * sin(PI * kq) * minf(1.0, lejos + 0.3))
-					if float(st.t) >= 1.0:
-						st.vuela = false
-						st.anc = ideal
-						pos_k = ideal
-				else:
-					st.anc = (st.anc as Vector3).lerp(ideal, 1.0 - exp(-4.0 * dt))
-					pos_k = st.anc
-			st["ult"] = pos_k
-			cu_pasos[k] = st
-			if k == "L" or k == "R":
-				leg_targets[k] = pos_k
-			else:
-				cu_manos[k.substr(1)] = pos_k
-		# rodillas: el punto de referencia cambia suave entre posturas
-		var k_pole := 1.0 - exp(-6.0 * dt)
-		for s in ["L", "R"]:
-			var obj_pole: Vector3 = poles[s]
-			var clave: String = "pole" + s
-			cu_suave[clave] = (cu_suave.get(clave, obj_pole) as Vector3).lerp(obj_pole, k_pole)
-			leg_targets[clave] = cu_suave[clave]
-		# el cuerpo sube un poco con cada empujón de las piernas
-		var empuje := (absf(sin(fz)) - 0.5) * 0.18 * mk if not fijo else 0.0
-		last_prone_t = now # (al salir de la cuesta, las piernas se mezclan suave con la animación normal)
-		Mr.transform = Rbx.cf(0, empuje, 0) * Rbx.ang(p_pitch, 0, p_roll)
-		# (al cambiar de postura la cadera gira despacio: con las piernas estiradas, un giro rápido de la pelvis
-		# hace barrer los pies)
-		smooth_j2(Mr, "Root", 5.0 if en_cambio else 9.0, dt)
-		pelvis_cf = fk(root_cf, Mr)
 		pelvis_drop = 0.0
 		replant = true
 	elif pb > 0.001:
@@ -1685,11 +1790,7 @@ func update_rig(dt: float) -> void:
 		neckR += ln * 0.24
 		# acometida del golpe: la cadera avanza, baja un poco y gira con los hombros
 		Mr.transform = Rbx.cf(-ln * 0.14, -pelvis_drop + bob - crouch - absf(ln) * 0.06 - mel_lunge * 0.22, -mel_lunge * 0.35) * Rbx.ang(pelvis_pitch, pelvis_yaw + mel_twist * 0.35, pelvis_roll + leanR * 0.3)
-		if now - ultima_cuesta_t < 0.8:
-			# (al salir de la cuesta la cadera se endereza con muelle y pasa poco a poco a la de andar)
-			smooth_j2(Mr, "Root", 9.0, dt, Rbx.smooth(clampf((now - ultima_cuesta_t - 0.3) / 0.5, 0.0, 1.0)))
-		else:
-			smooth_j(Mr, "Root", 16, dt)
+		smooth_j(Mr, "Root", 16, dt)
 		pelvis_cf = fk(root_cf, Mr)
 		# con la pelvis ya colocada (con su inercia), el pie apoyado rueda lo justo para que la
 		# pierna llegue casi recta desde la cadera real
@@ -1846,22 +1947,6 @@ func update_rig(dt: float) -> void:
 			if mt != null:
 				# en la moto: pie plano sobre el estribo (o el suelo), en la dirección de la moto
 				set_end(Lg, lower, Transform3D((mt.cuerpo as Transform3D).basis, target) * Rbx.ang(0.15, 0, 0))
-			elif cu != null:
-				# en la cuesta: el pie apoyado en ella (tumbado, de puntillas contra la cuesta)
-				var nn: Vector3 = cu.n
-				var fwp := Rbx.look(root_cf)
-				fwp = (fwp - nn * fwp.dot(nn)).normalized()
-				var bz := -fwp
-				var by := nn
-				if cu.postura == "tumbado":
-					by = fwp
-					bz = nn
-				# (el pie gira suave al cambiar de postura: si no, la punta da un salto)
-				var b_obj := Basis(by.cross(bz).normalized(), by, bz).orthonormalized()
-				var b_prev: Basis = cu_pie.get(s, b_obj)
-				var b_pie := b_prev.slerp(b_obj, 1.0 - exp(-7.0 * dt)).orthonormalized()
-				cu_pie[s] = b_pie
-				set_end(Lg, lower, Transform3D(b_pie, target))
 			elif not grounded:
 				set_end(Lg, lower, Rbx.cfp(target) * yaw_cf * Rbx.ang(-0.3, 0, 0))
 			else:
@@ -1869,22 +1954,11 @@ func update_rig(dt: float) -> void:
 			# justo después de levantarse: mezclar desde la pose de tumbado (sin saltos);
 			# el resto del tiempo solo se registra la pose para que el paso a tumbado parta de ella
 			var recent := now - last_prone_t < 0.6
-			# (al salir de la cuesta la mezcla es más lenta: las piernas vienen de una postura muy distinta)
-			# en la cuesta (y al salir) las piernas van con muelle: aceleran y frenan sin tirones
-			var t_fuera := now - ultima_cuesta_t
-			var muelle := cu != null or t_fuera < 0.8
 			for pair in [[Lg.top, "Hip"], [Lg.mid, "Knee"], [Lg.fin, "Ankle"]]:
-				if muelle:
-					smooth_j2(pair[0], s + pair[1], 13.0 if cu != null else 10.0, dt,
-						0.0 if cu != null else Rbx.smooth(clampf((t_fuera - 0.3) / 0.5, 0.0, 1.0)))
-				elif recent:
+				if recent:
 					smooth_j(pair[0], s + pair[1], 12.0, dt)
 				else:
 					anota_j(pair[0], s + pair[1], dt)
-
-	# en la cuesta los brazos no están "en el aire" (el resto de la animación la trata como en el suelo)
-	if cu != null:
-		grounded = true
 
 	## ------------------------------------------------ torso provisional (para calcular el pecho)
 	var Mw: RigPersonaje.Motor = M.Waist
@@ -1893,17 +1967,48 @@ func update_rig(dt: float) -> void:
 	var chest_yaw_base := Rbx.cfp(chest_cf.origin) * yaw_cf
 	# tumbado: el torso y la cabeza cubren la diferencia hasta que el cuerpo termina de pivotar
 	var prone_aim := pb > 0.5
-	# en la moto se apunta (y se golpea) girando el torso hacia la cámara: la moto sigue recta
+	# en la moto se apunta (y se golpea) girando el torso hacia la cámara: la moto sigue recta.
+	# Con arma de fuego (2026-10-30): apuntado LIBRE en 360°. Hacia delante, la derecha y detrás por la
+	# derecha dispara con la mano derecha; hacia la izquierda y detrás por la izquierda se pasa el arma a la
+	# mano izquierda (la derecha va al puño del acelerador). Ver _paso_mano_moto y "apuntado en la moto"
 	var rel_obj := 0.0
+	moto_fuego = false
 	if mt != null:
 		var tool_m: String = J.arsenal.equipado
+		var cfg_m: Dictionary = Armas.WEAPONS.get(tool_m, {})
 		var golpeando: bool = melee_st != null and now - float(melee_st.start) < float(melee_st.dur)
-		if tool_m != "" and (aiming or L.firing or now - last_shot_t < 0.8 or golpeando):
-			rel_obj = clampf(Rbx.wrap_a(float(L.yaw) - yaw), -2.7, 2.3)
-	rel_aim = Rbx.damp(rel_aim, rel_obj, 9.0 if mt != null else (3.5 if prone_aim else 5.0), dt)
+		var apunta_m: bool = tool_m != "" and (aiming or L.firing or now - last_shot_t < 0.8)
+		if cfg_m.get("Kind", "") == "Gun":
+			moto_fuego = true
+			if draw_st != null or L.holster != null:
+				_soltar_mano_moto() # sacar/guardar: siempre con la derecha
+			var rel_t := Rbx.wrap_a(float(L.yaw) - yaw)
+			var ocupado: bool = draw_st != null or L.holster != null or reload_st != null or float(mt.subir) < 1.0
+			_paso_mano_moto(apunta_m and not ocupado, rel_t, now)
+			if apunta_m:
+				rel_obj = angulo_mira(rel_t)
+		elif tool_m != "" and (apunta_m or golpeando):
+			rel_obj = clampf(Rbx.wrap_a(float(L.yaw) - yaw), -GOLPE_MOTO_DER, GOLPE_MOTO_IZQ)
+	else:
+		_soltar_mano_moto()
 	if mt != null:
-		waistY += rel_aim * 0.45
-		neckY += rel_aim * 0.3
+		# en la moto el torso y el brazo giran como un cuerpo de verdad (2026-11-01): muelle críticamente
+		# amortiguado con velocidad máxima (antes, con un suavizado simple, un tirón del ratón movía la mano a
+		# más de 70 studs/s de golpe). Arranca y frena con suavidad; media vuelta tarda ~0,7 s
+		var mr := _muelle_lim(rel_aim, moto_giro_vel, rel_obj, GIRO_W, GIRO_VMAX, GIRO_ACEL, dt)
+		rel_aim = mr[0]
+		moto_giro_vel = mr[1]
+	else:
+		moto_giro_vel = 0.0
+		rel_aim = Rbx.damp(rel_aim, rel_obj, 3.5 if prone_aim else 5.0, dt)
+	if mt != null:
+		if moto_fuego:
+			# APUNTADO EN LA MOTO: la pose (cintura, cuello y brazo derecho) sale de las poses hechas en Blender
+			# (PosesMoto), mezcladas según hacia dónde se apunta; se aplica abajo, en "aplicar torso, cuello y brazos"
+			moto_pose = _pose_moto(rel_aim, clampf(pitch, -1.2, 1.1), now)
+		else:
+			waistY += rel_aim * 0.45
+			neckY += rel_aim * 0.3
 	# (siempre que esté tumbado, no solo al apuntar: si no, al volver a ponerse boca abajo sin apuntar
 	# el arma y los brazos se quedaban mirando hacia los pies, hacia atrás)
 	if prone_aim:
@@ -2058,6 +2163,17 @@ func update_rig(dt: float) -> void:
 			else:
 				target_rel = Rbx.ang(pc * 0.35, 0, 0) * Armas.pose(tool, "LOW")
 				speed_pose = 4.5
+			# postura del cuerpo diseñada en Blender (PosturasPie) para este estado
+			var est_p := "LOW"
+			if reloading:
+				est_p = "LOW"
+			elif va != null or (sprinting and not aiming and not firing_recent):
+				est_p = "SPRINT"
+			elif aiming:
+				est_p = "AIM"
+			elif firing_recent or L.firing:
+				est_p = "HIP"
+			_paso_postura_pie(tool, est_p, pc, mt == null and pb < 0.5, speed_pose, dt)
 			# tumbado: arma apoyada sobre los codos, siempre lista
 			if pb > 0.8 and not reloading:
 				target_rel = Rbx.ang(pc, 0, 0) * Armas.pose(tool, "PRONE")
@@ -2132,6 +2248,18 @@ func update_rig(dt: float) -> void:
 		var piv := Vector3(0.92, 0.51, 0)
 		var swing_t := Rbx.cfp(piv) * Rbx.ang(swing_arma, 0, 0) * Rbx.cfp(-piv)
 		var handle_cf: Transform3D = aim_base * Rbx.cfp(sway) * swing_t * pose_rel * Rbx.cf(0, 0, kick * 0.06) * Rbx.ang(kick_rot * 0.05, 0, 0)
+		# APUNTADO EN LA MOTO (arma de fuego, 360°): el brazo derecho lo coloca la pose de Blender (ver
+		# _pose_moto y "aplicar torso, cuello y brazos"); aquí solo cuánto está apuntando (0 = arma baja, por IK)
+		var h_arma := "R"
+		var pole_moto = null
+		if moto_fuego and kind == "Gun":
+			var apunta_ok: bool = (aiming or firing_recent or L.firing) and draw_st == null and L.holster == null and not reloading
+			moto_apunta_k = Rbx.damp(moto_apunta_k, 1.0 if apunta_ok else 0.0, 8.0, dt)
+			_paso_correccion_moto(mdl, dt)
+		else:
+			moto_apunta_k = 0.0
+			moto_corr_q = Quaternion.IDENTITY
+		_arma_a_mano(mdl, tool, h_arma)
 		# CORRER con pistola o arma blanca de una mano: el brazo bombea como al correr sin arma
 		# (la muñeca inclina el arma hacia abajo); el bate va al hombro
 		correr_libre = sprinting and grounded and va == null and pb < 0.5 and libre_k > 0.5 and (Armas.base(tool) == "Pistola" or (kind == "Melee" and not Armas.dos_manos(tool))) \
@@ -2145,6 +2273,7 @@ func update_rig(dt: float) -> void:
 		var spot_part: Node3D = P.get(spot.get("Part", ""))
 		var D := Armas.draw(tool)
 		var holster_t = null
+		var fuera_saca := 0.0   # al sacar o guardar el arma de fuego: cuánto se aparta ya del torso (ver más abajo)
 		if L.holster != null and L.holster.name == tool:
 			holster_t = (now - float(L.holster.t0)) / Armas.HOLSTER_TIME
 		if spot_part and not D.is_empty():
@@ -2157,6 +2286,7 @@ func update_rig(dt: float) -> void:
 					var u := Rbx.smooth(clampf(holster_t / back, 0, 1))
 					handle_cf = handle_cf.interpolate_with(mid_w, u).interpolate_with(mid_w.interpolate_with(holster_w, u), u)
 					support_w = 1.0 - Rbx.smooth(clampf(u / 0.35, 0, 1))
+					fuera_saca = 1.0 - Rbx.smooth(clampf(u / 0.5, 0, 1))
 				else:
 					# ya enfundada: la mano vuelve a su sitio
 					var u2 := Rbx.smooth(clampf((holster_t - back) / (1 - back), 0, 1))
@@ -2182,6 +2312,7 @@ func update_rig(dt: float) -> void:
 						var u3 := Rbx.smooth((t3 - float(D.reach)) / (1.0 - float(D.reach)))
 						handle_cf = holster_w.interpolate_with(mid_w, u3).interpolate_with(mid_w.interpolate_with(handle_cf, u3), u3)
 						support_w = Rbx.smooth(clampf((u3 - 0.7) / 0.3, 0, 1))
+						fuera_saca = Rbx.smooth(clampf((u3 - 0.1) / 0.45, 0, 1))
 
 		# apuntando o disparando, el cañón se orienta hacia lo que marca la mira (la cámara va al hombro,
 		# así que sin esto el arma iba paralela a la mira y la bala salía con otra inclinación). La bala
@@ -2209,12 +2340,29 @@ func update_rig(dt: float) -> void:
 		# las armas blancas nunca atraviesan el propio cuerpo (torso, cabeza, cadera, muslos)
 		if kind == "Melee" and tool_shown and pb < 0.5:
 			handle_cf = _arma_fuera_del_cuerpo(handle_cf, tool, pelvis_cf, chest_cf)
+		# las de fuego, el torso (ni tumbado ni en la moto; al sacarla o guardarla, solo en el tramo de delante del
+		# cuerpo: al principio y al final del recorrido va o viene de la funda, a la espalda o en el muslo)
+		var fuera_t := 1.0 if kind == "Gun" and tool_shown and mdl and pb < 0.5 and mt == null else 0.0
+		if draw_st != null or holster_t != null:
+			fuera_t *= fuera_saca
+			fuera_w = minf(Rbx.damp(fuera_w, fuera_t, 8.0, dt), fuera_t)
+		else:
+			fuera_w = Rbx.damp(fuera_w, fuera_t, 8.0, dt)
+		if kind == "Gun" and mdl and fuera_w > 0.001:
+			# (con el pecho como quedará este fotograma: la postura de pie lo gira y lo inclina más abajo)
+			var kp := pie_k
+			var t_w := Rbx.ang(0, waistY + pie_w.x * kp - blade, 0) \
+					* Rbx.ang(waistP + breath + pie_w.y * kp + pc * 0.35 * (1.0 - kp), 0, waistR + pie_w.z * kp)
+			var pecho_fin: Transform3D = pelvis_cf * Mw.c0 * t_w * Mw.c1inv
+			handle_cf = _arma_de_fuego_fuera(handle_cf, _puntos_arma(mdl, tool), pelvis_cf, pecho_fin, fuera_w)
 		# mano derecha: la que sostiene el arma
 		var hand_cf: Transform3D = handle_cf * Armas.grip(tool) * Armas.grip_att().affine_inverse()
 		# codo: de pie hacia abajo y atrás; tumbado hacia fuera y delante
 		var pole_r := (aim_base * Rbx.cf(1.7, -0.7, -0.3)).origin if pb > 0.5 else (aim_base * Rbx.cf(1.9, -1.4, 0.9)).origin
+		if pie_k > 0.001 and pb <= 0.5:
+			pole_r = pole_r.lerp(aim_base * pie_polo_r, pie_k)
 		if not correr_libre:
-			hand_ik.R = {"cf": hand_cf, "pole": pole_r, "w": 1.0}
+			hand_ik.R = {"cf": hand_cf, "pole": pole_moto if pole_moto != null else pole_r, "w": 1.0}
 		waistP += kick_rot * 0.012
 
 		# mano izquierda
@@ -2227,7 +2375,9 @@ func update_rig(dt: float) -> void:
 			if support:
 				support_pos = Armas.punto_local(mdl, support.name)
 		var pole_l := (aim_base * Rbx.cf(-1.7, -0.7, -0.3)).origin if pb > 0.5 else (chest_yaw_base * Rbx.cf(-1.9, -1.5, 0.3)).origin
-		if reloading and mdl:
+		if pie_k > 0.001 and pb <= 0.5:
+			pole_l = pole_l.lerp(aim_base * pie_polo_l, pie_k)
+		if reloading and mdl and h_arma == "R":
 			var R2: Dictionary = reload_st.R
 			var t4: float = (now - float(reload_st.start)) * (float(R2.dur) / float(reload_st.dur))
 			var refs := {"grip": support_pos}
@@ -2246,15 +2396,26 @@ func update_rig(dt: float) -> void:
 					break
 			hand_ik.L = {"pos": pos, "pole": pole_l, "w": 1.0}
 			left_free = false
-		elif support:
+		elif support and h_arma == "R":
 			var one_handed: bool = (Armas.base(tool) == "Pistola" and sprinting and not aiming) or (kind == "Melee" and not Armas.dos_manos(tool)) \
 				or mt != null # en la moto la izquierda va en el manillar
 			if not one_handed:
 				hand_ik.L = {"pos": handle_cf * support_pos, "pole": pole_l, "w": support_w}
 				left_free = false
-		waistP += (pc * 0.35 if kind == "Gun" else pc * 0.12)
-		neckP += (pc * 0.35 if kind == "Gun" else pc * 0.2)
-		if Armas.base(tool) == "Rifle" and not sprinting:
+		# de pie con un arma de fuego: el pecho, la cintura y la cabeza según la postura de Blender (PosturasPie);
+		# en el resto de casos (tumbado, en la moto, armas blancas), como antes
+		var k_pie := pie_k if kind == "Gun" else 0.0
+		waistY += pie_w.x * k_pie
+		waistP += pie_w.y * k_pie
+		waistR += pie_w.z * k_pie
+		neckY += pie_n.x * k_pie
+		neckP += pie_n.y * k_pie
+		neckR += pie_n.z * k_pie
+		waistP += (pc * 0.35 if kind == "Gun" else pc * 0.12) * (1.0 - k_pie)
+		neckP += (pc * 0.35 if kind == "Gun" else pc * 0.2) * (1.0 - k_pie)
+		if k_pie > 0.5:
+			blade = Rbx.damp(blade, 0.0, 8, dt) # (el giro del pecho ya va en la postura)
+		elif Armas.base(tool) == "Rifle" and not sprinting:
 			blade = Rbx.damp(blade, 0.4 if aiming else 0.25, 8, dt)
 			if aiming:
 				neckP -= 0.12
@@ -2278,72 +2439,14 @@ func update_rig(dt: float) -> void:
 				continue
 			var sgn := -1.0 if s == "L" else 1.0
 			var pt: Transform3D = mt["puno" + s]
-			hand_ik[s] = {"pos": pt.origin + cpo2.basis.y * 0.04, "pole": (chest_cf * Rbx.cf(sgn * 1.7, -1.0, 0.9)).origin,
-				"w": w_m, "rot": rot_m, "rot_w": 1.0}
+			var pos_pu := pt.origin + cpo2.basis.y * 0.04
+			var rot_pw := 1.0
+			hand_ik[s] = {"pos": pos_pu, "pole": (chest_cf * Rbx.cf(sgn * 1.7, -1.0, 0.9)).origin,
+				"w": w_m, "rot": rot_m, "rot_w": rot_pw}
 			if s == "L":
 				left_free = false
 			else:
 				right_free = false
-
-	## ------------------------------------------------ en la cuesta: manos apoyadas (la que esté libre)
-	if cu != null and not cu_manos.is_empty():
-		var nn2: Vector3 = cu.n
-		var apunta: bool = aiming or L.firing or now - last_shot_t < 0.6
-		var fw2 := Rbx.look(root_cf)
-		fw2 = (fw2 - nn2 * fw2.dot(nn2)).normalized()
-		var rot_c := Basis(fw2.cross(nn2).normalized(), nn2, -fw2).orthonormalized()
-		for s in ["L", "R"]:
-			if not cu_manos.has(s):
-				continue
-			var sgn := -1.0 if s == "L" else 1.0
-			var pole_c := (chest_yaw_base * Rbx.cf(sgn * 1.8, -0.4, 0.6)).origin
-			var ik_c := {"pos": cu_manos[s], "pole": pole_c, "w": 1.0, "rot": rot_c, "rot_w": 0.8}
-			if (s == "L" and left_free) or (s == "R" and right_free):
-				hand_ik[s] = ik_c
-			elif s == "L" and hand_ik.has("L") and not apunta:
-				# con la pistola: la mano de apoyo la suelta y se agarra a la cuesta (al apuntar vuelve al arma)
-				hand_ik.L = ik_c
-			else:
-				continue
-			if s == "L":
-				left_free = false
-			else:
-				right_free = false
-		# de costado, la mano de fuera (sin apoyo ni arma) descansa sobre el muslo en vez de colgar contra la cuesta
-		if str(cu.postura) == "lado":
-			for s in ["L", "R"]:
-				if cu_manos.has(s) or hand_ik.has(s):
-					continue
-				var sgn_l := -1.0 if s == "L" else 1.0
-				hand_ik[s] = {"pos": (chest_cf * Rbx.cf(sgn_l * 1.15, -1.7, -0.35)).origin,
-					"pole": (chest_cf * Rbx.cf(sgn_l * 1.8, -0.6, 0.6)).origin, "w": 1.0}
-
-	# en la cuesta las manos pasan del arma a la cuesta (y al revés) sin saltar: van con muelle (aceleran y frenan)
-	if cu != null:
-		for s in ["L", "R"]:
-			if not hand_ik.has(s):
-				cu_mano.erase(s)
-				cu_mano_v.erase(s)
-				continue
-			var ik_h: Dictionary = hand_ik[s]
-			var obj_h: Vector3 = (ik_h.cf as Transform3D).origin if ik_h.has("cf") else (ik_h.wrist if ik_h.has("wrist") else ik_h.pos)
-			var ant_h: Vector3 = cu_mano.get(s, (P.LeftHand if s == "L" else P.RightHand).global_position)
-			var v_h: Vector3 = cu_mano_v.get(s, Vector3.ZERO)
-			var om_h := 12.0
-			v_h = (v_h + (obj_h - ant_h) * (om_h * om_h * dt)) / (1.0 + 2.0 * om_h * dt + om_h * om_h * dt * dt)
-			v_h = v_h.limit_length(14.0)
-			var nuevo_h := ant_h + v_h * dt
-			cu_mano[s] = nuevo_h
-			cu_mano_v[s] = v_h
-			if (nuevo_h - obj_h).length() > 0.05:
-				var ik_n := {"pos": nuevo_h, "pole": ik_h.pole, "w": ik_h.w}
-				if ik_h.has("rot"):
-					ik_n.rot = ik_h.rot
-					ik_n.rot_w = ik_h.get("rot_w", 1.0)
-				hand_ik[s] = ik_n
-	elif not cu_mano.is_empty():
-		cu_mano.clear()
-		cu_mano_v.clear()
 
 	## ------------------------------------------------ sortear: manos sobre el obstáculo
 	if va != null:
@@ -2566,6 +2669,13 @@ func update_rig(dt: float) -> void:
 	var Mn: RigPersonaje.Motor = M.Neck
 	Mw.transform = Rbx.ang(0, waistY, 0) * Rbx.ang(waistP + breath, 0, waistR)
 	Mn.transform = Rbx.ang(0, neckY, 0) * Rbx.ang(neckP - breath * 0.5, 0, neckR)
+	if moto_fuego and moto_apunta_k > 0.001 and moto_pose.size() == 5:
+		# pose de Blender: el giro de la cintura y del cuello respecto a la pose de conducir (sobre lo que ya
+		# hace el cuerpo en la moto: agacharse, inclinarse en las curvas, respirar)
+		var dw: Quaternion = (moto_pose[0] as Quaternion) * (PosesMoto.BASE[0] as Quaternion).inverse()
+		var dn: Quaternion = (moto_pose[1] as Quaternion) * (PosesMoto.BASE[1] as Quaternion).inverse()
+		Mw.transform.basis = Basis(Quaternion.IDENTITY.slerp(dw.normalized(), moto_apunta_k)) * Mw.transform.basis
+		Mn.transform.basis = Basis(Quaternion.IDENTITY.slerp(dn.normalized(), moto_apunta_k)) * Mn.transform.basis
 	smooth_j(Mw, "Waist", 6.0 if pb > 0.01 else (30.0 if mel_t >= 0.0 else 10.0), dt)
 	smooth_j(Mn, "Neck", 7, dt)
 	chest_cf = fk(pelvis_cf, Mw)
@@ -2602,6 +2712,14 @@ func update_rig(dt: float) -> void:
 					set_end(Lm, res_a[1], Transform3D(ik.rot, Vector3.ZERO), wgt * float(ik.get("rot_w", 1.0)))
 		else:
 			w_side[s] = Rbx.damp(w_side[s], 0, 8, dt)
+		if s == "R" and moto_fuego and moto_apunta_k > 0.001 and moto_pose.size() == 5:
+			# apuntando en la moto: el brazo derecho con la pose de Blender (FK: hombro, codo y muñeca), mezclada
+			# con la de la IK (arma baja) mientras sube; la muñeca lleva además la pequeña corrección hacia la mira
+			var k_m := moto_apunta_k
+			Lm.top.transform = Transform3D(Basis(Quaternion(Lm.top.transform.basis.orthonormalized()).slerp(moto_pose[2], k_m)), Vector3.ZERO)
+			Lm.mid.transform = Transform3D(Basis(Quaternion(Lm.mid.transform.basis.orthonormalized()).slerp(moto_pose[3], k_m)), Vector3.ZERO)
+			var qw: Quaternion = (moto_pose[4] as Quaternion) * moto_corr_q
+			Lm.fin.transform = Transform3D(Basis(Quaternion(Lm.fin.transform.basis.orthonormalized()).slerp(qw.normalized(), k_m)), Vector3.ZERO)
 		# brazos suavizados
 		# corriendo los brazos van rápidos: poco suavizado para no perder amplitud ni ir con retraso
 		var arm_rate := lerpf(9.0, 14.0, run_arm)
@@ -2613,18 +2731,9 @@ func update_rig(dt: float) -> void:
 				arm_rate = 60.0
 			elif draw_st != null or L.holster != null:
 				arm_rate = 30.0
-		var t_fuera_b := now - ultima_cuesta_t
-		if cu != null or t_fuera_b < 0.8:
-			# en la cuesta (y al salir) los brazos van con muelle: las manos cambian de apoyo sin tirones
-			var om := 16.0 if (tool != "" and hand_ik.has(s) and hand_ik[s].has("cf")) else 11.0
-			var dir_b := 0.0 if cu != null else Rbx.smooth(clampf((t_fuera_b - 0.3) / 0.5, 0.0, 1.0))
-			smooth_j2(Lm.top, s + "Sh", om, dt, dir_b)
-			smooth_j2(Lm.mid, s + "El", om, dt, dir_b)
-			smooth_j2(Lm.fin, s + "Wr", om, dt, dir_b)
-		else:
-			smooth_j(Lm.top, s + "Sh", arm_rate, dt)
-			smooth_j(Lm.mid, s + "El", arm_rate, dt)
-			smooth_j(Lm.fin, s + "Wr", arm_rate if tool != "" else 9.0, dt)
+		smooth_j(Lm.top, s + "Sh", arm_rate, dt)
+		smooth_j(Lm.mid, s + "El", arm_rate, dt)
+		smooth_j(Lm.fin, s + "Wr", arm_rate if tool != "" else 9.0, dt)
 		# las manos y antebrazos nunca atraviesan paredes ni estructuras
 		if pb < 0.5 and not (hand_ik.has(s) and w_side[s] > 0.3):
 			_brazo_sin_choque(Lm, s, chest_cf)

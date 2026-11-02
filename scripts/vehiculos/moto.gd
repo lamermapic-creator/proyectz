@@ -26,8 +26,10 @@ const CHOQUE := 30.0           # velocidad de impacto (studs/s) contra una pared
 ## bastante más: por debajo de CHOQUE_BAJO la moto rebota y frena, pero el piloto aguanta
 const CHOQUE_BAJO := 40.0
 const OBST_BAJO := 1.4          # (studs, ~43 cm) más bajo que esto, el piloto sale por encima del obstáculo
-const ESCALON_RAPIDO := 0.6     # deprisa, la rueda sube escalones algo más altos (~19 cm; con el paso, hasta ~30 cm) de un golpe
+const ESCALON_RAPIDO := 0.78    # deprisa, algo más (~24 cm). (2026-10-29) Antes despacio solo subía 14 cm y deprisa 19: tras
+								# chocar con un bloque de 20 cm a medias (una rueda arriba y otra abajo) ya no podía subirlo nunca
 const ATRAS := 5.0             # marcha atrás (empujando con los pies)
+const AGARRE_RUEDA := 0.95     # coeficiente de agarre del neumático (acelerando, la rueda de atrás lleva ~80 % del peso)
 const BATALLA := 4.6           # distancia entre ejes
 const GRAV := 35.0
 const AGARRE := 160.0          # cuánto se frena el deslizamiento lateral (studs/s²)
@@ -37,7 +39,7 @@ const RUIDO_RALENTI := 26.0    # radio del ruido del motor al ralentí (studs)
 const RUIDO_MAX := 95.0        # a tope de vueltas
 const ATROPELLO_MIN := 9.0     # velocidad mínima para atropellar (más despacio, solo empuja)
 const ALCANCE_SUBIR := 7.0
-const ESCALON_MAX := 0.45      # bordillo más alto que sube (studs, ~14 cm); más alto = obstáculo
+const ESCALON_MAX := 0.72      # bordillo más alto que sube despacio (studs, ~22 cm, 0,7 del radio de la rueda); más alto = obstáculo
 const LEVANTAR_DUR := 1.6      # s que se tarda en levantar la moto del suelo
 const HUNDIDO := 0.07          # cuánto se aplastan los neumáticos con el peso (studs)
 
@@ -62,8 +64,25 @@ var caida_k := 0.0             # 0..1 (animación de caer / levantarla)
 var caida_lado := 1.0
 var luces := true
 var motor_on := false
-var susp := 0.0                # compresión de la suspensión (visual)
+var susp := 0.0                # compresión media de la suspensión (studs; para el aplastado de los neumáticos)
 var susp_v := 0.0
+## SUSPENSIÓN (2026-10-29): delante (horquilla) y detrás (basculante + amortiguadores), cada una un muelle con
+## amortiguación. Compresión en studs (0 = extendida del todo). La aprietan: el peso (SUSP_SAG), las ruedas al subir de
+## golpe (baches, bordillos, aterrizajes: la velocidad vertical del eje cambia de repente), frenar (se hunde delante),
+## acelerar (se agacha detrás) y tumbarse en las curvas. Solo es visual: el cuerpo y el piloto se mueven sobre las ruedas
+var sus_d := 0.0
+var sus_dv := 0.0
+var sus_t := 0.0
+var sus_tv := 0.0
+var _vf_prev := 0.0
+var _acel_long := 0.0
+var _eje_vy := {}             # velocidad vertical de cada eje (fotograma anterior)
+var _eje_y := {}
+const SUSP_SAG := 0.12         # compresión con el peso de la moto (con piloto, más)
+const SUSP_SAG_PILOTO := 0.2
+const SUSP_RECORRIDO := 0.6    # compresión máxima (hace tope)
+const SUSP_K := 170.0          # rigidez (frecuencia ~2 Hz)
+const SUSP_C := 10.0           # amortiguación (rebota un poco)
 var cab_suelo := 0.0           # inclinación del suelo bajo las ruedas (suavizada)
 var suelo_del := {}            # último apoyo de cada rueda {pos, normal} (para aplastar el neumático)
 var suelo_tras := {}
@@ -181,6 +200,18 @@ func estribo(lado: String) -> Vector3:
 	return cuerpo_cf() * Vector3(x, ModeloMoto.ESTRIBO.y + 0.12, ModeloMoto.ESTRIBO.z)
 
 
+## ¿está "pos" a un lado de la moto? (2026-10-29: para subirse o levantarla hay que ponerse a su lado, no delante
+## ni detrás). Tumbada, a lo largo de su eje (el de las ruedas)
+func de_lado(pos: Vector3) -> bool:
+	var cpo := cuerpo_cf() if caida else global_transform
+	var eje := Rbx.flat(cpo.basis.z)
+	eje = eje.normalized() if eje.length() > 0.2 else Rbx.flat(global_transform.basis.z).normalized()
+	var d := Rbx.flat(pos - cpo.origin)
+	var a_lo_largo := absf(d.dot(eje))
+	var al_lado := (d - eje * d.dot(eje)).length()
+	return a_lo_largo < 2.1 and al_lado < ALCANCE_SUBIR and al_lado > 0.4
+
+
 func se_puede_subir() -> bool:
 	return piloto == null and not caida and not levantando and caida_k < 0.01
 
@@ -200,7 +231,8 @@ func bajar() -> void:
 	piloto = null
 	motor_on = false
 	gas = 0.0
-	if absf(velocidad()) < 4.0 and not en_aire:
+	# (despacio, o marcha atrás empujando con los pies: el piloto la deja en la pata)
+	if velocidad() < 4.0 and velocidad() > -ATRAS - 1.0 and not en_aire:
 		aparcada = true
 		vel_h = Vector3.ZERO
 
@@ -383,13 +415,18 @@ func paso(dt: float, mandos: Dictionary) -> void:
 				else:
 					# curva de par: mucho empuje abajo (arranca y sube cuestas con fuerza) que se acaba en la punta
 					var k_v := clampf(v_f / VMAX, 0.0, 1.0)
-					v_f += ACEL * gas * (1.6 - 0.9 * k_v) * (1.0 - pow(k_v, 4.0)) * dt
+					var empuje := ACEL * gas * (1.6 - 0.9 * k_v) * (1.0 - pow(k_v, 4.0))
+					# (2026-10-29) la rueda no puede empujar más de lo que agarra: en una cuesta muy empinada patina
+					# (cuesta arriba a más de ~40° ya no gana velocidad: si no, trepaba paredes de 50° como un cohete)
+					if apoyo == 2:
+						empuje = minf(empuje, AGARRE_RUEDA * GRAV * cos(cab_suelo) * 0.8)
+					v_f += empuje * dt
 			if f_in > 0.05:
 				if v_f > 0.5:
 					v_f = maxf(0.0, v_f - FRENO * f_in * dt)
 				elif g_in < 0.05:
 					# parada: marcha atrás, empujando con los pies
-					v_f = move_toward(v_f, -ATRAS * f_in, 6.0 * dt)
+					v_f = move_toward(v_f, -ATRAS * f_in, 11.0 * dt)
 			if mano:
 				v_f = move_toward(v_f, 0.0, 9.0 * dt)
 			# rozamiento, aire y freno motor
@@ -399,7 +436,10 @@ func paso(dt: float, mandos: Dictionary) -> void:
 			# (con una sola rueda, la gravedad ya va en vel_v: ver _mover)
 			if not aparcada:
 				if apoyo == 2:
-					v_f -= GRAV * sin(cab_suelo) * dt
+					# (empujando hacia atrás con los pies, el piloto aguanta casi todo el peso: si no, con la rueda de
+					# delante metida en un hueco no había forma de sacarla marcha atrás)
+					var k_g := 0.25 if (piloto != null and f_in > 0.05 and g_in < 0.05 and v_f < 0.6) else 1.0
+					v_f -= GRAV * sin(cab_suelo) * dt * k_g
 				# parada sin tocar nada con alguien encima: el piloto la sujeta con el freno
 				if piloto != null and g_in < 0.05 and f_in < 0.05 and absf(v_f) < 1.2:
 					v_f = move_toward(v_f, 0.0, 30.0 * dt)
@@ -631,14 +671,10 @@ func _mover(dt: float) -> void:
 			var v_largo := vh_f * cos(c) + vv * sin(c)
 			if apoyo0 == 0:
 				_aterrizar(golpe, c_libre - c, m.y)
-			else:
-				susp_v -= clampf(golpe, 0.0, 40.0) * 0.08
 			vf = v_largo * (0.8 if (_malo and apoyo0 == 0) else 1.0)
 		else:
 			# un bache: el suelo empuja la moto hacia arriba (la suspensión lo encaja)
 			var subida := (float(h_del.y) - fin_d.y + float(h_tras.y) - fin_t.y) * 0.5
-			if subida > 0.05:
-				susp_v -= minf(subida, ESCALON_RAPIDO) * 9.0
 			if subida > 0.3 and (h_del.normal as Vector3).y > 0.95 and (h_tras.normal as Vector3).y > 0.95:
 				# un escalón alto subido de golpe: frena y sacude
 				vf *= 1.0 - minf(0.3, (subida - 0.3) * 0.6)
@@ -763,10 +799,102 @@ func _mover(dt: float) -> void:
 				piloto.shake = minf(1.0, piloto.shake + impacto / 30.0)
 			if piloto == null and not aparcada and impacto > 12.0:
 				caer()
-	# suspensión (muelle visual)
-	susp_v += (-susp * 220.0 - susp_v * 16.0) * dt
-	susp += susp_v * dt
-	susp = clampf(susp, -0.25, 0.45)
+	_paso_suspension(dt, vf)
+	_no_atravesar_suelo()
+
+
+## red de seguridad (2026-10-29): si la moto ha atravesado el suelo (cae deprisa y justo encima hay una superficie
+## que debería estar debajo), vuelve encima de ella parada. Antes, mal levantada, caía al vacío con el piloto
+var _vacio_t := 0.0
+func _no_atravesar_suelo() -> void:
+	if apoyo != 0 or vel_v > -12.0:
+		return
+	_vacio_t += 1.0
+	if int(_vacio_t) % 8 != 0:
+		return
+	var p := global_position
+	var q := PhysicsRayQueryParameters3D.create(p + Vector3(0, 0.3, 0), p + Vector3(0, 40.0, 0), 1)
+	q.exclude = [get_rid()]
+	q.hit_from_inside = true
+	q.hit_back_faces = true
+	var r := get_world_3d().direct_space_state.intersect_ray(q)
+	if r.is_empty():
+		return
+	# ¿hay suelo "de verdad" justo encima? (desde arriba del todo hacia abajo)
+	var q2 := PhysicsRayQueryParameters3D.create(Vector3(p.x, p.y + 60.0, p.z), Vector3(p.x, p.y + 0.3, p.z), 1)
+	q2.exclude = [get_rid()]
+	var r2 := get_world_3d().direct_space_state.intersect_ray(q2)
+	if r2.is_empty() or (r2.normal as Vector3).y < 0.6:
+		return
+	global_position = (r2.position as Vector3) + Vector3(0, 0.05, 0)
+	vel_v = 0.0
+	vel_h = Vector3.ZERO
+	cabeceo = 0.0
+	cab_w = 0.0
+	apoyo = 2
+	en_aire = false
+	_toca_del = true
+	_toca_tras = true
+
+
+func _golpe_susp(del: float, tras: float) -> void:
+	sus_dv += del
+	sus_tv += tras
+
+
+func _paso_suspension(dt: float, vf: float) -> void:
+	if dt <= 0.0:
+		return
+	var sag := SUSP_SAG_PILOTO if piloto != null else SUSP_SAG
+	var obj_d := sag
+	var obj_t := sag
+	if apoyo == 0:
+		# en el aire se estira del todo
+		obj_d = 0.0
+		obj_t = 0.0
+	else:
+		# frenar hunde la horquilla; acelerar agacha la parte de atrás
+		_acel_long = lerpf(_acel_long, (vf - _vf_prev) / dt, 1.0 - exp(-10.0 * dt))
+		var tr := clampf(_acel_long * 0.011, -0.32, 0.32)
+		obj_d -= tr
+		obj_t += tr * 0.6
+		# tumbada en una curva, la fuerza aprieta las dos
+		var g_lat := 1.0 / maxf(0.5, cos(inclinacion)) - 1.0
+		obj_d += g_lat * 0.18
+		obj_t += g_lat * 0.18
+	_vf_prev = vf
+	# las ruedas que suben de golpe (bache, bordillo, aterrizaje) aprietan su muelle; las que caen lo estiran
+	for del in [true, false]:
+		var y_e := _eje_mundo(del).y
+		var vy := (y_e - float(_eje_y.get(del, y_e))) / dt
+		var dvy := vy - float(_eje_vy.get(del, vy))
+		_eje_y[del] = y_e
+		_eje_vy[del] = vy
+		if apoyo == 0:
+			continue
+		var imp := clampf(dvy, -8.0, 45.0) * (0.55 if dvy > 0.0 else 0.25)
+		if del:
+			sus_dv += imp
+		else:
+			sus_tv += imp
+	sus_dv += (-(sus_d - obj_d) * SUSP_K - sus_dv * SUSP_C) * dt
+	sus_tv += (-(sus_t - obj_t) * SUSP_K - sus_tv * SUSP_C) * dt
+	sus_d += sus_dv * dt
+	sus_t += sus_tv * dt
+	# topes: extendida del todo y comprimida del todo (el golpe seco se lo come el tope)
+	if sus_d < 0.0:
+		sus_d = 0.0
+		sus_dv = maxf(sus_dv, 0.0)
+	if sus_d > SUSP_RECORRIDO:
+		sus_d = SUSP_RECORRIDO
+		sus_dv = minf(sus_dv, 0.0)
+	if sus_t < 0.0:
+		sus_t = 0.0
+		sus_tv = maxf(sus_tv, 0.0)
+	if sus_t > SUSP_RECORRIDO:
+		sus_t = SUSP_RECORRIDO
+		sus_tv = minf(sus_tv, 0.0)
+	susp = (sus_d + sus_t) * 0.5 - sag
 
 
 ## en el aire: el morro sigue la trayectoria (como un dardo: sube al despegar y baja al caer) y el piloto lo
@@ -792,7 +920,6 @@ func _cabeceo_aire(dt: float, vh_f: float) -> void:
 func _aterrizar(golpe: float, desal: float, y: float) -> void:
 	golpe = clampf(golpe, 0.0, 80.0)
 	_malo = absf(desal) > 0.95 or absf(inclinacion) > 0.9
-	susp_v -= minf(golpe, 50.0) * 0.12
 	if piloto != null and "shake" in piloto:
 		piloto.shake = minf(1.0, piloto.shake + golpe / 60.0)
 	if golpe > 6.0:
@@ -877,7 +1004,14 @@ func _apoyo_rueda(delantera: bool, eje0: Vector3, eje1: Vector3) -> Dictionary:
 		var h := _tantear(xz, ini, fin)
 		if h.has("dentro"):
 			return {"bloq": float(i - 1) / float(n_p)}
-		if not h.is_empty() and (h.normal as Vector3).y < 0.45:
+		# (2026-10-29) la rueda apoyada en el CANTO de un escalón que puede subir: el contacto "mira" muy inclinado
+		# (normal.y = 1 - altura/radio) pero no es una pared: rueda por encima del canto. Antes eso la paraba en seco
+		# y la moto se quedaba atascada a medio subir un bloque de 20 cm
+		var canto_subible := false
+		if not h.is_empty() and (h.normal as Vector3).y < 0.45 and (h.normal as Vector3).dot(dir) < 0.0:
+			var alto_c: float = (h.pos as Vector3).y - (y - ModeloMoto.R_RUEDA)
+			canto_subible = alto_c <= _escalon() + 0.02 and (h.normal as Vector3).y > 1.0 - (_escalon() + 0.05) / ModeloMoto.R_RUEDA
+		if not h.is_empty() and (h.normal as Vector3).y < 0.45 and not canto_subible:
 			# demasiado empinado: si da la cara (pared, bordillo alto) la para; si mira hacia donde va (el borde
 			# de una rampa o de un escalón por el que se cae) la rueda se queda sin suelo
 			if (h.normal as Vector3).dot(dir) < 0.0:
@@ -1065,7 +1199,7 @@ func _atropellar() -> void:
 					o.derribar(imp, 2.5)
 				atropellos += 1
 				vel_h *= clampf(1.0 - 9.0 / maxf(va, 1.0), 0.6, 0.92)
-				susp_v -= 3.0
+				_golpe_susp(3.0, 2.0)
 				Efectos.blood_at(self, c, -dir_mov)
 				Efectos.sonido(self, "Blunt", c, 1.4, 0.75)
 				Efectos.sonido(self, "Flesh", c, 1.0, 0.8)
@@ -1081,7 +1215,7 @@ func _atropellar() -> void:
 			if long > -2.6 and long < 2.6 and lat < 1.0 and va > 4.0:
 				_golpeados[id] = _reloj
 				o.recibir_danio(va * 0.6, "UpperTorso", dir_mov * 4.0)
-				susp_v -= 4.0 + va * 0.08
+				_golpe_susp(4.0 + va * 0.08, 4.0 + va * 0.08)
 				Efectos.sonido(self, "Flesh", c, 0.8, 0.7)
 				if piloto != null:
 					piloto.shake = minf(1.0, piloto.shake + 0.2)
@@ -1097,9 +1231,10 @@ func _visual(dt: float) -> void:
 	# shader del neumático contra el plano del suelo
 	var hundido := 0.0
 	if not en_aire and caida_k < 0.5:
-		hundido = HUNDIDO * (1.6 if piloto != null else 1.0) + clampf(susp, -0.1, 0.4) * 0.3
+		hundido = HUNDIDO * (1.6 if piloto != null else 1.0) + clampf(susp, -0.1, 0.4) * 0.12
 	if not caida:
-		cuerpo.transform = Transform3D(Basis(Vector3.RIGHT, cabeceo) * Basis(Vector3.BACK, inclinacion), Vector3(0, -hundido, 0))
+		cuerpo.transform = Transform3D(Basis(Vector3.RIGHT, cabeceo) * Basis(Vector3.BACK, inclinacion), Vector3(0, -hundido, 0)) * _susp_cf()
+		_susp_ruedas()
 	_neumatico(n.get("neu_del"), suelo_del)
 	_neumatico(n.get("neu_tras"), suelo_tras)
 	(n.giro as Node3D).rotation = Vector3(0, direccion, 0)
@@ -1115,11 +1250,42 @@ func _visual(dt: float) -> void:
 	var mostrar := false
 	if piloto == null and not levantando and is_inside_tree():
 		var j := get_tree().get_first_node_in_group("jugador") as Node3D
-		if j and j.get("moto") == null and (j.global_position - global_position).length() < ALCANCE_SUBIR:
+		if j and j.get("moto") == null and (j.global_position - global_position).length() < ALCANCE_SUBIR and de_lado(j.global_position):
 			mostrar = true
 			cartel.text = "[F] Levantar la moto" if caida else "[F] Subir a la moto"
 	cartel.visible = mostrar
 	cartel.global_position = global_position + Vector3(0, 4.8, 0)
+
+
+## lo que la suspensión baja y cabecea el cuerpo (chasis, depósito, piloto) sobre las ruedas, en el sistema de la moto.
+## Respecto a la moto "de catálogo" (la del modelo), que es como queda con el peso del piloto
+func _susp_cf() -> Transform3D:
+	if caida or caida_k > 0.01:
+		return Transform3D.IDENTITY
+	var sag := SUSP_SAG_PILOTO
+	var cd := sus_d - sag
+	var ct := sus_t - sag
+	var ey := ModeloMoto.EJE_DEL.y
+	var th := (ct - cd) / BATALLA
+	return Transform3D(Basis.IDENTITY, Vector3(0, ey - (cd + ct) * 0.5, 0)) * Transform3D(Basis(Vector3.RIGHT, th), Vector3.ZERO) \
+		* Transform3D(Basis.IDENTITY, Vector3(0, -ey, 0))
+
+
+## las ruedas se quedan en el suelo: la de delante sube por las barras de la horquilla y la de atrás con el basculante
+func _susp_ruedas() -> void:
+	var s_inv := _susp_cf().affine_inverse()
+	var desl = n.get("deslizante")
+	if desl != null:
+		var u := (ModeloMoto.PIPA - ModeloMoto.EJE_DEL).normalized()
+		var q_d := s_inv * ModeloMoto.EJE_DEL
+		(desl as Node3D).position = Vector3(0, (q_d - ModeloMoto.EJE_DEL).dot(u), 0)
+	var basc = n.get("basculante")
+	if basc != null:
+		var v0 := ModeloMoto.EJE_TRAS - ModeloMoto.PIVOTE_BASC
+		var v1 := s_inv * ModeloMoto.EJE_TRAS - ModeloMoto.PIVOTE_BASC
+		(basc as Node3D).rotation = Vector3(atan2(v0.y, v0.z) - atan2(v1.y, v1.z), 0, 0)
+		for am in n.get("amortiguadores", []):
+			ModeloMoto.amortiguador(am, basc)
 
 
 ## parámetros del shader del neumático: el plano del suelo bajo esa rueda y el giro (para el dibujo)
@@ -1288,6 +1454,32 @@ func _pose_de_pie() -> Array:
 		adel = adelante()
 	adel = adel.normalized()
 	var giro := atan2(-adel.x, -adel.z)
+	# (2026-10-29) de pie tiene que caber: las dos ruedas sobre algo (no metidas en un bloque) y sin mucho desnivel
+	# entre ellas. Se prueba donde está y, si no cabe, un poco más adelante/atrás y algo girada. Antes, tumbada en el
+	# hueco entre dos bloques, se ponía de pie con una rueda dentro del bloque, daba vueltas y atravesaba el suelo
+	var rumbo0 := rumbo
+	var mejor := []
+	for dg in [0.0, 0.35, -0.35, 0.7, -0.7, PI * 0.5, -PI * 0.5, PI]:
+		var g2: float = giro + dg
+		rumbo = g2
+		var f2 := Vector3(-sin(g2), 0, -cos(g2))
+		for dd in [0.0, 0.8, -0.8, 1.6, -1.6, 2.6, -2.6]:
+			var c := p + f2 * float(dd)
+			var hd := _tantear(c + f2 * (BATALLA * 0.5), p.y + 3.0, p.y - 4.0)
+			var ht := _tantear(c - f2 * (BATALLA * 0.5), p.y + 3.0, p.y - 4.0)
+			if hd.is_empty() or ht.is_empty() or hd.has("dentro") or ht.has("dentro"):
+				continue
+			if (hd.normal as Vector3).y < 0.8 or (ht.normal as Vector3).y < 0.8:
+				continue
+			if absf(float(hd.y) - float(ht.y)) > 0.5:
+				continue
+			mejor = [Vector3(c.x, minf(float(hd.y), float(ht.y)) - ModeloMoto.R_RUEDA, c.z), g2]
+			break
+		if not mejor.is_empty():
+			break
+	rumbo = rumbo0
+	if not mejor.is_empty():
+		return mejor
 	var q := PhysicsRayQueryParameters3D.create(Vector3(p.x, p.y + 4.0, p.z), Vector3(p.x, p.y - 8.0, p.z), 1)
 	var ex: Array[RID] = [get_rid()]
 	if _fisica != null:
@@ -1404,7 +1596,8 @@ func _visual_ruedas(_dt: float) -> void:
 	var mostrar := false
 	if not levantando and is_inside_tree():
 		var j := get_tree().get_first_node_in_group("jugador") as Node3D
-		if j and j.get("moto") == null and (j.global_position - (n.cuerpo as Node3D).global_position).length() < ALCANCE_SUBIR + 1.0:
+		if j and j.get("moto") == null and (j.global_position - (n.cuerpo as Node3D).global_position).length() < ALCANCE_SUBIR + 1.0 \
+				and de_lado(j.global_position):
 			mostrar = true
 			cartel.text = "[F] Levantar la moto"
 	cartel.visible = mostrar

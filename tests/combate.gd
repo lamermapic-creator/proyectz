@@ -96,6 +96,35 @@ func _process(dt: float) -> void:
 			if _una("c%s" % k[0], t > k[0]):
 				a.select_slot(k[1])
 				_log("cambiar a hueco %d" % k[1])
+	# armas de fuego (2026-11-01): ¿atraviesa el arma el torso o la cabeza? Se miran las esquinas y el centro de cada
+	# pieza del modelo (no las manos ni los antebrazos, que la agarran). --pitch=<rad> fija el cabeceo
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--pitch="):
+			j.pitch = float(arg.split("=")[1])
+	if OS.get_cmdline_user_args().has("--choque_arma") and a.modelo_mano and a.modelo_mano.visible and Armas.WEAPONS.get(a.equipado, {}).get("Kind", "") == "Gun":
+		var an2: Animador = j.get_node("Animador")
+		var peor2 := ""
+		var pmax2 := 0.0
+		for mi in a.modelo_mano.find_children("*", "MeshInstance3D", true, false):
+			var ab: AABB = (mi as MeshInstance3D).get_aabb()
+			var pts := [ab.get_center()]
+			for c in 8:
+				pts.append(ab.get_endpoint(c))
+			for pl in pts:
+				var pt: Vector3 = (mi as MeshInstance3D).global_transform * (pl as Vector3)
+				for n in ["UpperTorso", "LowerTorso"]:
+					var nd: Node3D = j.rig.P[n]
+					var sz: Vector3 = nd.get_meta("size")
+					var lp: Vector3 = nd.global_transform.affine_inverse() * pt
+					var pen := minf(minf(sz.x * 0.5 - absf(lp.x), sz.y * 0.5 - absf(lp.y)), sz.z * 0.5 - absf(lp.z))
+					if pen > pmax2:
+						pmax2 = pen
+						peor2 = "%s en %s" % [mi.name, n]
+		if pmax2 > 0.03:
+			var est := "AIM" if j.aiming else ("HIP" if j.firing or t - an2.last_shot_t < 0.8 else "LOW")
+			if an2.reload_st != null:
+				est = "RELOAD"
+			print("CHOQUE_ARMA t=%.2f %s pen=%.2f %s pitch=%.2f saca=%s fw=%.2f" % [t, est, pmax2, peor2, j.pitch, an2.draw_st != null, an2.fuera_w])
 	if OS.get_cmdline_user_args().has("--choque") and a.modelo_mano and a.equipado in ["Bate", "Machete", "Cuchillo"]:
 		var largo := {"Bate": 2.28, "Machete": 1.67, "Cuchillo": 0.98}[a.equipado] as float
 		var hcf: Transform3D = a.modelo_mano.global_transform
@@ -128,7 +157,20 @@ func _process(dt: float) -> void:
 			foco = (p + man.global_position + Vector3(0, 2.3, 0)) * 0.5
 			r = Basis(Vector3.UP, j.yaw) * (Vector3(1, 0, -1.3).normalized() if OS.get_cmdline_user_args().has("--cam34") else Vector3(1, 0, 0))
 			dist = 16.0
-		cam.global_position = foco + r * dist + Vector3(0, 1, 0)
+		# --cam_az=<grados respecto al frente del jugador> --cam_alt=<studs> --cam_dist=<studs>: vista cercana
+		for arg in OS.get_cmdline_user_args():
+			if arg.begins_with("--cam_az="):
+				var az := deg_to_rad(float(arg.split("=")[1]))
+				r = Basis(Vector3.UP, j.yaw + az) * Vector3(0, 0, -1)
+				foco = j.global_position + Vector3(0, 0.6, 0)
+				dist = 6.0
+			if arg.begins_with("--cam_dist="):
+				dist = float(arg.split("=")[1])
+		var alt := 1.0
+		for arg in OS.get_cmdline_user_args():
+			if arg.begins_with("--cam_alt="):
+				alt = float(arg.split("=")[1])
+		cam.global_position = foco + r * dist + Vector3(0, alt, 0)
 		cam.look_at(foco, Vector3.UP)
 	if t > 7.5:
 		_log("fin")

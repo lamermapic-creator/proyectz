@@ -54,7 +54,7 @@ if [ ${#SOLO[@]} -eq 0 ]; then
 	# moto (v0.4, tests/moto.gd): conducir, saltar, cuestas, bloques, girar despacio, levantarla, atropellar,
 	# chocar, armas, derrapar, bajarse
 	# (empinada_N: a fondo contra las rampas de 15/30/50°; bajada: cuesta abajo por la de 30°; 30fps: lo mismo a 30 FPS)
-	for m in conducir salto morro cuesta bloque lento levantar atropello zombi choque disparar golpear derrape bajar \
+	for m in conducir salto morro cuesta bloque lento levantar atropello zombi choque disparar golpear derrape bajar suspension \
 			empinada_15 empinada_30 empinada_50 bajada morro_30fps empinada_50_30fps; do
 		modo="${m%%_*}"; extra=(); fps=60
 		[[ "$m" == empinada_* ]] && { a="${m#empinada_}"; extra=(--angulo="${a%%_*}"); }
@@ -75,8 +75,30 @@ if [ ${#SOLO[@]} -eq 0 ]; then
 		if grep -q "^OK moto_eyecta" <<<"$salida" && [ -z "$errores" ]; then resumen+=("OK    moto_eyecta_${o}_$v")
 		else [ -n "$errores" ] && echo "$errores" | head -10; fallos=$((fallos + 1)); resumen+=("FALLO moto_eyecta_${o}_$v"); fi
 	done
-	# cuestas empinadas (2026-10-28, tests/recorrido.gd): trepar con las manos, posturas, pistola, sin estamina, arriba
-	for e in cuesta cuesta_pistola cuesta_cansado cuesta_arriba; do
+	# atascos (2026-10-29, tests/moto.gd --modo=atasco): contra el bloque naranja de 20 cm del nivel, despacio y de
+	# lado, la moto lo sube y sigue (antes se quedaba con una rueda arriba y otra abajo)
+	# moto entre bloques: marcha atrás la saca; levantarla en el hueco no la hunde ni la tira (2026-10-29)
+	# apuntado libre en 360° desde la moto, parada y en marcha (2026-10-30): dispara en todas direcciones, el cañón
+	# va a la mira, solo con el brazo derecho, sin atravesar el cuerpo; "giros": tirones del ratón de un lado a
+	# otro, la mano se mueve con naturalidad (velocidad y aceleración limitadas, 2026-11-01)
+	for c in "fila --vel=6" "fila --vel=12 --lado=0.6" "levantar_hueco --x=-33.9 --ang=45" "levantar_hueco --x=-35.68 --ang=0" \
+			"apuntar360" "apuntar360 --mover" "giros"; do
+		salida="$("$GODOT" --headless --path "$RAIZ" --fixed-fps 60 res://tests/escena_moto.tscn -- --modo=$c 2>&1)"
+		errores="$(hay_errores "$salida")"
+		grep -E "^MOTO (fila|levantar_hueco|apuntar360|giros)|^(OK|MAL) moto_" <<<"$salida"
+		if grep -q "^OK moto_" <<<"$salida" && [ -z "$errores" ]; then resumen+=("OK    moto_${c// /_}")
+		else [ -n "$errores" ] && echo "$errores" | head -10; fallos=$((fallos + 1)); resumen+=("FALLO moto_${c// /_}"); fi
+	done
+	for c in 0:3:0 0:3:25 0:16:25 0:8:50; do
+		IFS=: read -r bq v a <<<"$c"
+		salida="$("$GODOT" --headless --path "$RAIZ" --fixed-fps 60 res://tests/escena_moto.tscn -- --modo=atasco --bloque=$bq --vel=$v --ang=$a 2>&1)"
+		errores="$(hay_errores "$salida")"
+		grep -E "^MOTO atasco|^(OK|MAL) moto_" <<<"$salida"
+		if grep -q "^OK moto_atasco" <<<"$salida" && [ -z "$errores" ]; then resumen+=("OK    moto_atasco_${bq}_${v}_$a")
+		else [ -n "$errores" ] && echo "$errores" | head -10; fallos=$((fallos + 1)); resumen+=("FALLO moto_atasco_${bq}_${v}_$a"); fi
+	done
+	# levantarse tras un derribo sin tirones (2026-10-30, tests/recorrido.gd --escenario=derribo_llano)
+	for e in derribo_llano; do
 		salida="$("$GODOT" --headless --path "$RAIZ" --fixed-fps 60 res://tests/escena_recorrido.tscn -- --escenario=$e 2>&1)"
 		errores="$(hay_errores "$salida")"
 		grep -E "^(OK|MAL) recorrido_" <<<"$salida"

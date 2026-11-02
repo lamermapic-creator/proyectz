@@ -1,0 +1,44 @@
+DIAG ---- inicio
+DIAG netstat: terminó tras 823 ms, 60999 caracteres de salida
+DIAG   TCP    127.0.0.1:8001         0.0.0.0:0              LISTENING       122680
+DIAG   TCP    127.0.0.1:8002         0.0.0.0:0              LISTENING       122680
+DIAG   TCP    127.0.0.1:56235        127.0.0.1:8001         TIME_WAIT       0
+DIAG   TCP    127.0.0.1:56258        127.0.0.1:8001         TIME_WAIT       0
+DIAG   TCP    127.0.0.1:56320        127.0.0.1:8001         TIME_WAIT       0
+DIAG   TCP    127.0.0.1:56337        127.0.0.1:8001         TIME_WAIT       0
+DIAG   TCP    127.0.0.1:56365        127.0.0.1:8001         TIME_WAIT       0
+DIAG   TCP    127.0.0.1:56387        127.0.0.1:8001         TIME_WAIT       0
+DIAG   TCP    127.0.0.1:56409        127.0.0.1:8001         TIME_WAIT       0
+DIAG   TCP    127.0.0.1:56430        127.0.0.1:8001         TIME_WAIT       0
+DIAG   TCP    127.0.0.1:56455        127.0.0.1:8001         TIME_WAIT       0
+DIAG   TCP    127.0.0.1:56475        127.0.0.1:8001         TIME_WAIT       0
+DIAG   TCP    127.0.0.1:56499        127.0.0.1:8001         TIME_WAIT       0
+DIAG   TCP    127.0.0.1:63489        127.0.0.1:8001         TIME_WAIT       0
+DIAG   TCP    127.0.0.1:63510        127.0.0.1:8001         TIME_WAIT       0
+DIAG   TCP    127.0.0.1:63535        127.0.0.1:8001         TIME_WAIT       0
+DIAG   TCP    127.0.0.1:63552        127.0.0.1:8001         TIME_WAIT       0
+DIAG   TCP    127.0.0.1:63577        127.0.0.1:8001         TIME_WAIT       0
+DIAG   TCP    127.0.0.1:63599        127.0.0.1:8001         TIME_WAIT       0
+DIAG   TCP    127.0.0.1:63620        127.0.0.1:8001         TIME_WAIT       0
+DIAG   TCP    127.0.0.1:63643        127.0.0.1:8001         TIME_WAIT       0
+DIAG   TCP    127.0.0.1:63668        127.0.0.1:8001         TIME_WAIT       0
+DIAG   TCP    127.0.0.1:63687        127.0.0.1:8001         TIME_WAIT       0
+DIAG   TCP    127.0.0.1:63710        127.0.0.1:8001         TIME_WAIT       0
+DIAG   TCP    127.0.0.1:63731        127.0.0.1:8001         TIME_WAIT       0
+DIAG tasklist: terminó tras 1331 ms, 25122 caracteres de salida
+DIAG   "uv.exe","99332","Console","1","46.116 KB"
+DIAG   "godot-ai.exe","56824","Console","1","5.532 KB"
+DIAG   "python.exe","140260","Console","1","11.408 KB"
+DIAG   "python3.11.exe","122680","Console","1","113.040 KB"
+DIAG   "uv.exe","109328","Console","1","39.536 KB"
+DIAG   "godot-ai.exe","50624","Console","1","5.520 KB"
+DIAG   "python.exe","136796","Console","1","4.560 KB"
+DIAG   "python.exe","142712","Console","1","116.020 KB"
+DIAG   "uv.exe","131800","Console","1","40.840 KB"
+DIAG   "godot-ai.exe","77952","Console","1","5.520 KB"
+DIAG   "python.exe","57940","Console","1","4.560 KB"
+DIAG   "python.exe","99348","Console","1","117.612 KB"
+DIAG powershell: terminó tras 3949 ms, 348 caracteres de salida
+DIAG puerto 8001: OCUPADO (error 22)
+DIAG puerto 8002: OCUPADO (error 22)
+DIAG ---- fin

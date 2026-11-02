@@ -13,6 +13,7 @@ const EJE_TRAS := Vector3(0, 1.0, 2.3)
 const EJE_DEL := Vector3(0, 1.0, -2.3)
 const PIPA := Vector3(0, 3.0, -1.75)  # pipa de dirección (arriba de la horquilla)
 const ASIENTO := Vector3(0, 2.4, 0.5)
+const PIVOTE_BASC := Vector3(0, 1.2, 0.7)  # eje del basculante
 const ESTRIBO := Vector3(0.62, 1.25, 0.45)  # (x = a cada lado)
 
 const PINTURA := Color8(150, 24, 22)
@@ -311,13 +312,27 @@ static func construir(raiz: Node3D) -> Dictionary:
 	silen.rotation.x = -PI / 2 + deg_to_rad(8)
 	cil(cuerpo, "Punta", 0.2, 0.08, Vector3(0.52, 1.55, 2.68), "z", NEGRO, "Metal")
 	caja(cuerpo, "Protector", Vector3(0.06, 0.22, 0.6), Vector3(0.68, 1.5, 1.9), Vector3(-8, 0, 0), NEGRO, "Metal")
-	# --- basculante, amortiguadores y estribos
-	tubo(cuerpo, "BasculanteL", Vector3(-0.3, 1.2, 0.7), EJE_TRAS + Vector3(-0.3, 0, 0), 0.14, NEGRO, "Metal", false)
-	tubo(cuerpo, "BasculanteR", Vector3(0.3, 1.2, 0.7), EJE_TRAS + Vector3(0.3, 0, 0), 0.14, NEGRO, "Metal", false)
+	# --- basculante (gira en su eje: la rueda de atrás sube y baja con la suspensión), amortiguadores y estribos
+	var basc := Node3D.new()
+	basc.name = "Basculante"
+	basc.position = PIVOTE_BASC
+	cuerpo.add_child(basc)
+	tubo(basc, "BasculanteL", Vector3(-0.3, 0, 0), EJE_TRAS - PIVOTE_BASC + Vector3(-0.3, 0, 0), 0.14, NEGRO, "Metal", false)
+	tubo(basc, "BasculanteR", Vector3(0.3, 0, 0), EJE_TRAS - PIVOTE_BASC + Vector3(0.3, 0, 0), 0.14, NEGRO, "Metal", false)
+	cil(basc, "EjeBasculante", 0.16, 0.72, Vector3.ZERO, "x", ALUMINIO, "Steel")
+	var amorts := []
 	for lado in [-1.0, 1.0]:
 		var nombre := "L" if lado < 0 else "R"
-		tubo(cuerpo, "Amortiguador" + nombre, Vector3(0.36 * lado, 1.15, 1.95), Vector3(0.36 * lado, 2.35, 1.2), 0.1, ALUMINIO, "Steel")
-		tubo(cuerpo, "Muelle" + nombre, Vector3(0.36 * lado, 1.35, 1.8), Vector3(0.36 * lado, 2.15, 1.32), 0.17, AMARILLO, "Metal")
+		# el amortiguador va del chasis (arriba) al basculante (abajo): se rehace cada fotograma (ver amortiguador())
+		var am := Node3D.new()
+		am.name = "Amortiguador" + nombre
+		cuerpo.add_child(am)
+		cil(am, "Cuerpo", 0.16, 1.0, Vector3.ZERO, "y", ALUMINIO, "Steel")
+		cil(am, "Vastago", 0.07, 1.0, Vector3.ZERO, "y", CROMO, "Steel")
+		cil(am, "Muelle", 0.2, 1.0, Vector3.ZERO, "y", AMARILLO, "Metal")
+		am.set_meta("arriba", Vector3(0.36 * lado, 2.35, 1.2))
+		am.set_meta("abajo_basc", Vector3(0.36 * lado, 1.15, 1.95) - PIVOTE_BASC)
+		amorts.append(am)
 		caja(cuerpo, "Estribo" + nombre, Vector3(0.36, 0.08, 0.14), Vector3(ESTRIBO.x * lado, ESTRIBO.y, ESTRIBO.z), Z(), NEGRO, "Rubber")
 		tubo(cuerpo, "SoporteEstribo" + nombre, Vector3(0.28 * lado, 1.15, 0.45), Vector3(0.48 * lado, 1.25, 0.45), 0.08, ALUMINIO, "Steel")
 	caja(cuerpo, "PedalFreno", Vector3(0.06, 0.06, 0.45), Vector3(0.55, 1.2, 0.15), Vector3(10, 0, 0), ALUMINIO, "Steel")
@@ -333,7 +348,7 @@ static func construir(raiz: Node3D) -> Dictionary:
 	# --- pata de cabra (lado izquierdo; se ve cuando está aparcada)
 	var pata := tubo(cuerpo, "PataCabra", Vector3(-0.35, 1.15, 0.2), Vector3(-0.85, 0.05, 0.45), 0.08, NEGRO, "Metal")
 	# --- rueda trasera
-	var rueda_tras := rueda(cuerpo, "RuedaTras", EJE_TRAS, false)
+	var rueda_tras := rueda(basc, "RuedaTras", EJE_TRAS - PIVOTE_BASC, false)
 	# --- dirección: horquilla inclinada en la pipa, y el giro del manillar
 	var horq := Node3D.new()
 	horq.name = "Horquilla"
@@ -345,10 +360,15 @@ static func construir(raiz: Node3D) -> Dictionary:
 	giro.name = "Giro"
 	horq.add_child(giro)
 	var largo_h := eje_h.length()
+	# la parte de abajo de la horquilla (botellas, guardabarros y rueda) se desliza por las barras cromadas
+	var desl := Node3D.new()
+	desl.name = "Deslizante"
+	giro.add_child(desl)
 	for lado3 in [-1.0, 1.0]:
 		var n3 := "L" if lado3 < 0 else "R"
-		cil(giro, "Barra" + n3, 0.16, largo_h * 0.55, Vector3(0.32 * lado3, -largo_h * 0.28, 0), "y", CROMO, "Steel")
-		cil(giro, "Botella" + n3, 0.22, largo_h * 0.5, Vector3(0.32 * lado3, -largo_h * 0.74, 0), "y", NEGRO, "Metal")
+		cil(giro, "Barra" + n3, 0.16, largo_h * 0.62, Vector3(0.32 * lado3, -largo_h * 0.33, 0), "y", CROMO, "Steel")
+		cil(desl, "Botella" + n3, 0.22, largo_h * 0.5, Vector3(0.32 * lado3, -largo_h * 0.74, 0), "y", NEGRO, "Metal")
+		cil(desl, "Reten" + n3, 0.25, 0.06, Vector3(0.32 * lado3, -largo_h * 0.49, 0), "y", CAUCHO, "Rubber")
 	caja(giro, "TijaSup", Vector3(0.9, 0.08, 0.3), Vector3(0, 0.12, 0), Z(), ALUMINIO, "Steel")
 	caja(giro, "TijaInf", Vector3(0.9, 0.1, 0.32), Vector3(0, -0.35, 0), Z(), ALUMINIO, "Steel")
 	# manillar y puños (posiciones para las manos del piloto)
@@ -384,8 +404,8 @@ static func construir(raiz: Node3D) -> Dictionary:
 	giro.add_child(luz)
 	# guardabarros delantero (sobre la rueda) y la rueda, en el eje de la horquilla
 	var eje_local := Vector3(0, -largo_h, 0)
-	caja(giro, "GuardabarrosDel", Vector3(0.5, 0.06, 1.3), eje_local + Vector3(0, R_RUEDA + 0.15, -0.1), Vector3(-15.4, 0, 0), PINTURA, "Metal")
-	var rueda_del := rueda(giro, "RuedaDel", eje_local, true)
+	caja(desl, "GuardabarrosDel", Vector3(0.5, 0.06, 1.3), eje_local + Vector3(0, R_RUEDA + 0.15, -0.1), Vector3(-15.4, 0, 0), PINTURA, "Metal")
+	var rueda_del := rueda(desl, "RuedaDel", eje_local, true)
 	# el eje de la rueda delantera tiene que quedar horizontal aunque la horquilla esté inclinada
 	(rueda_del.get_parent() as Node3D).rotation.x = -horq.rotation.x
 	# cartel para subirse
@@ -399,9 +419,36 @@ static func construir(raiz: Node3D) -> Dictionary:
 	cartel.position = Vector3(0, 4.6, 0)
 	cartel.visible = false
 	raiz.add_child(cartel)
+	for am in amorts:
+		amortiguador(am, basc)
 	return {"cuerpo": cuerpo, "giro": giro, "horquilla": horq, "rueda_tras": rueda_tras, "rueda_del": rueda_del,
+		"basculante": basc, "deslizante": desl, "amortiguadores": amorts,
 		"neu_tras": rueda_tras.get_parent().get_meta("neumatico"), "neu_del": rueda_del.get_parent().get_meta("neumatico"),
 		"luz": luz, "faro": faro, "pata": pata, "cartel": cartel}
+
+
+## coloca un amortiguador entre su anclaje en el chasis y el del basculante (que gira): el cuerpo arriba, el vástago
+## que entra y sale y el muelle, que se acorta al comprimirse
+static func amortiguador(am: Node3D, basc: Node3D) -> void:
+	var a: Vector3 = am.get_meta("arriba")
+	var b: Vector3 = basc.transform * (am.get_meta("abajo_basc") as Vector3)
+	var d := a - b
+	var largo := d.length()
+	var y := d / largo
+	var x := Vector3.RIGHT
+	var z := x.cross(y).normalized()
+	x = y.cross(z).normalized()
+	am.transform = Transform3D(Basis(x, y, z), b)
+	# (de abajo, el ojo del basculante, hacia arriba)
+	var cu := am.get_node("Cuerpo") as MeshInstance3D
+	cu.scale = Vector3(1, 0.5, 1)
+	cu.position = Vector3(0, largo - 0.25, 0)
+	var va := am.get_node("Vastago") as MeshInstance3D
+	va.scale = Vector3(1, largo * 0.75, 1)
+	va.position = Vector3(0, largo * 0.375, 0)
+	var mu := am.get_node("Muelle") as MeshInstance3D
+	mu.scale = Vector3(1, maxf(0.2, largo - 0.42), 1)
+	mu.position = Vector3(0, 0.14 + (largo - 0.42) * 0.5, 0)
 
 
 static func Z() -> Vector3:

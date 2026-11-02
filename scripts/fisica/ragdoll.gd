@@ -664,13 +664,28 @@ func terminar(mezcla := 0.3) -> void:
 		queue_free()
 
 
+var _mezcla_q := {}
+
+
 func _paso_mezcla(dt: float) -> void:
 	_mezcla_t += dt
 	var k := Rbx.smooth(clampf(_mezcla_t / _mezcla_dur, 0.0, 1.0))
 	# (el dueño ya ha animado este fotograma: se mezcla desde la postura en que quedó el cuerpo)
 	for mn in _final_motores:
 		var m: RigPersonaje.Motor = rig.M[mn]
-		m.transform = (_final_motores[mn] as Transform3D).interpolate_with(m.transform, k)
+		var tf: Transform3D = _final_motores[mn]
+		# (2026-10-30) giro continuo: la animación de levantarse va girando (rodar boca abajo) y, cuando su diferencia
+		# con la pose final del ragdoll pasaba de 180°, "el camino más corto" cambiaba de lado y el cuerpo daba un salto
+		var qf := Quaternion(tf.basis.orthonormalized())
+		var qt := Quaternion(m.transform.basis.orthonormalized())
+		var q_ant = _mezcla_q.get(mn)
+		if q_ant == null:
+			if qf.dot(qt) < 0.0:
+				qt = -qt
+		elif (q_ant as Quaternion).dot(qt) < 0.0:
+			qt = -qt
+		_mezcla_q[mn] = qt
+		m.transform = Transform3D(Basis(qf.slerpni(qt, k)), tf.origin.lerp(m.transform.origin, k))
 	var padre := rig.get_parent() as Node3D
 	if padre:
 		var desde := padre.global_transform.affine_inverse() * _final_raiz
