@@ -39,6 +39,11 @@ func _ready() -> void:
 	_botones.add_child(EstiloUI.boton("Opciones", _abrir_opciones))
 	_botones.add_child(EstiloUI.boton("Volver al menú principal", _al_menu))
 	_botones.add_child(EstiloUI.boton("Salir del juego", func(): get_tree().quit()))
+	# la versión, al final (los botones se buscan por su posición: get_child(2) = Continuar)
+	var ver := Label.new()
+	ver.text = "V%s · prototipo" % str(ProjectSettings.get_setting("application/config/version", "?"))
+	ver.add_theme_color_override("font_color", Color(1, 1, 1, 0.45))
+	_botones.add_child(ver)
 	_opciones = PanelOpciones.new()
 	_opciones.visible = false
 	_opciones.cerrado.connect(func():

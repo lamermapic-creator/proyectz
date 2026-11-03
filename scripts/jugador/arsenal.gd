@@ -168,6 +168,45 @@ func _desequipar_ya() -> void:
 	switching = null
 
 
+## trepar (encaramarse o colgarse): el arma se guarda para subir con las dos manos y al terminar se vuelve a sacar
+var rearmar := ""
+
+
+func recordar_para_trepar() -> void:
+	if armado() and rearmar == "":
+		rearmar = equipado if switching == null else String(switching.next)
+
+
+func guardar_para_trepar() -> void:
+	if not armado():
+		return
+	recordar_para_trepar()
+	if recargando > 0.0:
+		recargando = 0.0
+		anim.cancelar_recarga()
+	end_rest()
+	J.firing = false
+	J.aiming = false
+	if switching == null:
+		switching = {"t0": ahora(), "next": ""}
+		J.L.holster = {"name": equipado, "t0": ahora()}
+	else:
+		switching.next = ""
+
+
+func sacar_tras_trepar() -> void:
+	var w := rearmar
+	rearmar = ""
+	if w == "" or armado() or switching != null or not Armas.WEAPONS.has(w):
+		return
+	if arma_en_hueco(_hueco_de(w)) != w:
+		return
+	for i in Armas.SLOTS.size():
+		if Armas.SLOTS[i].Id == _hueco_de(w):
+			select_slot(i)
+			return
+
+
 ## teclas 1-4: guardar la de la mano y sacar la otra (o guardar si es la misma)
 ## guardar el arma de golpe (colgarse de una cornisa: hacen falta las dos manos)
 func guardar_ya() -> void:
@@ -188,6 +227,10 @@ func select_slot(i: int) -> void:
 	if recargando > 0.0:
 		return
 	var target := arma_en_hueco(Armas.SLOTS[i].Id)
+	# en la moto solo armas de una mano (la otra va en el manillar)
+	if J.moto != null and target != "" and target != equipado and not Armas.en_moto(target):
+		J.notify("En la moto solo puedes usar armas de una mano")
+		return
 	# tumbado solo se puede sacar el cuchillo como arma blanca
 	if target != "" and target != equipado and (J.stance == 2 or J.prone_p > 0.001) and Armas.es_larga_blanca(target):
 		J.notify("Tumbado solo puedes usar el arma blanca corta")
@@ -346,7 +389,10 @@ func _unhandled_input(e: InputEvent) -> void:
 			KEY_4: select_slot(3)
 			KEY_R: reload()
 			KEY_X: set_rest(rest == null)
-			KEY_F: _recoger()
+			KEY_F:
+				# junto a una moto (o en ella) F es subir/bajar (lo lleva el Jugador)
+				if J.moto == null and J.moto_cercana() == null:
+					_recoger()
 			KEY_F5:
 				if not OS.is_debug_build():
 					return
@@ -364,10 +410,23 @@ func reload() -> void:
 	var d := datos_equipado()
 	if d.mag >= w.Mag or (d.reserve <= 0 and not balas_infinitas):
 		return
+	if w.has("ShellTime"):
+		# cartucho a cartucho: tantos como falten (y queden)
+		var faltan: int = int(w.Mag) - int(d.mag)
+		if not balas_infinitas:
+			faltan = mini(faltan, int(d.reserve))
+		var dur := 0.35 + faltan * float(w.ShellTime) + 0.25
+		_cartuchos = {"total": faltan, "metidos": 0}
+		recargando = ahora() + dur
+		anim.on_reload(equipado, dur, faltan)
+		Ruido.emitir(J, J.global_position, C.RUIDO.Recarga, Ruido.ARMA, J)
+		return
 	recargando = ahora() + w.Reload
 	anim.on_reload(equipado, w.Reload)
 	Ruido.emitir(J, J.global_position, C.RUIDO.Recarga, Ruido.ARMA, J)
-	Efectos.sonido(J, "Reload", J.global_position, 0.9, 1.5 / w.Reload * 1.1)
+	# grabaciones reales: la del rifle dura ~3 s y la de la pistola ~2 s (se aceleran un poco si la recarga es más rápida)
+	var larga := str(w.get("Slot", "")) == "Larga"
+	Efectos.sonido(J, "ReloadRifle" if larga else "ReloadPistol", J.global_position, 0.9, (3.0 if larga else 1.9) / float(w.Reload))
 
 
 func _terminar_recarga() -> void:
@@ -376,6 +435,12 @@ func _terminar_recarga() -> void:
 	recargando = 0.0
 	if w.is_empty() or d.is_empty():
 		return
+	if w.has("ShellTime"):
+		# los cartuchos que la animación no llegó a meter (fotogramas perdidos), se meten ahora
+		while not _cartuchos.is_empty() and int(_cartuchos.metidos) < int(_cartuchos.total):
+			cartucho_metido()
+		_cartuchos = {}
+		return
 	var take: int = mini(int(w.Mag) - int(d.mag), int(d.reserve))
 	if balas_infinitas:
 		take = int(w.Mag) - int(d.mag)
@@ -383,6 +448,32 @@ func _terminar_recarga() -> void:
 		return
 	d.mag += take
 	d.reserve -= take
+
+
+## casquillo por la ventana de expulsión (a la derecha del arma, algo por detrás de la boca)
+func expulsar_casquillo(mz_t: Transform3D, escopeta: bool) -> void:
+	var atras := 0.45 if not cfg().get("Slot", "") == "Larga" else 1.0
+	var p := mz_t * Vector3(0.08, 0.05, atras)
+	var d := mz_t.basis * Vector3(1.0, 0.7, 0.25)
+	Efectos.casquillo(J, p, d, escopeta, J.vel_real * 0.8)
+
+
+## escopeta: la animación avisa cada vez que mete un cartucho (uno a uno, como de verdad)
+var _cartuchos := {}
+
+
+func cartucho_metido() -> void:
+	var w := cfg()
+	var d := datos_equipado()
+	if w.is_empty() or d.is_empty() or _cartuchos.is_empty():
+		return
+	if int(_cartuchos.metidos) >= int(_cartuchos.total) or int(d.mag) >= int(w.Mag):
+		return
+	_cartuchos.metidos = int(_cartuchos.metidos) + 1
+	d.mag += 1
+	Efectos.sonido(J, "Empty", J.global_position, 0.35, 0.8)
+	if not balas_infinitas:
+		d.reserve = maxi(0, int(d.reserve) - 1)
 
 
 ## ---------------------------------------------------------------- ¿se puede disparar ahí?
@@ -395,6 +486,12 @@ func aim_check() -> Array:
 	var flat_cam := Vector3(look.x, 0, look.z)
 	var bl := Rbx.look(J.root_cf())
 	var flat_body := Vector3(bl.x, 0, bl.z)
+	if J.moto != null:
+		# en la moto (2026-10-30) se dispara en cualquier dirección: hacia la izquierda y detrás por la izquierda
+		# el arma pasa a la mano izquierda (Animador). Solo mientras se cambia de mano no se puede disparar
+		if anim != null and anim.moto_cambiando():
+			return [false, "cambio"]
+		return [true, ""]
 	if flat_cam.length() > 0.05 and flat_body.length() > 0.05:
 		var rel := acos(clampf(flat_cam.normalized().dot(flat_body.normalized()), -1, 1))
 		# boca arriba se apunta por encima de los pies (el cuerpo mira al lado contrario)
@@ -430,10 +527,14 @@ func punto_mira() -> Vector3:
 func salida_bala() -> Array:
 	var mz_t := (modelo_mano.get_node("Muzzle") as Node3D).global_transform
 	var dir := (-mz_t.basis.z).normalized()
+	var pecho: Vector3 = (J.rig.P.UpperTorso as Node3D).global_position
+	# ¿la boca del cañón está metida en una pared? Se mira A LO LARGO DEL ARMA (de la empuñadura a la boca),
+	# no desde el pecho: con el arma apoyada sobre un muro, la línea pecho-boca rozaba el propio muro y
+	# la bala "salía del torso" contra él
+	var empu: Vector3 = modelo_mano.global_position
+	var dentro := J.raycast(empu, mz_t.origin - empu)
 	# el arma aún está subiendo hacia la mira (primer disparo desde la pose baja): la bala va al punto
 	# de la mira desde el cañón, en vez de al suelo. Pegado a una pared (arma levantada), donde apunte
-	var pecho: Vector3 = (J.rig.P.UpperTorso as Node3D).global_position
-	var dentro := J.raycast(pecho, mz_t.origin - pecho)
 	if anim == null or anim.arma_alzada < 0.1:
 		var pm := punto_mira()
 		var al := pm - mz_t.origin
@@ -441,16 +542,17 @@ func salida_bala() -> Array:
 			# blanco PEGADO (un zombi encima): el cañón puede quedar a su lado o dentro de él; la bala va
 			# desde el pecho hacia lo que marca la mira
 			if (pm - pecho).length() > 0.3:
-				return [mz_t.origin, (pm - pecho).normalized(), dentro, pecho]
+				return [mz_t.origin, (pm - pecho).normalized(), {}, pecho]
 		elif dir.angle_to(al) > deg_to_rad(8):
 			dir = al.normalized()
-	# el rayo de la bala empieza en la línea del cañón a la altura del pecho, no en la boca: con un
-	# zombi pegado, la boca del cañón queda DENTRO de él y un rayo que empieza dentro no lo toca
-	var atras := maxf(0.0, (mz_t.origin - pecho).dot(dir))
+	# el rayo de la bala empieza en la línea del cañón a la altura de la empuñadura, no en la boca: con
+	# un zombi pegado, la boca del cañón queda DENTRO de él (el rayo cuenta los blancos desde dentro)
+	var atras := maxf(0.0, (mz_t.origin - empu).dot(dir))
 	return [mz_t.origin, dir, dentro, mz_t.origin - dir * atras]
 
 
 ## ---------------------------------------------------------------- apoyar el arma (X)
+const LADO_ALCANCE := 2.0 # studs: hasta dónde puede estar la pared para apoyar el arma de lado
 ## Busca delante una superficie a la altura adecuada (muro bajo, barrera, alféizar...). Tumbado: el suelo.
 func find_rest():
 	var w := cfg()
@@ -496,6 +598,19 @@ func find_rest():
 			rest_motivo = "alto"
 			continue
 		return {"top": top, "point": hit.position, "gap": maxf(0.0, gap), "ground": false}
+	# APOYO LATERAL: de lado a una pared (o al borde de una esquina), el arma se apoya contra ella.
+	# Hace falta una pared vertical justo al lado del arma, más o menos paralela a donde se apunta
+	var der := Vector3(-fwd.z, 0, fwd.x)
+	for d: float in [0.4, 0.9, 1.4]:
+		var base: Vector3 = Vector3(rp.x, gun_y, rp.z) + fwd * d
+		for lado: float in [-1.0, 1.0]:
+			var hl := J.raycast(base, der * lado * LADO_ALCANCE)
+			if hl.is_empty():
+				continue
+			var n: Vector3 = hl.normal
+			if absf(n.y) > 0.3 or absf(n.dot(fwd)) > 0.6:
+				continue
+			return {"top": gun_y, "point": hl.position, "gap": 0.0, "ground": false, "lado": true, "normal": n}
 	return null
 
 
@@ -510,6 +625,8 @@ func end_rest() -> void:
 func set_rest(on: bool) -> void:
 	if not on:
 		end_rest()
+		return
+	if J.moto != null:
 		return
 	if J.move_direction.length() > 0.1:
 		J.notify("Quédate quieto para apoyar el arma")
@@ -540,7 +657,7 @@ func shoot() -> void:
 	if recogiendo != null:
 		return
 	var w := cfg()
-	if w.is_empty() or w.Kind != "Gun" or J.health <= 0 or J.vaulting != null or J.L.gettingUp:
+	if w.is_empty() or w.Kind != "Gun" or J.health <= 0 or J.vaulting != null or J.L.gettingUp or J.ragdoll != null:
 		return
 	if switching != null or ahora() < draw_until:
 		return
@@ -554,7 +671,13 @@ func shoot() -> void:
 	if now - last_shot < 60.0 / w.RPM:
 		return
 	if recargando > 0.0:
-		return
+		# la escopeta deja de recargar para disparar (con los cartuchos que ya ha metido)
+		if w.has("ShellTime") and int(datos_equipado().mag) > 0:
+			recargando = 0.0
+			_cartuchos = {}
+			anim.cancelar_recarga()
+		else:
+			return
 	var d := datos_equipado()
 	if d.mag <= 0:
 		last_shot = now
@@ -571,6 +694,9 @@ func shoot() -> void:
 
 	# dispersión: apuntar, movimiento, saltar y ráfaga
 	var move_speed := Vector3(J.vel_real.x, 0, J.vel_real.z).length()
+	if J.moto != null:
+		# en la moto se mueve el vehículo, no los pies: dispara bastante mejor que corriendo
+		move_speed = minf(move_speed, 30.0) * 0.45
 	var spread: float = ((w.AimSpread if J.aiming else w.HipSpread) * (1.0 + move_speed / 18.0) + spread_bloom) * C.STANCE[J.stance].Spread
 	if not J.en_suelo:
 		spread *= 2.5
@@ -594,42 +720,71 @@ func shoot() -> void:
 		eje = sb[1]
 		forzado = sb[2]
 		desde = sb[3]
-	var r := deg_to_rad(spread) * sqrt(randf())
-	var a := randf() * TAU
-	var dir := Rbx.look(Rbx.look_at(Vector3.ZERO, eje) * Rbx.ang(cos(a) * r, sin(a) * r, 0))
-	var res := forzado if not forzado.is_empty() else _rayo_bala(desde, dir, float(w.Range) + desde.distance_to(origin))
-	var hit_pos := origin + dir * float(w.Range)
-	var tipo := "none"
-	var normal := Vector3.UP
-	if not res.is_empty():
-		hit_pos = res.position
-		normal = res.normal
-		if normal.length() < 0.1: # el rayo empezó dentro (blanco pegado al arma)
-			normal = -dir
-		tipo = "surface"
-		var col: Object = res.collider
-		# zonas de impacto de un blanco (maniquí o zombi): ver "contrato de objetivo" en docs/RUIDO_Y_ZOMBIS.md
-		if col and col.has_meta("objetivo"):
-			tipo = "flesh"
-			var obj = col.get_meta("objetivo")
-			var pieza: String = res.pieza if res.has("pieza") else col.get_meta("pieza")
-			var dmg: float = w.Damage * Maniqui.mult_pieza(pieza, w)
-			# caída de daño con la distancia
-			if hit_pos.distance_to(origin) > float(w.Range) * 0.5:
-				dmg *= 0.75
-			if obj.vivo():
-				var killed: bool = obj.recibir_danio(dmg, pieza, dir * 45.0)
-				_confirmar(killed, pieza == "Head")
-
-	# efectos
-	Efectos.sonido(J, w.Sound, J.global_position, 1.3, 0.95 + randf() * 0.1)
+	# perdigones (escopeta): varios rayos con su propia dispersión; un solo marcador de impacto
+	var n_balas := int(w.get("Pellets", 1))
+	var pell := float(w.get("PelletSpread", 0.0))
 	var mz_t := Transform3D(Basis.IDENTITY, origin)
 	if modelo_mano and modelo_mano.has_node("Muzzle"):
 		mz_t = (modelo_mano.get_node("Muzzle") as Node3D).global_transform
-	Efectos.muzzle_flash(J, mz_t)
-	Efectos.tracer(J, mz_t.origin, hit_pos)
-	if tipo != "none":
-		Efectos.impacto(J, hit_pos, normal, tipo)
+	var mato := false
+	var cabeza := false
+	var acerto := false
+	var impacto_superficie := Vector3.INF
+	var r0 := deg_to_rad(spread) * sqrt(randf())
+	var a0 := randf() * TAU
+	var eje0 := Rbx.look(Rbx.look_at(Vector3.ZERO, eje) * Rbx.ang(cos(a0) * r0, sin(a0) * r0, 0))
+	for nb in n_balas:
+		var dir := eje0
+		if n_balas > 1:
+			var rp := deg_to_rad(pell) * sqrt(randf())
+			var ap := randf() * TAU
+			dir = Rbx.look(Rbx.look_at(Vector3.ZERO, eje0) * Rbx.ang(cos(ap) * rp, sin(ap) * rp, 0))
+		var res := forzado if not forzado.is_empty() else _rayo_bala(desde, dir, float(w.Range) + desde.distance_to(origin))
+		var hit_pos := origin + dir * float(w.Range)
+		var tipo := "none"
+		var normal := Vector3.UP
+		if not res.is_empty():
+			hit_pos = res.position
+			normal = res.normal
+			if normal.length() < 0.1: # el rayo empezó dentro (blanco pegado al arma)
+				normal = -dir
+			tipo = "surface"
+			var col: Object = res.collider
+			# zonas de impacto de un blanco (maniquí o zombi): ver "contrato de objetivo" en docs/RUIDO_Y_ZOMBIS.md
+			if col and col.has_meta("objetivo"):
+				tipo = "flesh"
+				var obj = col.get_meta("objetivo")
+				var pieza: String = res.pieza if res.has("pieza") else col.get_meta("pieza")
+				var dmg: float = w.Damage * Maniqui.mult_pieza(pieza, w)
+				# caída de daño con la distancia
+				if hit_pos.distance_to(origin) > float(w.Range) * 0.5:
+					dmg *= 0.75
+				if obj.vivo():
+					var killed: bool = obj.recibir_danio(dmg, pieza, dir * (45.0 if n_balas == 1 else 12.0))
+					acerto = true
+					mato = mato or killed
+					cabeza = cabeza or pieza == "Head"
+			elif impacto_superficie == Vector3.INF:
+				impacto_superficie = hit_pos
+		# trazadoras: todas las balas; de los perdigones, solo algunas
+		if n_balas == 1 or nb % 3 == 0:
+			Efectos.tracer(J, mz_t.origin, hit_pos)
+		if tipo != "none":
+			Efectos.impacto(J, hit_pos, normal, tipo)
+		if not forzado.is_empty():
+			break
+	if acerto:
+		_confirmar(mato, cabeza)
+
+	# efectos
+	Efectos.sonido(J, w.Sound, J.global_position, 1.3, 0.95 + randf() * 0.1)
+	var fuerza := {"Pistola": 0.8, "Revolver": 1.1, "Subfusil": 0.75, "Escopeta": 1.5, "Francotirador": 1.4}.get(equipado, 1.0) as float
+	Efectos.muzzle_flash(J, mz_t, fuerza)
+	# casquillo (las de corredera y cerrojo lo sueltan al accionarlas; el revólver no expulsa)
+	if not w.get("Pump", false) and not w.get("Bolt", false) and equipado != "Revolver":
+		expulsar_casquillo(mz_t, false)
+	var tipo := "surface" if impacto_superficie != Vector3.INF else "none"
+	var hit_pos := impacto_superficie
 	# la bala que golpea una superficie también suena allí (sin "fuente": los zombis van a mirar ese
 	# sitio, no saben que ha sido el jugador). Disparar a una pared lejana sirve para distraerlos.
 	if tipo == "surface":
@@ -650,6 +805,8 @@ func _rayo_bala(origin: Vector3, dir: Vector3, rango: float) -> Dictionary:
 	var q := PhysicsRayQueryParameters3D.create(origin, origin + dir * rango, 1 | 2)
 	q.hit_from_inside = true # un blanco pegado al arma también cuenta
 	var excluir: Array[RID] = [J.get_rid()]
+	if J.moto != null:
+		excluir.append(J.moto.get_rid()) # la moto que conduce no para sus balas
 	var res := {}
 	for intento in 4:
 		q.exclude = excluir
@@ -680,7 +837,7 @@ func melee() -> void:
 	if recogiendo != null:
 		return
 	var w := cfg()
-	if w.is_empty() or w.Kind != "Melee" or J.health <= 0 or J.vaulting != null:
+	if w.is_empty() or w.Kind != "Melee" or J.health <= 0 or J.vaulting != null or J.ragdoll != null or J.L.gettingUp:
 		return
 	if switching != null or ahora() < draw_until:
 		return
@@ -696,7 +853,8 @@ func melee() -> void:
 	Ruido.emitir(J, J.global_position, C.RUIDO.GolpeAire, Ruido.GOLPE, J)
 	anim.on_melee(equipado)
 	# el impacto llega en el punto de golpe de la animación
-	golpes_pendientes.append([now + float(w.get("HitTime", 0.26)), equipado, false])
+	# (en la moto el golpe llega antes: a esa velocidad el blanco se queda atrás enseguida)
+	golpes_pendientes.append([now + float(w.get("HitTime", 0.26)) * (0.6 if J.moto != null else 1.0), equipado, false])
 	J.shake = minf(1.0, J.shake + 0.15)
 
 
@@ -706,13 +864,25 @@ func _resolver_golpe(arma: String) -> void:
 	var look := Rbx.look(root)
 	var hits := []
 	var pecho := root.origin + Vector3(0, 1.2, 0)
+	var alcance := float(w.Range)
+	var bonus := 1.0
+	if J.moto != null:
+		# en la moto: se golpea hacia donde mira la cámara, con un poco más de alcance, y la velocidad
+		# de la moto se suma al golpe
+		var lc := Rbx.flat(Rbx.look(J.camara.global_transform))
+		if lc.length() > 0.1:
+			look = lc.normalized()
+		alcance += 1.6
+		bonus = 1.0 + clampf(absf(J.moto.velocidad()) / 60.0, 0.0, 0.7)
+		root = Transform3D(root.basis, root.origin - Vector3(0, 1.0, 0))
 	# blancos: maniquíes y zombis (grupo "objetivos", ver "contrato de objetivo" en docs/RUIDO_Y_ZOMBIS.md)
 	for man in J.get_tree().get_nodes_in_group("objetivos"):
 		if not man.vivo():
 			continue
 		var off: Vector3 = man.centro() - root.origin
 		var flat := Vector3(off.x, 0, off.z)
-		if flat.length() < float(w.Range) and absf(off.y) < 5 and (flat.length() < 2 or flat.normalized().dot(look) > 0.35):
+		var cono := 0.0 if J.moto != null else 0.35 # (en la moto, también lo que ya está a tu lado)
+		if flat.length() < alcance and absf(off.y) < 5 and (flat.length() < 2 or flat.normalized().dot(look) > cono):
 			# nada de golpear a través de paredes (AUDITORIA.md §7.1)
 			if not J.raycast(pecho, man.centro() - pecho).is_empty():
 				continue
@@ -721,20 +891,22 @@ func _resolver_golpe(arma: String) -> void:
 	for i in mini(2, hits.size()):
 		var man = hits[i][1]
 		var crit := randf() < 0.25
-		var dmg: float = w.Damage * (w.HeadMult if crit else 1.0) * (0.5 if i == 1 else 1.0)
+		var dmg: float = w.Damage * (w.HeadMult if crit else 1.0) * (0.5 if i == 1 else 1.0) * bonus
 		var pieza := "Head" if crit else "UpperTorso"
 		var ppos: Vector3 = (man.rig.P[pieza] as Node3D).global_position
 		var killed: bool = man.recibir_danio(dmg, pieza, look * float(w.Knockback))
-		Ruido.emitir(J, ppos, C.RUIDO.GolpeContundente if arma == "Bate" else C.RUIDO.GolpeCarne, Ruido.GOLPE, J)
+		var contundente: bool = str(w.get("Sound", "Flesh")) == "Blunt"
+		Ruido.emitir(J, ppos, C.RUIDO.GolpeContundente if contundente else C.RUIDO.GolpeCarne, Ruido.GOLPE, J)
 		_confirmar(killed, crit)
 		if not killed and man.en_pie():
-			if arma == "Bate" and (crit or randf() < 0.45):
+			var p_derribo := float(w.get("Derriba", 0.0))
+			if p_derribo > 0.0 and (crit or randf() < p_derribo):
 				# batazo: lo derriba y luego se levanta
 				man.derribar(look * 38 + Vector3(0, 12, 0), 2.2)
 			else:
 				man.empujar(look * float(w.Knockback) * 0.8, float(w.get("Stagger", 0.45)))
 		Efectos.blood_at(J, ppos, -look)
-		Efectos.sonido(J, "Flesh" if arma != "Bate" else "Blunt", ppos, 1.1, 0.9 + randf() * 0.2)
+		Efectos.sonido(J, "Blunt" if contundente else "Flesh", ppos, 1.1, 0.9 + randf() * 0.2)
 
 
 ## ---------------------------------------------------------------- cada fotograma
@@ -758,8 +930,10 @@ func actualizar(dt: float) -> void:
 		# acometida: el cuerpo da un paso hacia delante justo antes del impacto
 		if not g[2] and now >= g[0] - 0.09:
 			g[2] = true
-			var fuerza := {"Cuchillo": 9.0, "Machete": 8.0, "Bate": 6.0}.get(g[1], 6.0) as float
-			J.empuje += Rbx.look(J.root_cf()) * fuerza
+			# (en la moto no hay paso adelante)
+			var fuerza := {"Cuchillo": 9.0, "Machete": 8.0, "Bate": 6.0, "Hacha": 7.0, "Palanca": 7.5}.get(g[1], 6.0) as float
+			if J.moto == null:
+				J.empuje += Rbx.look(J.root_cf()) * fuerza
 		if now >= g[0]:
 			golpes_pendientes.erase(g)
 			if equipado == g[1]:
@@ -768,7 +942,7 @@ func actualizar(dt: float) -> void:
 	var moving := J.move_direction.length() > 0.1
 	# arma apoyada: se suelta al moverse, cambiar de postura o de arma, caer...
 	if rest != null:
-		if w.is_empty() or w.Kind != "Gun" or moving or J.stance != rest.stance or J.vaulting != null or (J.stance == 2 and J.supine) \
+		if w.is_empty() or w.Kind != "Gun" or moving or J.moto != null or J.stance != rest.stance or J.vaulting != null or (J.stance == 2 and J.supine) \
 				or J.L.knocked or switching != null or not J.en_suelo:
 			end_rest()
 		else:
@@ -798,14 +972,14 @@ func actualizar(dt: float) -> void:
 		shoot()
 	# disparo pendiente: el arma se está alineando con la mira (si tarda demasiado, se cancela)
 	if pending_shot != null:
-		if now - float(pending_shot) > 0.35 or w.is_empty() or w.Kind != "Gun":
+		if now - float(pending_shot) > (0.75 if J.moto != null else 0.35) or w.is_empty() or w.Kind != "Gun":
 			pending_shot = null
 		elif not (J.firing and w.Auto):
 			shoot()
 	aim_blocked = false
 	if not w.is_empty() and w.Kind == "Gun" and (J.aiming or J.firing or pending_shot != null):
 		var ac := aim_check()
-		aim_blocked = not ac[0]
+		aim_blocked = not ac[0] and ac[1] != "cambio" # (pasar el arma de mano es un instante: sin mira roja)
 		aim_block_reason = ac[1]
 	spread_bloom = maxf(0.0, spread_bloom - dt * (2.0 if J.firing else 7.0))
 	# armas en el suelo: aviso al acercarse
@@ -816,15 +990,42 @@ func actualizar(dt: float) -> void:
 
 
 ## ---------------------------------------------------------------- HUD de armas
+const MIRA_TELE_SHADER := """
+shader_type canvas_item;
+void fragment() {
+	vec2 px = 1.0 / SCREEN_PIXEL_SIZE;
+	vec2 p = (SCREEN_UV - 0.5) * px / px.y; // coordenadas con el alto = 1
+	float r = length(p);
+	float borde = smoothstep(0.43, 0.445, r);
+	vec4 c = vec4(0.0, 0.0, 0.0, borde);
+	// retícula: líneas finas, gruesas lejos del centro, y puntos cada 0.04
+	float fino = 0.0012;
+	float grueso = 0.004;
+	float lx = abs(p.y) < (abs(p.x) > 0.12 ? grueso : fino) ? 1.0 : 0.0;
+	float ly = abs(p.x) < (abs(p.y) > 0.12 ? grueso : fino) ? 1.0 : 0.0;
+	float puntos = 0.0;
+	if (abs(p.y) < 0.004 && abs(fract(p.x / 0.04 + 0.5) - 0.5) < 0.08 && abs(p.x) > 0.01 && abs(p.x) < 0.12) puntos = 1.0;
+	if (abs(p.x) < 0.004 && abs(fract(p.y / 0.04 + 0.5) - 0.5) < 0.08 && abs(p.y) > 0.01 && abs(p.y) < 0.12) puntos = 1.0;
+	float ret = max(max(lx, ly), puntos) * (1.0 - borde);
+	// viñeta suave dentro del círculo
+	float vig = smoothstep(0.28, 0.43, r) * 0.45;
+	c = mix(vec4(0.0, 0.0, 0.0, vig), vec4(0.0, 0.0, 0.0, 1.0), max(borde, ret));
+	COLOR = c;
+}
+"""
+
+
 ## círculo rojo del HUD: pegado a una estructura (pared, esquina, muro) el cañón no da donde marca la
 ## mira: marca el punto donde daría la bala. Solo si lo que tapa el cañón está a menos de CIRCULO_CERCA
-const CIRCULO_CERCA := 6.0
+const CIRCULO_CERCA := 3.0   # studs
+const CIRCULO_PX := 12.0     # tamaño del círculo
+const CIRCULO_MIN_PX := 28.0 # solo si en pantalla se separa al menos esto de la mira
 func _actualizar_circulo(gun: bool) -> void:
 	var circ: Panel = _hud.impacto
 	circ.visible = false
 	if not gun or modelo_mano == null or not modelo_mano.has_node("Muzzle") or not modelo_mano.visible:
 		return
-	if recargando > 0.0 or switching != null or ahora() < draw_until or J.colgado != null:
+	if recargando > 0.0 or switching != null or ahora() < draw_until or J.colgado != null or rest != null or J.mira_tele:
 		return
 	var sb := salida_bala()
 	var imp: Dictionary = sb[2]
@@ -843,7 +1044,7 @@ func _actualizar_circulo(gun: bool) -> void:
 	# solo si en pantalla no coincide con la mira (al centro)
 	var sp := J.camara.unproject_position(p)
 	var centro := J.camara.get_viewport().get_visible_rect().size * 0.5
-	if sp.distance_to(centro) < 14.0:
+	if sp.distance_to(centro) < CIRCULO_MIN_PX:
 		return
 	circ.visible = true
 	circ.position = sp - circ.size * 0.5
@@ -902,12 +1103,24 @@ func _crear_hud() -> void:
 	sbx.bg_color = Color(0, 0, 0, 0)
 	sbx.border_color = Color8(235, 50, 40)
 	sbx.set_border_width_all(2)
-	sbx.set_corner_radius_all(9)
+	sbx.set_corner_radius_all(int(CIRCULO_PX * 0.5))
 	circ.add_theme_stylebox_override("panel", sbx)
-	circ.size = Vector2(18, 18)
+	circ.size = Vector2(CIRCULO_PX, CIRCULO_PX)
 	circ.visible = false
 	capa.add_child(circ)
 	_hud.impacto = circ
+	# mira telescópica: círculo negro alrededor, retícula con puntos (shader, sin texturas)
+	var tele := ColorRect.new()
+	tele.set_anchors_preset(Control.PRESET_FULL_RECT)
+	var sm := ShaderMaterial.new()
+	var sh := Shader.new()
+	sh.code = MIRA_TELE_SHADER
+	sm.shader = sh
+	tele.material = sm
+	tele.visible = false
+	capa.add_child(tele)
+	capa.move_child(tele, 0)
+	_hud.tele = tele
 	# panel del arma (abajo a la derecha)
 	var panel := VBoxContainer.new()
 	panel.anchor_left = 1.0
@@ -923,22 +1136,26 @@ func _crear_hud() -> void:
 	var nom := Label.new()
 	nom.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	nom.add_theme_font_size_override("font_size", 16)
-	nom.modulate = Color(1, 1, 1, 0.8)
+	nom.modulate = Color(1, 1, 1, 0.9)
+	Jugador._contorno(nom, 5)
 	panel.add_child(nom)
 	var fila := HBoxContainer.new()
 	fila.alignment = BoxContainer.ALIGNMENT_END
 	panel.add_child(fila)
 	var mag := Label.new()
 	mag.add_theme_font_size_override("font_size", 40)
+	Jugador._contorno(mag, 8)
 	fila.add_child(mag)
 	var res := Label.new()
 	res.add_theme_font_size_override("font_size", 22)
-	res.modulate = Color(1, 1, 1, 0.75)
+	res.modulate = Color(1, 1, 1, 0.9)
+	Jugador._contorno(res, 6)
 	fila.add_child(res)
 	var rec := Label.new()
 	rec.text = "RECARGANDO…"
 	rec.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	rec.add_theme_color_override("font_color", Color8(240, 200, 90))
+	Jugador._contorno(rec, 5)
 	panel.add_child(rec)
 	_hud.panel = panel
 	_hud.nombre = nom
@@ -955,25 +1172,28 @@ func _crear_hud() -> void:
 	rh.offset_top = 40
 	rh.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	rh.add_theme_font_size_override("font_size", 15)
+	Jugador._contorno(rh, 5)
 	capa.add_child(rh)
 	_hud.rest = rh
-	# huecos de arma (abajo, centrados)
+	# huecos de arma (abajo a la derecha, encima del panel del arma). Solo se ven un momento al cambiar o coger
+	# un arma (antes estaban siempre en el centro, tapando los pies del personaje)
 	var barra := HBoxContainer.new()
-	barra.anchor_left = 0.5
-	barra.anchor_right = 0.5
+	barra.anchor_left = 1.0
+	barra.anchor_right = 1.0
 	barra.anchor_top = 1.0
 	barra.anchor_bottom = 1.0
-	barra.offset_left = -330
-	barra.offset_right = 330
-	barra.offset_top = -92
-	barra.offset_bottom = -50
-	barra.alignment = BoxContainer.ALIGNMENT_CENTER
-	barra.add_theme_constant_override("separation", 8)
+	barra.offset_left = -560
+	barra.offset_right = -28
+	barra.offset_top = -190
+	barra.offset_bottom = -160
+	barra.alignment = BoxContainer.ALIGNMENT_END
+	barra.add_theme_constant_override("separation", 6)
 	capa.add_child(barra)
+	_hud.barra = barra
 	_hud.huecos = []
 	for i in Armas.SLOTS.size():
 		var caja := PanelContainer.new()
-		caja.custom_minimum_size = Vector2(150, 40)
+		caja.custom_minimum_size = Vector2(124, 30)
 		var sb := StyleBoxFlat.new()
 		sb.bg_color = Color(0, 0, 0, 0.45)
 		sb.set_corner_radius_all(4)
@@ -982,16 +1202,31 @@ func _crear_hud() -> void:
 		var lab := Label.new()
 		lab.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		lab.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		lab.add_theme_font_size_override("font_size", 13)
+		lab.add_theme_font_size_override("font_size", 12)
+		Jugador._contorno(lab, 3)
 		caja.add_child(lab)
 		barra.add_child(caja)
 		_hud.huecos.append({"caja": caja, "sb": sb, "lab": lab})
 	_ignorar_raton(capa)
 
 
+var _barra_t := -99.0      # última vez que cambió el arma o el inventario (la barra de huecos se ve un rato)
+var _barra_firma := ""
+
+
 func _actualizar_hud() -> void:
 	var w := cfg()
 	var vivo := J.health > 0
+	# barra de huecos: visible 3 s después de cualquier cambio (o mientras se cambia de arma), luego se desvanece
+	var firma := equipado + str(inventario.keys()) + str(switching != null)
+	for k in inventario:
+		firma += str(inventario[k].name)
+	if firma != _barra_firma:
+		_barra_firma = firma
+		_barra_t = ahora()
+	var vis_b := clampf(1.0 - (ahora() - _barra_t - 3.0) / 0.6, 0.0, 1.0)
+	(_hud.barra as Control).modulate.a = vis_b
+	(_hud.barra as Control).visible = vis_b > 0.01
 	_hud.panel.visible = not w.is_empty()
 	_hud.rec.visible = recargando > 0.0
 	if not w.is_empty():
@@ -1023,6 +1258,10 @@ func _actualizar_hud() -> void:
 		(l as ColorRect).visible = gun
 		(l as ColorRect).color = Color(0.9, 0.24, 0.2, 0.4) if aim_blocked else Color(0.94, 0.94, 0.94, 1)
 	_hud.bloqueo.visible = gun and aim_blocked
+	var tele_on: bool = J.mira_tele and J.cam_fov < 30.0
+	(_hud.tele as ColorRect).visible = tele_on
+	if tele_on:
+		_hud.mira.visible = false
 	_actualizar_circulo(gun and vivo)
 	var ht := clampf(1.0 - (ahora() - hit_t) / 0.25, 0, 1)
 	for h in _hud.hit:

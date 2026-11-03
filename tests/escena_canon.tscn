@@ -1,15 +1,15 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene format=3 uid="uid://dpm44c5sdd0fc"]
 
-[ext_resource type="Script" path="res://scripts/nivel/nivel_pruebas.gd" id="1_niv"]
+[ext_resource type="Script" uid="uid://b6crua1diis5j" path="res://scripts/nivel/nivel_pruebas.gd" id="1_niv"]
 [ext_resource type="PackedScene" path="res://escenas/jugador.tscn" id="2_jug"]
-[ext_resource type="Script" path="res://tests/canon.gd" id="3_t"]
+[ext_resource type="Script" uid="uid://b2bs0c2nyqrre" path="res://tests/canon.gd" id="3_t"]
 
-[node name="PruebasMovimiento" type="Node3D"]
+[node name="PruebasMovimiento" type="Node3D" unique_id=1250010660]
 script = ExtResource("1_niv")
 metadata/sin_zombis = true
 
-[node name="Jugador" parent="." instance=ExtResource("2_jug")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.2, 0)
+[node name="Jugador" parent="." unique_id=562679879 instance=ExtResource("2_jug")]
+transform = Transform3D(0.9985361, -0.0016535963, 0.054063562, 0, -0.9995326, -0.030571854, 0.054088846, 0.0305271, -0.99806935, 0.069095135, 16.833588, 3.9867027)
 
-[node name="Prueba" type="Node" parent="."]
+[node name="Prueba" type="Node" parent="." unique_id=1820351226]
 script = ExtResource("3_t")

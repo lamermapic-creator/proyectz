@@ -83,6 +83,12 @@ var _caida_dir := Vector3.FORWARD
 var _levantar_t := 0.0
 var _levantando := false
 var _muerte_t := 0.0
+## RAGDOLL (añadido por el Claude de KangooG, v0.4 — ver CLAUDE.md "Mensajes"): al derribarlo o matarlo el
+## cuerpo cae con física (scripts/fisica/ragdoll.gd); al levantarse se mezcla con la animación
+var _ragdoll: Ragdoll = null
+var _impulso_golpe := Vector3.ZERO
+var _pieza_golpe := "UpperTorso"
+var _sale_ragdoll_t := -1.0     # mezclando la postura del suelo con la de pie (hasta esta hora)
 var _fase := 0.0                # fase de la zancada
 var _brazos := 0.0              # 0 colgando .. 1 al frente
 var _var := 0.0                 # variación individual (desfase de los movimientos)
@@ -167,8 +173,13 @@ func centro() -> Vector3:
 
 
 func recibir_danio(cantidad: float, pieza: String, impulso: Vector3) -> bool:
+	if _ragdoll != null and is_instance_valid(_ragdoll):
+		# en el suelo (o muerto): el golpe sacude el cuerpo
+		_ragdoll.golpe(pieza, impulso * 0.15)
 	if not vivo():
 		return false
+	_impulso_golpe = impulso
+	_pieza_golpe = pieza
 	health = maxf(0.0, health - cantidad)
 	var dir := Rbx.flat(impulso)
 	dir = dir.normalized() if dir.length() > 0.01 else -global_transform.basis.z
@@ -201,6 +212,7 @@ func empujar(vel: Vector3, dur: float) -> void:
 func derribar(impulso: Vector3, dur: float) -> void:
 	if not en_pie():
 		return
+	_impulso_golpe = impulso
 	_caer(Rbx.flat(impulso), dur)
 	_cambiar(Estado.CAIDO)
 
@@ -717,11 +729,23 @@ func _caer(dir: Vector3, dur: float) -> void:
 	_levantar_t = reloj + dur
 	_levantando = false
 	_forma.disabled = true
+	# ragdoll: el golpe (bate, atropello, bala) lanza el cuerpo en su dirección
+	if _ragdoll == null or not is_instance_valid(_ragdoll):
+		var imp := _impulso_golpe * 0.3
+		if imp.length() > 16.0:
+			imp = imp.normalized() * 16.0
+		if imp.length() < 2.0:
+			imp = _caida_dir * 4.0 + Vector3(0, 1.0, 0)
+		_ragdoll = Ragdoll.iniciar(self, rig, velocity, {"comportamiento": "caer", "impulso": imp, "pieza": _pieza_golpe,
+			"duracion": minf(dur, 30.0)})
+		_ragdoll.recuperado.connect(_ragdoll_levantar)
 	velocity = Vector3.ZERO
 
 
 func _morir(dir: Vector3) -> void:
 	_caer(dir, 1e9)
+	if _ragdoll != null and is_instance_valid(_ragdoll):
+		_ragdoll.morir()
 	_muerte_t = reloj
 	_cambiar(Estado.MUERTO)
 	remove_from_group(Ruido.GRUPO)
@@ -730,6 +754,19 @@ func _morir(dir: Vector3) -> void:
 
 
 func _paso_caida(dt: float) -> void:
+	if _ragdoll != null or _sale_ragdoll_t >= 0.0:
+		# con ragdoll: la física lleva el cuerpo; al recuperarse, mientras se mezcla con la postura de pie
+		if _sale_ragdoll_t >= 0.0 and reloj > _sale_ragdoll_t:
+			_sale_ragdoll_t = -1.0
+			_ragdoll = null
+			_caida = 0.0
+			_forma.disabled = false
+			alerta = 1.0
+			var jr := _jugador()
+			if jr:
+				_percibir(jr.global_position, 1.0, true)
+			_cambiar(Estado.PERSEGUIR if _toca_perseguir() else Estado.INVESTIGAR)
+		return
 	if estado == Estado.CAIDO and reloj > _levantar_t and _caida >= 0.999:
 		_levantando = true
 	if _levantando:
@@ -1029,3 +1066,21 @@ func _jugador() -> Node3D:
 
 func nombre_estado() -> String:
 	return NOMBRE_ESTADO[estado]
+
+
+## el ragdoll se ha parado y ya toca levantarse: de pie donde quedó el cuerpo, mirando hacia su cabeza
+func _ragdoll_levantar() -> void:
+	if _ragdoll == null or estado != Estado.CAIDO or reloj < _levantar_t - 0.01:
+		# (aún no: el Ragdoll vuelve a avisar en cuanto se pare, si se le pide)
+		if _ragdoll != null and estado == Estado.CAIDO:
+			_ragdoll._avisado = false
+			_ragdoll.duracion = maxf(_ragdoll.duracion, _ragdoll._t + 0.3)
+		return
+	var pel := _ragdoll.pelvis()
+	var dir := _ragdoll.direccion_cabeza()
+	var q := PhysicsRayQueryParameters3D.create(pel + Vector3(0, 3, 0), pel + Vector3(0, -12, 0), 1)
+	var r := get_world_3d().direct_space_state.intersect_ray(q)
+	var gy: float = (r.position as Vector3).y if not r.is_empty() else pel.y - 0.5
+	global_transform = Transform3D(Basis(Vector3.UP, atan2(-dir.x, -dir.z)), Vector3(pel.x, gy + CENTRO, pel.z))
+	_ragdoll.terminar(0.9)
+	_sale_ragdoll_t = reloj + 0.9

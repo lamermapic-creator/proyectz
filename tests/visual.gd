@@ -36,6 +36,21 @@ const ESC := {
 	"reptar": [Vector3(-100, 3.2, 100), 0.0, 5.0, [[0.2, KEY_Z, true], [0.25, KEY_Z, false], [1.8, KEY_W, true]]],
 	"reptar_c": [Vector3(-100, 3.2, 100), 0.0, 5.0, [[0.2, KEY_Z, true], [0.25, KEY_Z, false], [1.8, KEY_W, true], [1.8, KEY_SHIFT, true]]],
 	"fatiga": [Vector3(-100, 3.2, 100), 0.0, 5.0, [[0.3, KEY_W, true]]],
+	# 2026-11-02: marcha agachado y transiciones (andar -> correr -> andar -> parar)
+	"agachado_andar": [Vector3(-100, 3.2, 100), 0.0, 5.0, [[0.2, KEY_C, true], [0.25, KEY_C, false], [1.0, KEY_W, true]]],
+	"agachado_correr": [Vector3(-100, 3.2, 100), 0.0, 5.0, [[0.2, KEY_C, true], [0.25, KEY_C, false], [1.0, KEY_W, true], [1.0, KEY_SHIFT, true]]],
+	"trepar_rifle": [Vector3(0, 3.2, -15), 0.0, 6.0, [[1.4, KEY_W, true], [1.4, KEY_SHIFT, true], [2.05, KEY_SPACE, true], [2.1, KEY_SPACE, false]]],
+	"levantarse_boca_arriba": [Vector3(-100, 3.2, 100), 0.0, 8.0, [[0.2, KEY_Z, true], [0.25, KEY_Z, false], [4.6, KEY_SPACE, true], [4.65, KEY_SPACE, false], [6.2, KEY_SPACE, true], [6.25, KEY_SPACE, false]]],
+	"levantarse_boca_abajo": [Vector3(-100, 3.2, 100), 0.0, 7.0, [[0.2, KEY_Z, true], [0.25, KEY_Z, false], [2.6, KEY_SPACE, true], [2.65, KEY_SPACE, false], [4.4, KEY_SPACE, true], [4.45, KEY_SPACE, false]]],
+	"salto_parado": [Vector3(-100, 3.2, 100), 0.0, 3.5, [[0.8, KEY_SPACE, true], [0.85, KEY_SPACE, false], [2.2, KEY_SPACE, true], [2.25, KEY_SPACE, false]]],
+	"salto_correr": [Vector3(-100, 3.2, 100), 0.0, 4.5, [[0.3, KEY_W, true], [0.3, KEY_SHIFT, true], [1.6, KEY_SPACE, true], [1.65, KEY_SPACE, false], [3.0, KEY_SPACE, true], [3.05, KEY_SPACE, false]]],
+	# 2026-11-03: piernas animadas (andar hacia atrás y en diagonal)
+	"escalera_c": [Vector3(-64.5, 3.2, 4), PI, 4.0, [[0.3, KEY_W, true], [0.3, KEY_SHIFT, true]]],
+	# 2026-11-03: moverse de lado boca arriba (tumbarse, mirar atrás para quedar boca arriba, A y luego D)
+	"boca_arriba_lado": [Vector3(-100, 3.2, 100), 0.0, 10.0, [[0.2, KEY_Z, true], [0.25, KEY_Z, false], [3.4, KEY_A, true], [6.2, KEY_A, false], [6.6, KEY_D, true], [9.4, KEY_D, false]]],
+	"atras": [Vector3(-100, 3.2, 100), 0.0, 4.0, [[0.3, KEY_S, true]]],
+	"diagonal_atras": [Vector3(-100, 3.2, 100), 0.0, 4.0, [[0.3, KEY_S, true], [0.3, KEY_D, true]]],
+	"transiciones": [Vector3(-100, 3.2, 100), 0.0, 7.0, [[0.3, KEY_W, true], [1.8, KEY_SHIFT, true], [3.6, KEY_SHIFT, false], [5.0, KEY_W, false]]],
 	"correr_rifle": [Vector3(-100, 3.2, 100), 0.0, 5.0, [[1.4, KEY_W, true], [1.4, KEY_SHIFT, true]]],
 	"andar_pistola": [Vector3(-100, 3.2, 100), 0.0, 5.0, [[1.4, KEY_W, true]]],
 	"tumbado_rifle": [Vector3(-100, 3.2, 100), 0.0, 6.0, [[1.4, KEY_Z, true], [1.45, KEY_Z, false], [3.6, KEY_W, true], [4.6, KEY_W, false]]],
@@ -109,7 +124,7 @@ func _process(dt: float) -> void:
 	cam.current = not OS.get_cmdline_user_args().has("--camjuego")
 	if not cam.current:
 		j.camara.current = true
-	var armas_esc := {"recoger_pistola": 0, "boca_arriba_rifle": 1, "pistola_correr": 0, "bate_correr": 3, "pistola_andar": 0, "correr_rifle": 1, "andar_pistola": 0, "tumbado_rifle": 1, "cuchillo_correr": 2, "strafe_rifle": 1, "strafe_pistola": 0, "strafe_rifle_apunta": 1, "pared_rifle": 1, "pared_pistola": 0, "tiro_campo": 1}
+	var armas_esc := {"recoger_pistola": 0, "boca_arriba_rifle": 1, "pistola_correr": 0, "bate_correr": 3, "pistola_andar": 0, "correr_rifle": 1, "andar_pistola": 0, "tumbado_rifle": 1, "cuchillo_correr": 2, "strafe_rifle": 1, "strafe_pistola": 0, "strafe_rifle_apunta": 1, "pared_rifle": 1, "pared_pistola": 0, "tiro_campo": 1, "trepar_rifle": 1}
 	if armas_esc.has(esc) and t > 0.1 and j.arsenal.equipado == "" and j.arsenal.switching == null and not get_meta("eq", false):
 		set_meta("eq", true)
 		j.arsenal.select_slot(armas_esc[esc])
@@ -126,10 +141,18 @@ func _process(dt: float) -> void:
 			set_meta("vuelta2", true)
 			j.yaw -= PI
 		j.aiming = (t > 4.0 and t < 5.4) or t > 6.6
+	if esc == "boca_arriba_lado" and t > 1.8 and not get_meta("vuelta", false):
+		set_meta("vuelta", true)
+		j.yaw += PI
 	if esc == "tumbado_rifle":
 		j.aiming = t > 3.0 and t < 3.6 or t > 4.8
 	if OS.get_cmdline_user_args().has("--logcam") and Engine.get_process_frames() % 15 == 0:
 		print("CAM t=%.2f z=%.3f fov=%.1f dist=%.2f vel=%.1f ws=%.1f md=%.1f camy=%.3f camrot=%s" % [t, j.global_position.z, j.camara.fov, j.cam_dist, Vector2(j.vel_real.x, j.vel_real.z).length(), j.walk_speed, j.move_direction.length(), j.camara.global_position.y, str(j.camara.global_rotation)])
+	if esc == "levantarse_boca_arriba" and t > 1.8 and t < 4.4:
+		# mira hacia atrás para quedar boca arriba
+		j.yaw = PI
+	if OS.get_cmdline_user_args().has("--logarma") and Engine.get_process_frames() % 6 == 0:
+		print("ARMA t=%.2f equipado=%s switching=%s vault=%s rearmar=%s" % [t, j.arsenal.equipado, str(j.arsenal.switching != null), str(j.vaulting != null), j.arsenal.rearmar])
 	if esc == "tiro_campo":
 		j.aiming = t > 1.5
 		j.pitch = -0.08
@@ -140,7 +163,7 @@ func _process(dt: float) -> void:
 			j.firing = t > 4.6 and t < 5.6
 		if OS.get_cmdline_user_args().has("--logpared") and Engine.get_process_frames() % 6 == 0:
 			var ac: Array = j.arsenal.aim_check()
-			print("PARED t=%.2f z=%.2f alza=%.2f disparo=%s" % [t, j.global_position.z, j.get_node("Animador").arma_alzada, str(ac)])
+			print("PARED t=%.2f z=%.2f retro=%.2f alza=%.2f disparo=%s" % [t, j.global_position.z, j.get_node("Animador").arma_retro, j.get_node("Animador").arma_alzada, str(ac)])
 	if esc in ["pared_espalda", "pared_lado"]:
 		# gira la cámara despacio alrededor del personaje (como con el ratón)
 		if t > 1.0:
@@ -185,6 +208,8 @@ func _process(dt: float) -> void:
 		var fr: Dictionary = an.feet.R
 		var hp: Vector3 = j.rig.P.LowerTorso.global_position
 		print("LOG t=%.2f v=%.1f drop=%.2f yr=%.2f L=%s R=%s dL=%.2f dR=%.2f hipy=%.2f bodyy=%.2f" % [t, j.cur_move, an.pelvis_drop, an.yaw_rate, "sw%.2f" % fl.u if fl.swing != null else "pl", "sw%.2f" % fr.u if fr.swing != null else "pl", (j.rig.P.LeftFoot.global_position - hp).length(), (j.rig.P.RightFoot.global_position - hp).length(), hp.y, j.global_position.y])
+	_registrar()
+	_contactos()
 	var p := j.global_position + Vector3(0, -0.8, 0)
 	var r := Basis(Vector3.UP, j.yaw) * (Vector3(1, 0, -1).normalized() if OS.get_cmdline_user_args().has("--cam34") else Vector3(1, 0, 0))
 	var alto := 7.0 if esc in ["trepar", "saltar", "borde", "correr_girar", "correr_girar_d", "trepar_lejos", "trepar_lejos_c", "trepar_c", "saltar_pared", "colgar", "colgar_d", "colgar_salto", "colgar_corre"] else 1.0
@@ -193,6 +218,11 @@ func _process(dt: float) -> void:
 		r = Basis(Vector3.UP, j.yaw) * Vector3(0.45, 0, 1).normalized()
 		dist_c = 11.0
 		alto = 4.0
+	elif OS.get_cmdline_user_args().has("--cam=arriba"):
+		# desde arriba (moverse tumbado)
+		r = Vector3(0.35, 0, 0.6).normalized()
+		dist_c = 4.5
+		alto = 8.0
 	elif OS.get_cmdline_user_args().has("--cam=frente"):
 		r = Basis(Vector3.UP, j.yaw) * Vector3(0.25, 0, -1).normalized()
 		dist_c = 11.0
@@ -227,5 +257,76 @@ func _process(dt: float) -> void:
 		var rr := Rbx.right(j.root_cf())
 		cam.global_position = j.global_position + bk * 11 + rr * 6 + Vector3(0, 3, 0)
 		cam.look_at(j.global_position + Vector3(0, 1.0, 0), Vector3.UP)
+	if OS.get_cmdline_user_args().has("--geom") and t > 1.0 and not get_meta("geom", false):
+		set_meta("geom", true)
+		var an3 := j.get_node("Animador") as Animador
+		var hm: RigPersonaje.Motor = j.rig.M.RightHip
+		var am: RigPersonaje.Motor = j.rig.M.RightAnkle
+		print("GEOM leg=%.3f hip_x=%.3f min_x=%.3f foot_half=%.3f ankle=%s body_y=%.3f center=%.3f hip=%s ankle_w=%s foot=%s size=%s" % [an3.leg_len, an3.hip_x, an3.min_foot_x, an3.foot_half, an3.ankle_in_foot.R, j.global_position.y, j.center_cur, (j.rig.P[hm.part0] as Node3D).global_transform * hm.c0.origin, (j.rig.P[am.part0] as Node3D).global_transform * am.c0.origin, (j.rig.P.RightFoot as Node3D).global_position, j.rig.P.RightFoot.get_meta("size")])
+	if OS.get_cmdline_user_args().has("--pisadas"):
+		# cada vez que un pie apoya: en qué altura (escalón) y dónde
+		var an4 := j.get_node("Animador") as Animador
+		for sp in ["L", "R"]:
+			var fp: Dictionary = an4.feet[sp]
+			var ap := fp.swing == null
+			if ap and not get_meta("ap_" + sp, true):
+				print("PISA t=%.2f pie=%s y=%.2f pos=%s esc=%.2f v=%.1f" % [t, sp, float(fp.pos.y), fp.pos, an4.esc_fondo, Vector2(j.velocity.x, j.velocity.z).length()])
+			set_meta("ap_" + sp, ap)
+	if OS.get_cmdline_user_args().has("--curL"):
+		var an5 := j.get_node("Animador") as Animador
+		var fl5: Dictionary = an5.feet.L
+		var nl: Node3D = j.rig.P.LeftFoot
+		print("CL t=%.3f sw=%s pos=%s talon=%s v=%.2f" % [t, str(fl5.swing != null), fl5.pos, nl.global_transform * Vector3(0, -0.15, 0.5), Vector2(j.velocity.x, j.velocity.z).length()])
+	if OS.get_cmdline_user_args().has("--logtorso"):
+		var an6 := j.get_node("Animador") as Animador
+		print("TOR t=%.2f ph=%.2f k=%.2f root=%.3f low=%.3f up=%.3f head=%.3f lowy=%.3f" % [t, an6.sup_ph, an6.sup_mov_k, j.global_position.x, (j.rig.P.LowerTorso as Node3D).global_position.x, (j.rig.P.UpperTorso as Node3D).global_position.x, (j.rig.P.Head as Node3D).global_position.x, (j.rig.P.LowerTorso as Node3D).global_position.y])
 	if t > e[2]:
 		get_tree().quit()
+
+
+## --registro=<ruta>: cada fotograma, la posición de las piezas principales (respecto al cuerpo, en el marco de su
+## rumbo, y en el mundo), para medir lo suave que es el movimiento (tests/fluidez.py)
+var _reg: FileAccess = null
+
+
+func _registrar() -> void:
+	var ruta := ""
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--registro="):
+			ruta = a.split("=")[1]
+	if ruta == "":
+		return
+	if _reg == null:
+		_reg = FileAccess.open(ruta, FileAccess.WRITE)
+		_reg.store_line("t,v,pieza,lx,ly,lz,wx,wy,wz")
+	var rc := j.root_cf()
+	var marco := Transform3D(Basis(Vector3.UP, Rbx.yaw_of(rc)), rc.origin)
+	var v := Vector2(j.vel_real.x, j.vel_real.z).length()
+	for n in ["Head", "UpperTorso", "LowerTorso", "LeftHand", "RightHand", "LeftFoot", "RightFoot", "LeftLowerArm", "RightLowerArm"]:
+		var w: Vector3 = (j.rig.P[n] as Node3D).global_position
+		var l := marco.affine_inverse() * w
+		_reg.store_line("%.4f,%.3f,%s,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f" % [t, v, n, l.x, l.y, l.z, w.x, w.y, w.z])
+	_reg.flush()
+
+
+## --contactos: cuánto se mete en el suelo (o flota) cada pieza de las piernas y las manos (studs; < 0 = dentro)
+var _cont_max := {}
+func _contactos() -> void:
+	if not OS.get_cmdline_user_args().has("--contactos"):
+		return
+	var linea := ""
+	for n in ["LeftFoot", "RightFoot", "LeftLowerLeg", "RightLowerLeg", "LeftHand", "RightHand", "LowerTorso", "Head"]:
+		var nd: Node3D = j.rig.P[n]
+		var sz: Vector3 = nd.get_meta("size")
+		var hit := j.raycast(nd.global_position + Vector3(0, 3, 0), Vector3(0, -12, 0))
+		if hit.is_empty():
+			continue
+		var gy: float = (hit.position as Vector3).y
+		var mn := 99.0
+		for c in 8:
+			var lp := Vector3(sz.x * (0.5 if c & 1 else -0.5), sz.y * (0.5 if c & 2 else -0.5), sz.z * (0.5 if c & 4 else -0.5))
+			mn = minf(mn, (nd.global_transform * lp).y - gy)
+		linea += " %s=%.2f" % [n, mn]
+		_cont_max[n] = minf(_cont_max.get(n, 99.0), mn)
+	if Engine.get_process_frames() % 3 == 0:
+		print("CONT t=%.2f pb=%.2f%s" % [t, float(j.L.proneP), linea])

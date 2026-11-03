@@ -100,6 +100,11 @@ class Motor:
 
 ## maniquí de pruebas: mismo esqueleto, sin ropa, de madera clara
 @export var maniqui := false
+## aspecto (2026-11-01): "" = el muñeco clásico hecho por código (PIEZAS + DETALLES; lo usan los zombis, que lo
+## tiñen); "superviviente" = el modelo hecho en Blender (animaciones/blender/personaje/, ~200 piezas). El esqueleto,
+## las piezas y sus tamaños (cajas de impacto, ragdoll) son los mismos: solo cambian las mallas
+@export var modelo := ""
+const MODELOS := {"superviviente": "res://modelos/superviviente.glb"}
 
 var M := {}      # nombre -> Motor
 var P := {}      # nombre de pieza -> Node3D (con su tamaño en meta "size")
@@ -145,9 +150,13 @@ func construir() -> void:
 		if maniqui:
 			col = Color8(196, 160, 112) if m.part1 in ["Head", "LeftHand", "RightHand"] else (Color8(168, 132, 90) if "Torso" in m.part1 else Color8(186, 150, 104))
 			mat = "Wood"
-		_malla(nd, m.part1, info[0], col, mat, Transform3D.IDENTITY, "head" if m.part1 == "Head" else "box", 0.0)
+		if not _usa_modelo():
+			_malla(nd, m.part1, info[0], col, mat, Transform3D.IDENTITY, "head" if m.part1 == "Head" else "box", 0.0)
 		M[m.name] = m
 		m.apply()
+	if _usa_modelo():
+		_cargar_modelo()
+		return
 	for d in DETALLES:
 		if maniqui:
 			break
@@ -155,6 +164,35 @@ func construir() -> void:
 		var base: Vector3 = PIEZAS[d[1]][3]
 		var t := Transform3D(Basis(Rbx.ZAXIS, d[6]), d[2] - base)
 		_malla(padre, d[0], d[3], d[4], d[5], t, d[7], d[8])
+
+
+func _usa_modelo() -> bool:
+	return not maniqui and MODELOS.has(modelo) and ResourceLoader.exists(MODELOS[modelo])
+
+
+## mete las mallas del modelo de Blender en las piezas: en el .glb, cada pieza es un nodo con el nombre de la pieza
+## (en su centro de reposo) y sus mallas cuelgan de él, una por material
+func _cargar_modelo() -> void:
+	var ps := load(MODELOS[modelo]) as PackedScene
+	if ps == null:
+		return
+	var inst := ps.instantiate()
+	for parte in PIEZAS:
+		var src := inst.find_child(parte, true, false)
+		if src == null:
+			continue
+		for c in src.get_children():
+			if not (c is MeshInstance3D):
+				continue
+			var mi := c as MeshInstance3D
+			var t := mi.transform
+			src.remove_child(mi)
+			mi.owner = null
+			(P[parte] as Node3D).add_child(mi)
+			mi.transform = t
+			mi.name = "M_" + String(c.name).trim_prefix("M_")
+			_meshes.append(mi)
+	inst.free()
 
 
 func _malla(padre: Node3D, nombre: String, tam: Vector3, color: Color, material: String, t: Transform3D, forma: String, transp: float) -> void:
