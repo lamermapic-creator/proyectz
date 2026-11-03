@@ -79,6 +79,7 @@ var prev_vel_y := 0.0
 var lean_cur := 0.0
 var lean_max := 1.0
 var rest_lower_cur := 0.0
+var rest_cam := 0.0     # 0..1: cámara de arma apoyada (más cerca, el personaje a un lado, más zoom)
 var stance := 0
 var stance_change_t := -10.0
 var supine := false
@@ -605,7 +606,7 @@ func start_vault(v: Dictionary) -> bool:
 		# arranque: primero se acerca al borde (sin subir), luego el arco por encima
 		v.pre = Vector3(e.x, p0.y, e.z) - d * 0.9
 		v.k = 0.25 if face_dist > 1.2 else 0.0
-		v.exitVel = d * maxf(hs, 7)
+		v.exitVel = d * maxf(hs, 5.5) # (antes al menos 7: andando despacio, al caer salía acelerado)
 	else:
 		v.dur = 0.85 + v.h * 0.14
 		v.hang = Vector3(e.x, 0, e.z) - d * 0.75
@@ -615,8 +616,13 @@ func start_vault(v: Dictionary) -> bool:
 		var p_top: Vector3 = e + d * 1.05
 		v.pEnd = Vector3(p_top.x, v.topY + Cst, p_top.z)
 		v.exitVel = Vector3.ZERO
+		# velocidad con la que llega a la pared (a lo largo de d): el acercamiento parte de ella y frena hasta pegarse
+		var dist_h := maxf(0.05, (v.hang - Vector3(p0.x, 0, p0.z)).dot(d))
+		v.v0 = maxf(Vector3(vel_real.x, 0, vel_real.z).dot(d), 0.0)
+		v.dist0 = dist_h
 	v.p0 = p0
-	v.t0 = ahora()
+	# (empieza ya en este fotograma: si no, el cuerpo se quedaba quieto un fotograma justo al empezar)
+	v.t0 = ahora() - get_physics_process_delta_time()
 	v.prev = p0
 	Ruido.emitir(self, e, C.RUIDO.Sortear if v.kind == "vault" else C.RUIDO.Encaramarse, Ruido.SORTEAR, self)
 	# encaramarse a algo alto (2026-11-02): se guarda el arma para subir con las dos manos y al terminar se vuelve a sacar
@@ -638,11 +644,24 @@ func _vault_path(v: Dictionary, t: float) -> Vector3:
 			return p0.lerp(v.pre, t / k)
 		var u := (t - k) / (1 - k)
 		return thru(v.pre if k > 0 else p0, v.pMid, v.p1, u)
-	var a := smooth01(t / 0.18)       # pegarse a la pared
+	var s_a := clampf(t / 0.3, 0.0, 1.0)  # pegarse a la pared (más largo que antes: sin tirón hacia ella)
 	var b := smooth01((t - 0.12) / 0.5) # tirar hacia arriba
 	var c := smooth01((t - 0.55) / 0.4) # subir el cuerpo encima
 	var p_end: Vector3 = v.pEnd
-	var xz := Vector3(p0.x, 0, p0.z).lerp(v.hang, a).lerp(Vector3(p_end.x, 0, p_end.z), c)
+	# (2026-11-03) el acercamiento empieza con la velocidad que traía y frena hasta pegarse, sin pasarse (muelle
+	# críticamente amortiguado): antes se paraba en seco y luego daba un tirón hacia la pared
+	var p0h := Vector3(p0.x, 0, p0.z)
+	var dv: Vector3 = v.dir
+	var hang_v: Vector3 = v.hang
+	var dist0: float = float(v.get("dist0", (hang_v - p0h).dot(dv)))
+	var v0: float = float(v.get("v0", 0.0))
+	var tau := t * float(v.dur)
+	var kk := maxf(6.0, v0 / maxf(dist0, 0.05))   # (6/s: parado o andando despacio se acerca sin tirón)
+	var err := (-dist0 + (v0 - kk * dist0) * tau) * exp(-kk * tau)
+	var lat0 := p0h - dv * p0h.dot(dv)
+	var lat1 := hang_v - dv * hang_v.dot(dv)
+	var xz_a := lat0.lerp(lat1, smooth01(s_a)) + dv * (hang_v.dot(dv) + err)
+	var xz := xz_a.lerp(Vector3(p_end.x, 0, p_end.z), c)
 	var pull_y: float = v.pullY
 	var y := p0.y + (pull_y - p0.y) * b
 	y += (p_end.y - y) * c
@@ -664,6 +683,7 @@ func step_vault(dt: float) -> void:
 		collision_mask = 1 | 4
 		velocity = v.exitVel
 		vel_real = velocity
+		_vel_inercia = Rbx.flat(v.exitVel)
 		_set_estado("Freefall" if v.kind == "vault" else "Running")
 		cur_move = (v.exitVel as Vector3).length()
 		if v.kind != "vault":
@@ -1548,6 +1568,9 @@ func _sondear_suelo(largo: float) -> Dictionary:
 func humanoid_step(dt: float) -> void:
 	if estado == "Physics":
 		en_suelo = false
+		# (2026-11-03) la inercia sigue a la velocidad real mientras se sortea o se trepa: antes se quedaba con la
+		# de antes de trepar y, al terminar, el personaje salía disparado hacia delante (y la cámara con él)
+		_vel_inercia = Rbx.flat(vel_real)
 		return
 	var g: float = C.WORLD.Gravity
 	var v := velocity
@@ -1670,6 +1693,10 @@ func humanoid_step(dt: float) -> void:
 
 
 ## ---------------------------------------------------------------- cámara al hombro
+const REST_CAM_DIST := 3.4          # arma apoyada: distancia de la cámara (de pie o agachado)
+const REST_CAM_DIST_TUMBADO := 3.0
+const REST_CAM_HOMBRO := 3.1        # hacia el lado (el personaje queda a un lado de la pantalla)
+const REST_CAM_FOV := 50.0          # zoom (con el campo de visión de las opciones en 70)
 func update_camera(dt: float) -> void:
 	var now_t := ahora()
 	var alive := health > 0
@@ -1733,7 +1760,14 @@ func update_camera(dt: float) -> void:
 		dist = 4.4 if aiming else 7.5
 	if not aiming:
 		dist *= zoom_cam
+	# ARMA APOYADA (2026-11-03, a pedido de KangooG): la cámara se acerca con zoom y deja al personaje a un lado,
+	# para apuntar con calma (la mira se hace más pequeña: Arsenal)
+	rest_cam = Rbx.damp(rest_cam, 1.0 if (arsenal.rest != null and alive and not en_moto) else 0.0, 6.0, dt)
+	if rest_cam > 0.001:
+		dist = lerpf(dist, REST_CAM_DIST_TUMBADO if stance == 2 else REST_CAM_DIST, rest_cam)
 	var fov := (62.0 if aiming else (76.0 if sprinting else 70.0)) + (Opciones.fov - 70.0)
+	if rest_cam > 0.001:
+		fov = lerpf(fov, REST_CAM_FOV + (Opciones.fov - 70.0), rest_cam)
 	if en_moto and not aiming:
 		fov += clampf((v_moto - 15.0) / 55.0, 0.0, 1.0) * 14.0
 	# mira telescópica (francotirador): aumento y el personaje no tapa la vista
@@ -1757,11 +1791,18 @@ func update_camera(dt: float) -> void:
 			shoulder = 2.7 * side_cur # más hacia el hombro: el cuerpo inclinado tapa menos
 	if absf(lean_cur) > 0.05:
 		shoulder *= 1 - absf(lean_cur) * 0.35
+	if rest_cam > 0.001:
+		shoulder = lerpf(shoulder, REST_CAM_HOMBRO * side_cur, rest_cam)
+		height = lerpf(height, 0.45 if stance != 2 else 0.7, rest_cam)
 
 	# seguimiento con peso: el punto que sigue la cámara va un pelín por detrás del personaje
 	if cam_pivot == null or (cam_pivot - pivot).length() > 15:
 		cam_pivot = pivot
 	var kH := 15.0 if not en_moto else 22.0
+	# sorteando o trepando, la cámara sigue con más calma (el cuerpo frena de golpe contra la pared y sube: la cámara
+	# no da el tirón con él)
+	if vaulting != null:
+		kH = 7.0
 	var kV := 9.0 if not en_moto else 12.0
 	# cayendo rápido: la cámara no se queda atrás (sigue al cuerpo) y mira un poco hacia abajo
 	var fall_v := maxf(0, -vel_real.y)
@@ -1831,7 +1872,10 @@ func update_camera(dt: float) -> void:
 	# hasta 4 studs en un fotograma. Las paredes siguen acercándola al instante (abajo)
 	if dist_suave < 0.0:
 		dist_suave = dist
-	dist_suave += (dist - dist_suave) * minf(1, dt * (13.0 if dist < dist_suave else 6.0))
+
+	# (acercarse rápido solo al apuntar; dejar de correr, frenar contra una pared o trepar la acercan con calma: antes
+	# daba un tirón)
+	dist_suave += (dist - dist_suave) * minf(1, dt * (13.0 if (dist < dist_suave and (aiming or rest_cam > 0.05)) else 5.0))
 	var back := -Rbx.look(rot) * dist_suave
 	var c_hit := spherecast(shoulder_pt, 0.4, back)
 	var allowed := maxf(0.5, c_hit - 0.1) if c_hit >= 0 else dist_suave

@@ -196,7 +196,15 @@ Freesound (sonidos), Poly Haven y ambientCG (texturas/HDRI), Quaternius y Kenney
   usuario le molestaba al jugar): solo se recoge (`arma_retro`).
   Se mide a lo largo del cañón (empuñadura → boca + `ALZA_MARGEN`); primero se recoge (`arma_retro`, `RETRO_MAX`) y solo
   extremadamente pegado se levanta; apoyada (X) nunca. Círculo rojo: `CIRCULO_CERCA/PX/MIN_PX`, nunca apoyada.
-- Apoyar el arma: además de superficies horizontales, apoyo lateral contra una pared vertical (`rest.lado`).
+- Apoyar el arma: además de superficies horizontales, apoyo lateral contra una pared vertical (`rest.lado`;
+  desactivado desde el 2026-11-03, `Arsenal.APOYO_LATERAL`).
+  Con el arma apoyada (2026-11-03): cámara con zoom y el personaje a un lado (`Jugador.rest_cam`, `REST_CAM_*`) y la
+  mira más pequeña (`Arsenal.mira_esc`).
+  El arma queda a ras del apoyo (2026-11-03, 8): `Animador._arma_sobre_apoyo` (el cuerpo baja o se incorpora,
+  `rest_baja`; los brazos la suben si hace falta, `rest_alza`); `find_rest` con `REST_DELANTE_PIE/AGACHADO`.
+  Apuntando sin apoyar junto a una barrera (`Arsenal.apoyo_delante`): `solo_subir`, el cuerpo se incorpora para no
+  atravesarla. **Apoyar con X de lado contra paredes (superficies verticales) está DESACTIVADO** (2026-11-03,
+  KangooG: `Arsenal.APOYO_LATERAL = false`); quedan el apoyo encima de superficies horizontales y tumbado en el suelo.
 - Cabeza: `FormaCabeza` (caja creada en `_actualizar_formas`, solo de pie, hasta `CABEZA_ALTO` 2.45 sobre el centro);
   agachado bajo techo bajo: `Animador.agache_techo`.
 - Colgado: Shift = `COLGAR_RAPIDO` (x1.9, doble gasto). Andar de lado: `Animador.lat_k` (pasos cortos, rodillas dobladas).
@@ -263,6 +271,7 @@ Freesound (sonidos), Poly Haven y ambientCG (texturas/HDRI), Quaternius y Kenney
 - **Efectos:** `Efectos.muzzle_flash(ctx, muzzle, fuerza)`, `humo`, `casquillo` (RigidBody3D capa 0, máx. 30);
   `Arsenal.expulsar_casquillo`. Cachés estáticas que se vacían al salir (`Efectos.limpiar`).
 - **Inercia:** `Jugador._vel_inercia` en `humanoid_step` (solo en "Running" sin vallar/colgarse/mover forzado);
+  en "Physics" (vallas, trepar) sigue a `vel_real` (2026-11-03: si no, al terminar salía disparado);
   `ZConfig.PLAYER.Frenada`. Si se añade un movimiento forzado nuevo, ponerlo en `_move_override` o la inercia lo frenará.
 - **Cámara:** `dist_suave` (la distancia se acerca suave y al instante si choca), `apretado_cur` sube al instante.
 - **HUD:** `Jugador._contorno(label, px)`, ayuda con H (`_hud.ayuda`), barra de armas auto-oculta (`Arsenal._barra_t`),

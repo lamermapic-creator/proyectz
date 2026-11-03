@@ -280,6 +280,9 @@ func _process(dt: float) -> void:
 	if OS.get_cmdline_user_args().has("--logtorso"):
 		var an6 := j.get_node("Animador") as Animador
 		print("TOR t=%.2f ph=%.2f k=%.2f root=%.3f low=%.3f up=%.3f head=%.3f lowy=%.3f" % [t, an6.sup_ph, an6.sup_mov_k, j.global_position.x, (j.rig.P.LowerTorso as Node3D).global_position.x, (j.rig.P.UpperTorso as Node3D).global_position.x, (j.rig.P.Head as Node3D).global_position.x, (j.rig.P.LowerTorso as Node3D).global_position.y])
+	if OS.get_cmdline_user_args().has("--logpos"):
+		var vr2: Vector3 = j.vel_real
+		print("POS t=%.3f p=(%.2f,%.2f,%.2f) vh=%.2f est=%s vault=%s cam=(%.2f,%.2f,%.2f)" % [t, j.global_position.x, j.global_position.y, j.global_position.z, Vector2(vr2.x, vr2.z).length(), j.estado, str(j.vaulting.kind if j.vaulting != null else "-"), j.camara.global_position.x, j.camara.global_position.y, j.camara.global_position.z])
 	if t > e[2]:
 		get_tree().quit()
 

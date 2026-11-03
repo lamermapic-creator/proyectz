@@ -25,6 +25,7 @@ var last_shot := -9.0
 var last_melee := -9.0
 var spread_bloom := 0.0
 var pending_shot = null
+var mira_esc := 1.0             # tamaño de la mira (más pequeña con el arma apoyada)
 var rest = null                 # arma apoyada {top, point, gap, ground, yaw0, stance, t0}
 var rest_avail = null
 var rest_scan_t := 0.0
@@ -554,6 +555,17 @@ func salida_bala() -> Array:
 ## ---------------------------------------------------------------- apoyar el arma (X)
 const LADO_ALCANCE := 2.0 # studs: hasta dónde puede estar la pared para apoyar el arma de lado
 ## Busca delante una superficie a la altura adecuada (muro bajo, barrera, alféizar...). Tumbado: el suelo.
+## (2026-11-03, KangooG) qué apoyos valen con X: encima de superficies horizontales (muros, barreras, alféizares) SÍ;
+## de lado contra superficies verticales (paredes, esquinas) NO (desactivado: poner APOYO_LATERAL = true lo vuelve a
+## activar tal cual). Tumbado, en el suelo, siempre. El apoyo horizontal de delante también se busca al apuntar
+## (apoyo_delante) para que el cuerpo se incorpore y el arma no atraviese la barrera.
+const APOYO_HORIZONTAL := true
+const APOYO_LATERAL := false
+var apoyo_delante = null        # barrera / muro bajo delante al apuntar (solo para no atravesarlo)
+const REST_DELANTE_PIE := 0.5        # altura de la parte de delante del arma al apuntar, sobre el centro del cuerpo
+const REST_DELANTE_AGACHADO := 0.15
+
+
 func find_rest():
 	var w := cfg()
 	if w.is_empty() or w.Kind != "Gun" or J.vaulting != null or J.L.knocked:
@@ -576,8 +588,30 @@ func find_rest():
 	# hay que agacharse; si queda más alto, no se puede disparar por encima.
 	var gun_y := rp.y + J.eye_cur - 0.3 # altura del arma al apuntar
 	var feet_y := rp.y - J.center_cur
-	var max_gap: float = C.REST.MaxGapCrouch if J.stance == 1 else C.REST.MaxGapStand
 	rest_motivo = ""
+	if APOYO_HORIZONTAL:
+		var rh = _apoyo_horizontal(rp, fwd, gun_y, feet_y)
+		if rh != null:
+			return rh
+	if not APOYO_LATERAL:
+		return null
+	return _apoyo_lateral(rp, fwd, gun_y)
+
+
+## superficie horizontal delante a la altura del arma (muro, barrera, alféizar), o null
+func buscar_apoyo_horizontal():
+	var w := cfg()
+	if w.is_empty() or w.Kind != "Gun" or J.vaulting != null or J.L.knocked or J.stance == 2:
+		return null
+	var look := Rbx.look(J.camara.global_transform)
+	var fwd := Vector3(look.x, 0, look.z)
+	if fwd.length() < 0.1:
+		return null
+	var rp := J.global_position
+	return _apoyo_horizontal(rp, fwd.normalized(), rp.y + J.eye_cur - 0.3, rp.y - J.center_cur)
+
+
+func _apoyo_horizontal(rp: Vector3, fwd: Vector3, gun_y: float, feet_y: float):
 	for d in [1.0, 1.35, 1.7, 2.05]:
 		var probe: Vector3 = rp + fwd * d
 		var hit := J.raycast(Vector3(probe.x, gun_y + 1.2, probe.z), Vector3(0, -(gun_y + 1.2 - feet_y - 1.0), 0))
@@ -590,14 +624,23 @@ func find_rest():
 		var from := Vector3(rp.x, top + 0.3, rp.z)
 		if not J.raycast(from, fwd * (d - 0.1)).is_empty():
 			continue
-		var gap := gun_y - (top + 0.26)
-		if gap > max_gap:
+		# (2026-11-03) el cuerpo se ajusta a la altura del apoyo (Animador._arma_sobre_apoyo): de pie puede bajar
+		# doblando las rodillas y los brazos subir un poco el arma; agachado, además, incorporarse. "sube" = cuánto
+		# tiene que subir la parte de delante del arma (medida en el juego al apuntar) para quedar encima del apoyo
+		var sube := top + 0.02 - (rp.y + (REST_DELANTE_PIE if J.stance == 0 else REST_DELANTE_AGACHADO))
+		var sube_max := 0.35 if J.stance == 0 else 1.2
+		var baja_max := 1.1 if J.stance == 0 else 0.6
+		if sube < -baja_max:
 			rest_motivo = "bajo"
 			continue
-		if gap < -0.25:
+		if sube > sube_max:
 			rest_motivo = "alto"
 			continue
-		return {"top": top, "point": hit.position, "gap": maxf(0.0, gap), "ground": false}
+		return {"top": top, "point": hit.position, "gap": -sube, "ground": false}
+	return null
+
+
+func _apoyo_lateral(rp: Vector3, fwd: Vector3, gun_y: float):
 	# APOYO LATERAL: de lado a una pared (o al borde de una esquina), el arma se apoya contra ella.
 	# Hace falta una pared vertical justo al lado del arma, más o menos paralela a donde se apunta
 	var der := Vector3(-fwd.z, 0, fwd.x)
@@ -957,13 +1000,18 @@ func actualizar(dt: float) -> void:
 					rest.gap += (r2.gap - rest.gap) * 0.5
 				elif now - float(rest.t0) > 0.5:
 					end_rest()
-	J.rest_lower_cur += ((rest.gap if rest != null else 0.0) - J.rest_lower_cur) * minf(1.0, dt * 6.0)
+	# (la cámara baja con el cuerpo: el Animador lo agacha lo justo para que el arma quede encima del apoyo)
+	# (también apuntando junto a una barrera: el cuerpo se incorpora para pasar el arma por encima)
+	var baja_c: float = anim.rest_baja if anim != null else 0.0
+	J.rest_lower_cur += (baja_c - J.rest_lower_cur) * minf(1.0, dt * 6.0)
 	# ¿hay dónde apoyar el arma? (solo al apuntar con un arma de fuego, para el aviso)
 	if rest == null and J.aiming and now - rest_scan_t > 0.2:
 		rest_scan_t = now
 		rest_avail = find_rest() if not moving else null
+		apoyo_delante = buscar_apoyo_horizontal() if not moving else null
 	elif not J.aiming:
 		rest_avail = null
+		apoyo_delante = null
 	J.L.rested = rest != null
 	J.L.restGap = rest.gap if (rest != null and not rest.ground) else null
 
@@ -1249,11 +1297,19 @@ func _actualizar_hud() -> void:
 		if rest != null:
 			rmul = C.REST.ProneSpread if rest.ground else C.REST.Spread
 		gap = 6.0 + ((w.AimSpread if J.aiming else w.HipSpread) + spread_bloom) * 3.2 * rmul
+	# arma apoyada: la mira se hace más pequeña (rayitas más cortas y más juntas), poco a poco
+	mira_esc = lerpf(mira_esc, 0.55 if (gun and rest != null) else 1.0, 1.0 - exp(-8.0 * get_process_delta_time()))
+	gap *= lerpf(1.0, 0.6, (1.0 - mira_esc) / 0.45)
+	var lr := 9.0 * mira_esc
 	var lin: Array = _hud.lineas
-	(lin[0] as ColorRect).position = Vector2(-1, -gap - 4 - 9)
-	(lin[1] as ColorRect).position = Vector2(-1, gap + 4)
-	(lin[2] as ColorRect).position = Vector2(-gap - 4 - 9, -1)
-	(lin[3] as ColorRect).position = Vector2(gap + 4, -1)
+	(lin[0] as ColorRect).size = Vector2(2, lr)
+	(lin[1] as ColorRect).size = Vector2(2, lr)
+	(lin[2] as ColorRect).size = Vector2(lr, 2)
+	(lin[3] as ColorRect).size = Vector2(lr, 2)
+	(lin[0] as ColorRect).position = Vector2(-1, -gap - 4 * mira_esc - lr)
+	(lin[1] as ColorRect).position = Vector2(-1, gap + 4 * mira_esc)
+	(lin[2] as ColorRect).position = Vector2(-gap - 4 * mira_esc - lr, -1)
+	(lin[3] as ColorRect).position = Vector2(gap + 4 * mira_esc, -1)
 	for l in lin:
 		(l as ColorRect).visible = gun
 		(l as ColorRect).color = Color(0.9, 0.24, 0.2, 0.4) if aim_blocked else Color(0.94, 0.94, 0.94, 1)

@@ -13,6 +13,56 @@ en el mismo commit que el cambio. Formato:
 
 ---
 
+## 2026-11-03 (10) — Desactivado apoyar el arma de lado contra paredes (KangooG)
+- KangooG: "que se desactive apoyar el arma en superficies verticales, como paredes" (primero se desactivó por error
+  el apoyo horizontal; corregido). Con X ya no se apoya el arma de lado contra una pared o una esquina
+  (`Arsenal.APOYO_LATERAL = false`; ponerlo a `true` lo vuelve a activar tal cual). Sigue funcionando apoyarla ENCIMA
+  de muros, barreras y alféizares (`APOYO_HORIZONTAL = true`) y tumbado en el suelo. Apuntando junto a una barrera,
+  el cuerpo se sigue incorporando para que el arma no la atraviese (`Arsenal.apoyo_delante`).
+- **Archivos:** `scripts/jugador/arsenal.gd` (`_apoyo_horizontal`, `_apoyo_lateral`), `scripts/jugador/animador.gd`.
+
+## 2026-11-03 (9) — Apuntando junto a una barrera el arma no la atraviesa (KangooG)
+- KangooG: "si me agacho y apunto, que también se ajuste a la altura de la barrera para que no atraviese".
+  Apuntando (sin apoyar) con un apoyo delante (`Arsenal.rest_avail`, el mismo que enseña "[X] apoyar el arma"),
+  `_arma_sobre_apoyo(..., solo_subir = true)` hace que el cuerpo se incorpore lo justo para que el arma pase ~6 cm por
+  encima del borde (nunca baja el cuerpo: si el arma ya pasa por encima, no cambia nada). La cámara sube con él.
+  Con el arma apoyada, el ajuste sigue también durante la recarga (antes el cuerpo volvía a bajar y el arma se metía).
+- **Archivos:** `scripts/jugador/animador.gd`, `scripts/jugador/arsenal.gd`.
+- **Cómo probarlo:** F5: agachado junto a la barrera de tiro, apuntar con clic derecho.
+- Arreglado de paso (`scripts/fisica/ragdoll.gd`, `golpe`): disparar a un zombi justo cuando terminaba su ragdoll
+  (al levantarse) paraba el juego con un error ("UpperTorso" en un diccionario vacío). Ahora no hace nada.
+
+## 2026-11-03 (8) — El arma apoyada se apoya de verdad (KangooG)
+- KangooG: "al apoyar el arma, que el personaje se ajuste a la altura de la estructura: el arma la atraviesa".
+  Antes el cuerpo no cambiaba de altura (solo bajaba la cámara) y la altura del arma se estimaba desde los ojos, así
+  que agachado tras la barrera el rifle quedaba ~30 cm DENTRO de ella. Ahora `Animador._arma_sobre_apoyo` mide la
+  parte de abajo del arma que queda encima del apoyo (esquinas de sus piezas, `_esquinas_arma`) y la deja a ras:
+  si flota, el cuerpo baja doblando las rodillas (`rest_baja`); si se mete, agachado se incorpora y los brazos la
+  suben en el mismo fotograma (`rest_alza`, nunca la atraviesa). La cámara sube/baja con el cuerpo. `find_rest` usa la
+  altura real del arma al apuntar (`REST_DELANTE_PIE` 0,5 / `AGACHADO` 0,15 sobre el centro) y acepta apoyos más
+  bajos o más altos porque el cuerpo se ajusta. Medido: queda a ~2 cm del apoyo en ~0,3 s, de pie y agachado.
+- **Archivos:** `scripts/jugador/animador.gd`, `scripts/jugador/arsenal.gd`, `tests/combate.gd` (`--logapoyo`,
+  `--logarma_y`, `--de_pie`, `--sin_apoyar`).
+- **Cómo probarlo:** F5: junto a la barrera de tiro (o un muro a la altura del pecho), apuntar y pulsar X, de pie y agachado.
+
+## 2026-11-03 (7) — Trepar sin acelerón y cámara de arma apoyada (KangooG)
+- KangooG: "cuando trepo un obstáculo el jugador hace como un dash hacia delante y la cámara se mueve con él; al
+  apoyar el arma, que se haga zoom con el jugador de lado para apuntar y la mira más pequeña".
+- **Trepar:** mientras se sorteaba o se trepaba, la inercia (`Jugador._vel_inercia`) se quedaba con la velocidad de
+  antes de trepar y, al terminar, el personaje salía disparado hacia delante a esa velocidad. Ahora sigue a la velocidad
+  real durante el movimiento (`humanoid_step` en "Physics") y al terminar arranca en la de salida. Además, al
+  encaramarse se acerca a la pared con la velocidad que traía y frena sin pasarse (antes se paraba en seco y daba un
+  tirón hacia la pared), empieza ya en el primer fotograma (antes se quedaba quieto uno) y la valla ya no acelera al
+  que va despacio (salida al menos 5,5 en vez de 7 studs/s). Cámara: sigue con más calma mientras se trepa y al dejar
+  de correr ya no se acerca de golpe (solo al apuntar). Medido (`recorrido.gd`, tirón de la cámara): trepar 0,26 → 0,14,
+  vallar 0,41 → 0,37, saltos 0,42 → 0,15; el resto igual.
+- **Arma apoyada (X):** la cámara se acerca con zoom (`REST_CAM_DIST` 3,4, tumbado 3,0; `REST_CAM_FOV` 50) y se va
+  hacia el lado (`REST_CAM_HOMBRO` 3,1): el personaje queda a un lado de la pantalla. La mira se encoge a algo más de la
+  mitad (`Arsenal.mira_esc`). Todo con transición suave (`Jugador.rest_cam`).
+- **Archivos:** `scripts/jugador/jugador.gd`, `scripts/jugador/arsenal.gd`, `tests/combate.gd` (`--modo=apoyar` se
+  agacha antes de apoyar: la barrera es baja; `--logmira`), `tests/visual.gd` (`--logpos`).
+- **Cómo probarlo:** F5: trepar a un bloque andando y corriendo; agacharse junto a la barrera de tiro y pulsar X.
+
 ## 2026-11-03 (6) — Revisión de la fusión con los zombis v1 de Juan (KangooG)
 - Al aceptar el PR #2 de Juan (zombis v1: vista e ingenio) se quedaron fuera cosas nuestras al resolver los choques:
   este archivo había vuelto a la versión del 2026-10-24 (se perdían todas las entradas desde entonces), la ayuda de

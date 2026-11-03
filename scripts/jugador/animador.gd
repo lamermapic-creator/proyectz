@@ -1620,6 +1620,61 @@ func _puntos_arma(mdl: Node3D, tool: String) -> Array:
 ## guardamanos al llevarla cruzada, la pistola pegada a la tripa) sale siempre HACIA DELANTE, hasta la cara delantera
 ## del torso (así la culata queda apoyada en el hombro, y nunca da saltos de un lado a otro)
 var fuera_w := 0.0
+# ARMA APOYADA (2026-11-03): el cuerpo se agacha o el arma sube lo justo para que el arma quede encima del apoyo
+var rest_baja := 0.0     # cuánto baja el cuerpo (studs; < 0 = se incorpora)
+var rest_alza := 0.0     # cuánto suben los brazos el arma (si el apoyo está algo más alto que el arma)
+var _esquinas_arma_cache := {}
+
+
+## esquinas de las piezas del arma (en el espacio del arma): para saber dónde queda su parte de abajo
+func _esquinas_arma(mdl: Node3D, tool: String) -> Array:
+	if _esquinas_arma_cache.has(tool):
+		return _esquinas_arma_cache[tool]
+	var pts: Array = []
+	var inv := mdl.global_transform.affine_inverse()
+	for mi in mdl.find_children("*", "MeshInstance3D", true, false):
+		var ab: AABB = (mi as MeshInstance3D).get_aabb()
+		var t: Transform3D = inv * (mi as MeshInstance3D).global_transform
+		for i in 8:
+			pts.append(t * ab.get_endpoint(i))
+	_esquinas_arma_cache[tool] = pts
+	return pts
+
+
+## Arma apoyada en un muro, una barrera, un alféizar…: la parte de abajo del arma que queda encima del apoyo (más
+## allá de su borde) se pone a ras de él. Si el arma flota, el cuerpo baja (rodillas); si se mete dentro, el arma
+## sube en ese mismo fotograma (nunca atraviesa) y el cuerpo sube poco a poco. Devuelve el arma corregida.
+func _arma_sobre_apoyo(h: Transform3D, mdl: Node3D, tool: String, root_cf: Transform3D, dt: float, ra, solo_subir := false) -> Transform3D:
+	if ra == null or bool(ra.get("ground", false)) or bool(ra.get("lado", false)):
+		rest_alza = 0.0
+		return h
+	var fwd := Rbx.flat(-h.basis.z)
+	if fwd.length() < 0.1:
+		return h
+	fwd = fwd.normalized()
+	var top: float = ra.top
+	var base := root_cf.origin
+	# dónde empieza el apoyo (su cara delantera), medido desde el cuerpo a lo largo del arma
+	if not ra.has("borde_d") or absf(float(ra.get("borde_top", top)) - top) > 0.05:
+		var hb: Dictionary = jugador.raycast(Vector3(base.x, top - 0.08, base.z), fwd * 3.5)
+		ra.borde_d = float(hb.distance) if not hb.is_empty() else maxf(0.0, Rbx.flat(ra.point - base).length() - 0.35)
+		ra.borde_top = top
+	var borde: float = ra.borde_d
+	var y_min := INF
+	for p in _esquinas_arma(mdl, tool):
+		var wp: Vector3 = h * (p as Vector3)
+		if (wp - base).dot(fwd) > borde + 0.06:
+			y_min = minf(y_min, wp.y)
+	if y_min == INF:
+		rest_alza = 0.0
+		return h
+	# (apuntando sin apoyar, solo se evita que lo atraviese: queda un poco por encima)
+	var delta := top + (0.06 if solo_subir else 0.02) - y_min   # (> 0: el arma se mete en el apoyo; < 0: flota)
+	# el cuerpo baja si el arma flota y sube si se mete (despacio: así no tiembla)
+	# (negativo = el cuerpo se levanta: agachado tras una barrera, se incorpora un poco para apoyar el arma)
+	rest_baja = clampf(rest_baja - delta * minf(1.0, dt * 6.0), -0.9, 0.0 if solo_subir else 1.1)
+	rest_alza = clampf(delta, 0.0, 0.4)
+	return Transform3D(h.basis, h.origin + Vector3(0, rest_alza, 0))
 
 
 func _arma_de_fuego_fuera(h: Transform3D, pts: Array, pelvis_cf: Transform3D, chest_cf: Transform3D, w: float) -> Transform3D:
@@ -2339,6 +2394,8 @@ func update_rig(dt: float) -> void:
 				techo_t = clampf(agache_techo + (hd.y + 0.56) - ((arriba.position as Vector3).y - 0.1), 0.0, 0.8)
 		agache_techo = Rbx.damp(agache_techo, techo_t, 10.0, dt)
 		crouch += agache_techo
+		# arma apoyada: el cuerpo baja lo justo para que el arma quede encima del apoyo (ver _arma_sobre_apoyo)
+		crouch += rest_baja
 		# altura de pelvis: bajarla si algún pie no llega (zancadas largas, bordillos)
 		var yaw_only := Rbx.cfp(root_cf.origin) * yaw_cf
 		# cuánto hay que bajar la pelvis para que la pierna de apoyo llegue al pie (péndulo invertido:
@@ -3090,6 +3147,18 @@ func update_rig(dt: float) -> void:
 					* Rbx.ang(waistP + breath + pie_w.y * kp + pc * 0.35 * (1.0 - kp), 0, waistR + pie_w.z * kp)
 			var pecho_fin: Transform3D = pelvis_cf * Mw.c0 * t_w * Mw.c1inv
 			handle_cf = _arma_de_fuego_fuera(handle_cf, _puntos_arma(mdl, tool), pelvis_cf, pecho_fin, fuera_w)
+		# arma apoyada: a ras del apoyo (ni flotando ni metida dentro). Apuntando junto a una barrera o un muro (sin
+		# apoyar, 2026-11-03): el cuerpo se incorpora lo justo para que el arma pase por encima y no lo atraviese
+		# (recargando con el arma apoyada también: si no, el cuerpo volvía a bajar y el arma se metía en la barrera)
+		var apoyo_ok: bool = kind == "Gun" and mdl and tool_shown and draw_st == null and holster_t == null \
+				and (not reloading or L.get("rested", false)) and pb < 0.5 and mt == null
+		if apoyo_ok and L.get("rested", false):
+			handle_cf = _arma_sobre_apoyo(handle_cf, mdl, tool, root_cf, dt, J.arsenal.rest)
+		elif apoyo_ok and aiming and J.arsenal.apoyo_delante != null:
+			handle_cf = _arma_sobre_apoyo(handle_cf, mdl, tool, root_cf, dt, J.arsenal.apoyo_delante, true)
+		else:
+			rest_alza = 0.0
+			rest_baja = Rbx.damp(rest_baja, 0.0, 6.0, dt)
 		# mano derecha: la que sostiene el arma
 		var hand_cf: Transform3D = handle_cf * Armas.grip(tool) * Armas.grip_att().affine_inverse()
 		# codo: de pie hacia abajo y atrás; tumbado hacia fuera y delante

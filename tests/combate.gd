@@ -68,16 +68,47 @@ func _process(dt: float) -> void:
 		a.select_slot(slot)
 		_log("equipar")
 	if modo in ["pistola", "rifle", "apoyar"]:
+		# (la barrera mide 1 m: agachado, que es la altura buena para apoyar el arma)
+		if modo == "apoyar" and _una("agachar", t > 1.0) and not OS.get_cmdline_user_args().has("--de_pie"):
+			j.set_stance(1)
 		if modo == "apoyar" and _una("x", t > 2.0):
 			j.aiming = true
-			a.set_rest(true)
-			_log("apoyar rest=%s gap=%s" % [str(a.rest != null), str(a.rest.gap if a.rest else -1)])
+			if not OS.get_cmdline_user_args().has("--sin_apoyar"):
+				a.set_rest(true)
+			_log("apoyar rest=%s gap=%s motivo=%s pos=%s" % [str(a.rest != null), str(a.rest.gap if a.rest else -1), a.rest_motivo, j.global_position])
 		if t > 1.8 and t < 4.5:
 			j.aiming = true
 			if modo == "rifle":
 				j.firing = t > 2.2 and t < 3.4
 			elif fmod(t, 0.4) < dt and t > 2.2:
 				a.shoot()
+		if OS.get_cmdline_user_args().has("--logarma_y") and fmod(t, 0.1) < dt and a.modelo_mano != null:
+			var an8: Animador = j.get_node("Animador")
+			var ymin8 := INF
+			for p8 in an8._esquinas_arma(a.modelo_mano, a.equipado):
+				ymin8 = minf(ymin8, ((a.modelo_mano as Node3D).global_transform * (p8 as Vector3)).y)
+			# parte de delante (más de 1,4 studs por delante del cuerpo: lo que queda sobre un apoyo)
+			var yfr := INF
+			var fw8 := Rbx.flat(-(a.modelo_mano as Node3D).global_transform.basis.z).normalized()
+			for p9 in an8._esquinas_arma(a.modelo_mano, a.equipado):
+				var w9: Vector3 = (a.modelo_mano as Node3D).global_transform * (p9 as Vector3)
+				if (w9 - j.global_position).dot(fw8) > 1.4:
+					yfr = minf(yfr, w9.y)
+			print("ARMA_Y t=%.2f stance=%d aim=%s abajo_rel_centro=%.2f delante=%.2f ojo=%.2f" % [t, j.stance, str(j.aiming), ymin8 - j.global_position.y, yfr - j.global_position.y, j.eye_cur])
+		if OS.get_cmdline_user_args().has("--logapoyo") and fmod(t, 0.1) < dt and a.rest != null:
+			# parte de abajo del arma sobre el apoyo respecto a la cara de arriba del apoyo (0 = apoyada)
+			var an7: Animador = j.get_node("Animador")
+			var mdl7: Node3D = a.modelo_mano
+			var ymin := INF
+			var fw7 := Rbx.flat(-mdl7.global_transform.basis.z).normalized()
+			for p7 in an7._esquinas_arma(mdl7, a.equipado):
+				var wp7: Vector3 = mdl7.global_transform * (p7 as Vector3)
+				if (wp7 - j.global_position).dot(fw7) > float(a.rest.get("borde_d", 1.0)) + 0.06:
+					ymin = minf(ymin, wp7.y)
+			print("APOYO t=%.2f hueco=%.3f baja=%.3f alza=%.3f top=%.2f borde=%.2f" % [t, ymin - float(a.rest.top), an7.rest_baja, an7.rest_alza, float(a.rest.top), float(a.rest.get("borde_d", -1))])
+		if OS.get_cmdline_user_args().has("--logmira") and fmod(t, 0.25) < dt:
+			var l0: ColorRect = a._hud.lineas[0]
+			print("MIRA t=%.2f vis=%s esc=%.2f pos0=%s size0=%s rest=%s cam_fov=%.1f" % [t, str(a._hud.mira.visible and l0.visible), a.mira_esc, l0.position, l0.size, str(a.rest != null), j.cam_fov])
 		if _una("fin_tiro", t > 3.6):
 			_log("tras disparar mag=%d reserva=%d" % [a.datos_equipado().mag, a.datos_equipado().reserve])
 			j.firing = false

@@ -443,12 +443,20 @@ func cambiar(nuevo: String, t_desfase := 0.0) -> void:
 
 ## golpe sobre el cuerpo ya caído (balas, patadas): sacude la pieza
 func golpe(pieza: String, impulso: Vector3) -> void:
+	# (2026-11-03) un ragdoll que ya terminó (o aún no tiene cuerpos) no hace nada: un balazo a un zombi justo cuando se
+	# levantaba paraba el juego con un error
+	if cuerpos.is_empty() or not is_instance_valid(self):
+		return
 	if not cuerpos.has(pieza):
 		pieza = "UpperTorso"
+	if not cuerpos.has(pieza):
+		return
 	if _congelado:
 		_descongelar()
-	var b: RigidBody3D = cuerpos[pieza]
-	b.apply_central_impulse(impulso * maxf(b.mass, 0.3))
+	var b = cuerpos[pieza]
+	if not is_instance_valid(b) or (b as RigidBody3D).is_queued_for_deletion():
+		return
+	(b as RigidBody3D).apply_central_impulse(impulso * maxf((b as RigidBody3D).mass, 0.3))
 	_quieto_t = 0.0
 
 
