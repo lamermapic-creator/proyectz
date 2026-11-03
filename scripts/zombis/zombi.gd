@@ -1048,11 +1048,11 @@ func _dibujar_cono() -> void:
 	for i in 13:
 		var p := Vector3(0, 0, -alcance).rotated(Vector3.UP, lerpf(-a, a, i / 12.0))
 		if i == 0 or i == 12:
-			im.add_vertex(Vector3.ZERO)
-			im.add_vertex(p)
+			im.surface_add_vertex(Vector3.ZERO)
+			im.surface_add_vertex(p)
 		if i > 0:
-			im.add_vertex(previo)
-			im.add_vertex(p)
+			im.surface_add_vertex(previo)
+			im.surface_add_vertex(p)
 		previo = p
 	im.surface_end()
 

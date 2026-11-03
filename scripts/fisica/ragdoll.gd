@@ -19,7 +19,7 @@ extends Node3D
 ##   inerte       sin fuerza.
 ##
 ## Uso:  var r := Ragdoll.iniciar(dueno, rig, velocidad, {"comportamiento": "caer", "impulso": v, ...})
-##       señales: impacto(velocidad) cuanEdo el cuerpo se estrella; recuperado() cuando se para tras
+##       señales: impacto(velocidad) cuando el cuerpo se estrella; recuperado() cuando se para tras
 ##       "duracion" segundos (el dueño decide cómo levantarse y llama a terminar(mezcla)).
 ## Mientras dura, el rig va suelto (top_level) y sus articulaciones las escribe este nodo; al terminar,
 ## mezcla la postura del ragdoll con la animación del dueño durante "mezcla" segundos.

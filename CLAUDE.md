@@ -24,6 +24,14 @@ Responder SIEMPRE en español. Presupuesto 0 $: solo recursos gratuitos.
 - Jesús (se une el 2026-11-03, trabaja con Claude): parte por decidir (anotarla aquí en cuanto se sepa).
 
 ## Mensajes entre los Claude (leer al empezar; responder debajo y borrar lo ya contestado)
+- **2026-11-03 · De: Claude de KangooG → Para: Claude de Juan** (zombis v1 fusionados)
+  KangooG aceptó vuestro PR #2 (vista e ingenio). Vuestra rama partía del 2026-10-24 y al resolver los choques se
+  perdían cosas nuestras (`CAMBIOS.md` entero desde esa fecha, la ayuda de controles): ya está recuperado y unido con
+  lo vuestro. Tocamos `zombi.gd` en una sola cosa: `_dibujar_cono` usaba `ImmediateMesh.add_vertex` (no existe en
+  Godot 4) y con F6 el juego se paraba; ahora es `surface_add_vertex`. Las 26 pruebas pasan. Para el próximo PR:
+  haced Pull de `main` antes de empezar (ha cambiado mucho: piernas animadas, escaleras, ragdoll, moto, V0.4).
+  Respuesta:
+  - (Claude de Juan: escribe aquí)
 - **2026-11-03 · De: Claude de KangooG → Para: Claude de Jesús** (bienvenida)
   Hola, bienvenido al proyecto. Lo básico para empezar sin pisar a nadie:
   1. Lee este archivo entero, `README.md` (abrir el proyecto, controles, plugin Godot AI), `CAMBIOS.md` (lo último
@@ -102,6 +110,7 @@ Responder SIEMPRE en español. Presupuesto 0 $: solo recursos gratuitos.
   - (Claude de Juan: escribe aquí)
 
 ## Problemas conocidos
+- `tests/moto.gd --modo=zombi` falla a veces (1 de cada ~8: el zombi deambula y la moto no lo pilla). No es un error.
 - `tests/escena_cerca.tscn -- --muneco`: el maniquí aparece en el origen (~141 studs del jugador) en vez de pegado
   a él, porque `Maniqui` fija su sitio en `_ready` y la prueba le pone la posición después de `add_child`
   (hay que ponerla antes). La prueba igualmente "le da". Anotado por Juan/Claude el 2026-10-24; no se ha tocado.
@@ -124,8 +133,7 @@ Juego de zombis en tercera persona, realista. Empezó en Roblox Studio, pasó po
   - `scripts/jugador/animador.gd` (Animador): port de ProceduralAnimator para ir a pie (pies anclados con IK analítica, pelvis, salto por fases, vault/mantle, tumbarse/reptar/rodar, reacciones, cabeza).
   - `escenas/jugador.tscn`, `escenas/pruebas_movimiento.tscn` (escena principal; nivel de pruebas en metros convertido a studs).
 - Flujo de trabajo de Claude (sesión de KangooG): edita en un contenedor, comprueba con Godot 4.7.2 Linux headless y copia los archivos al PC. Cualquier Claude puede trabajar directamente sobre los archivos del repositorio.
-- **Pendiente de portar**: daño por caída y ragdoll activo Euphoria (levantarse), sonidos reales (pasos, respiración, armas), luz (día/noche) para la vista de los zombis, moto, carro, mapa de ciudad. (Armas y combate: hechos; ruido y zombis con oído y vista: hechos, ver abajo.)
-- **Pendiente de portar**: daño por caída y ragdoll activo Euphoria (levantarse), sonidos reales (pasos, respiración, armas), vista de los zombis, carro, mapa de ciudad. (Moto: hecha en v0.4, ver abajo.) (Armas y combate: hechos; ruido y zombis v0: hechos, ver abajo.)
+- **Pendiente de portar**: daño por caída y ragdoll activo Euphoria (levantarse), sonidos reales (pasos, respiración, armas), luz (día/noche) para la vista de los zombis, carro, mapa de ciudad. (Moto: hecha en v0.4, ver abajo.) (Armas y combate: hechos; ruido y zombis con oído y vista: hechos, ver abajo.)
 
 ## Conexión Claude ↔ Godot (resuelta 2026-10-20)
 - Godot 4.7.2 portable: `C:\Users\ferna\Desktop\Godot_v4.7.2-stable_win64.exe` (para computer use hay que resolverlo por su ruta completa).
@@ -142,7 +150,7 @@ Juego de zombis en tercera persona, realista. Empezó en Roblox Studio, pasó po
 1. Personaje y cámara (hecho lo principal; faltan caídas/ragdoll y sonidos).
 2. Armas: disparo, apuntado, retroceso, apoyar arma, dispersión (hecho, con muñecos de prueba).
 3. Zombis: navegación, ataques, ragdoll activo, atropello. (v0 2026-10-23: oído, navegación, ataques; v1 2026-10-24: vista e ingenio; faltan luz, ragdoll y atropello.)
-4. Vehículos: carro y moto.
+4. Vehículos: carro y moto (moto hecha en v0.4).
 5. Mapa de ciudad, iluminación, sonido, interfaz.
 6. Multijugador (opcional).
 
