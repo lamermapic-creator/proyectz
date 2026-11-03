@@ -98,35 +98,18 @@ def pose(phi):
 		poner_T(lado + "Elbow", ang(co, 0, 0))
 		poner_T(lado + "Wrist", ang(mu, 0, 0))
 	upd()
-	# pies sobre la cinta (en el espacio del rig: -Z delante). Paso = vel * periodo / 2
-	paso = vel * periodo / 2.0
-	suelo_y = -3.11 + FOOT_HALF * 0  # planta del pie (centro del rig en 0)
-	for s, ini in (("R", 0.25), ("L", 0.75)):
+	# piernas animadas (2026-11-03, diseno_mov.pierna: lo mismo que hace el juego). En el espacio del rig: -Z delante;
+	# z de la animación = tobillo delante de la cadera; el centro del pie va 0,2 por delante del tobillo
+	suelo_y = -3.11
+	for s in ("R", "L"):
 		lado = "Right" if s == "R" else "Left"
-		sx = HIP_X if s == "R" else -HIP_X
-		u = ((phi - ini) % 1.0) / 0.5
-		if u < 1.0:
-			# en el aire: de detrás (despegue) a delante (apoyo)
-			a = DM.pie(ciclo, "pie_avance", u)
-			z = paso / 2 - paso * a + DM.pie(ciclo, "pie_atras", u)
-			alto = DM.pie(ciclo, "pie_alto", u)
-			if ciclo != "correr":
-				alto *= 0.2 + vel * 0.02
-			inc = DM.pie(ciclo, "pie_inclina", u)
-		else:
-			w = u - 1.0
-			z = -paso / 2 + paso * w
-			alto = 0.0
-			inc = 0.0
-			# apoyo: talón que despega al final (gira sobre la punta) y el pie aún algo levantado de punta al principio
-			if w > 0.75:
-				inc = -math.radians(30) * ((w - 0.75) / 0.25) ** 1.5
-		p = Vector((sx, suelo_y + alto, z))
-		F = Matrix.Translation(p + Vector((0, FOOT_HALF, 0))) @ ang(0, s == "R" and -0.1 or 0.1, 0) @ ang(inc, 0, 0)
-		# girar sobre la punta o el talón
-		if inc < 0 and u >= 1.0:
-			piv = Vector((0, -FOOT_HALF, -0.5))
-			F = Matrix.Translation(p + Vector((0, FOOT_HALF, 0))) @ cf(*piv) @ ang(inc, 0, 0) @ cf(*(-piv))
+		est = DM.PIERNAS[ciclo]["estrecha"]
+		sx = (HIP_X - est) if s == "R" else -(HIP_X - est)
+		z, alto, inc = DM.pierna(ciclo, s, phi, vel)
+		p = Vector((sx, suelo_y + alto, -(z + 0.2)))
+		base = Matrix.Translation(p + Vector((0, FOOT_HALF, 0))) @ ang(0, s == "R" and -0.1 or 0.1, 0)
+		piv = Vector((0, -FOOT_HALF, -0.5 if inc < 0 else 0.5))
+		F = base @ cf(*piv) @ ang(inc, 0, 0) @ cf(*(-piv))
 		polo = Vector((sx, 0.5, -6))
 		tob = (F @ cf(0, 0.15, 0.2)).translation
 		ik_pierna(lado, tob, polo, F)

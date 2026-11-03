@@ -13,6 +13,65 @@ en el mismo commit que el cambio. Formato:
 
 ---
 
+## 2026-11-03 (5) — Se une Jesús al proyecto (KangooG)
+- **Qué:** Jesús entra en el equipo (trabaja con Claude). Añadido a "Reparto" en `CLAUDE.md` (parte por decidir) y un
+  mensaje de bienvenida para su Claude en "Mensajes entre los Claude" con las normas para empezar.
+- **Archivos:** `CLAUDE.md`, `CAMBIOS.md`.
+
+## 2026-11-03 (4) — Moverse de lado boca arriba (KangooG)
+- KangooG: "añádele una animación para moverse de costado boca arriba". Antes, tumbado boca arriba el cuerpo se
+  deslizaba quieto. Ahora hace la "gamba" (diseño de Blender: `diseno_mov.BOCA_ARRIBA` → `Movimientos.BOCA_ARRIBA`):
+  con las rodillas dobladas da un pasito de lado con el pie de ese lado y luego con el otro, levanta un poco la cadera
+  (puente) y la lleva de lado, la baja y arrastra los hombros (la espalda se curva y se endereza); sin arma, las
+  manos se apoyan en el suelo junto a la cadera. Vale también hacia la cabeza o hacia los pies. El cuerpo avanza
+  continuo y la cadera, los pies y los hombros van a tirones, cada uno en su momento (en el suelo, quietos).
+- **Archivos:** `scripts/jugador/animador.gd` (`sup_ph`, `sup_amt`, `sup_dir`, `sup_mov_k`), `movimientos.gd`
+  (generado), `animaciones/blender/movimiento/{diseno_mov.py, a_gd_mov.py}`, `tests/visual.gd` (escenario
+  `boca_arriba_lado`, `--cam=arriba`, `--logtorso`).
+- **Cómo probarlo:** F5, Z para tumbarse, mirar hacia atrás para quedar boca arriba y moverse con A / D.
+
+## 2026-11-03 (3) — Versión 0.4 (KangooG)
+- **Qué:** el juego pasa a la versión **V0.4** (`application/config/version` de project.godot; se ve en el menú, la
+  pausa y el título de la ventana). Exportación: `../versiones/v0.4/V0.4.exe`, versión de archivo 0.4.0.0.
+- **Archivos:** `project.godot`, `export_presets.cfg`, `CLAUDE.md`.
+
+## 2026-11-03 (2) — Escaleras escalón a escalón y marcha más fluida (KangooG)
+- KangooG: "en las escaleras el personaje sube andando de 2 en 2; también haz las animaciones más fluidas".
+- **Escaleras:** el Animador mira el suelo a lo largo de la marcha (`_mirar_escalera`, cada 3 fotogramas) y reconoce
+  una escalera (bordes seguidos, del mismo sentido, con huellas parecidas): entonces la zancada es exactamente un
+  escalón por paso andando (dos por paso corriendo) y cada pie apoya en el centro de la huella (`_centro_huella`,
+  elegido al despegar). En una escalera se va como mucho a ~3,4 pasos por segundo andando y ~4 corriendo
+  (`Jugador`: velocidad limitada a `esc_fondo` × 3,4 / × 8; antes se iba igual de deprisa que por una cuesta y las
+  piernas no podían pisar todos los escalones). Bajando, el cuerpo "cae" un instante de escalón en escalón: ya no
+  se toma por un salto (`aire_corto_t`, hasta 0,3 s si no es un salto), la marcha sigue.
+- **Más fluido:** las tablas de Blender se leen con interpolación cúbica (`Movimientos._ciclica/_abierta`; antes
+  lineal: pequeños tirones en cada muestra); cada pie lleva su propio avance (`ap_paso`/`ap_x`, `_avanza_pie`): al
+  pasar de andar a correr ningún pie salta de golpe de apoyado a en el aire (el ajuste a la fase global solo en el
+  aire); la zancada cambia suave (`anim_zan`); al pararse, el pie que va en el aire termina su paso (`anim_parando`);
+  un pie apoyado que se queda muy atrás despega; por delante el pie no apoya más lejos de lo que alcanza la pierna
+  (frenando, la cadera se hundía de golpe).
+- **Archivos:** `scripts/jugador/{animador.gd, jugador.gd, movimientos.gd (generado)}`,
+  `animaciones/blender/movimiento/a_gd_mov.py`, `tests/visual.gd` (`escalera_c`, `--pisadas`, `--curL`), docs.
+- **Cómo probarlo:** F5: subir y bajar la escalera andando y corriendo; correr y soltar Shift; pararse.
+
+## 2026-11-03 — Piernas con animación normal hecha en Blender (KangooG)
+- KangooG: "el movimiento de las piernas está muy exagerado (el pie procedural); quiero la animación normal, olvidando
+  los pasos procedurales al 95 %, en Blender; además el torso avanza primero que las piernas".
+  **Qué:** en marcha las piernas ya no las decide el juego paso a paso: cada pie sigue una animación cíclica fija
+  respecto a la cadera, diseñada en Blender (`diseno_mov.PIERNAS` → `Movimientos.PIERNAS`), para andar, correr y
+  agachado (mezcladas según la velocidad); hacia atrás se reproduce al revés y de lado con pasos laterales. Lo
+  procedural queda en lo mínimo: el pie se pone a la altura del suelo que pisa (escalones, cuestas), el de apoyo se
+  queda clavado donde pisó y, al arrancar, una mezcla corta desde los pies parados. Las piernas se mueven a la vez que
+  el cuerpo (antes los pies esperaban anclados y el torso se adelantaba); además menos inclinación del torso al
+  acelerar y a la carrera. Zancadas algo más cortas (`RITMO`) para que la pierna de apoyo no se estire de más.
+  Medido: tirón de los pies ~3 veces menor (`fluidez.py`: pies_p98 6308 andando y 5924 corriendo, antes 19182 y
+  21029), pasos siempre alternos, menos resbalones (`recorrido.gd`).
+- **Archivos:** `animaciones/blender/movimiento/{diseno_mov.py, a_gd_mov.py, ver_mov.py}`, `scripts/jugador/
+  {movimientos.gd (generado), animador.gd}`, `tests/visual.gd` (escenarios `atras`, `diagonal_atras`; `--geom`),
+  `animaciones/blender/LEEME.md`, `CLAUDE.md`.
+- **Cómo probarlo:** F5: andar, correr, agachado, hacia atrás (S), de lado con un arma, escaleras y saltar corriendo.
+- **Pendiente / avisos:** parado se siguen dando pasitos de ajuste (girar sin moverse). Los zombis no cambian.
+
 ## 2026-11-02 (2) — Pasos siempre en orden, levantarse del suelo y guardar el arma para trepar (KangooG)
 - KangooG: "arregla las piernas, que los pasos se hagan en orden; cuando corre las dos piernas se van adelante".
   Los pasos ya no se deciden "cuando un pie se queda atrás": un **reloj de la marcha** avanza con la distancia

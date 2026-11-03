@@ -67,13 +67,21 @@ blender -b -P personaje.py -- --nuevo --glb=../../../modelos/superviviente.glb
     `SORTEAR` (vallas y encaramarse) por el progreso; `COLGADO`; `LEVANTAR` (boca abajo / boca arriba).
   - `RITMO`: zancada según la velocidad y fracción del ciclo en el aire: marca cuándo despega y apoya cada pie
     (los pasos siempre alternan).
+  - `PIERNAS` (2026-11-03): **la animación de las piernas** (andar, correr, agachado). Cada pie respecto a la cadera:
+    en el apoyo va hacia atrás en línea recta a la velocidad del cuerpo; en el aire vuelve con las curvas `avance`,
+    `alto` e `inclina_aire` (más la velocidad de despegue, sin tirones; `retrae` = cuánto "araña" hacia atrás antes
+    de apoyar); `delante` = dónde apoya; `inclina_apoyo` = talón al apoyar y punta al despegar; `estrecha` = pisar
+    hacia el centro. `pierna(tipo, lado, φ, v)` es exactamente lo que hace el juego (`Animador._pierna_anim`).
+  - `BOCA_ARRIBA` (2026-11-03): moverse tumbado boca arriba (pasito de cada pie, puente de cadera, hombros).
 - Ver en Blender (sobre el personaje montado desde el juego: `tests/moto.gd --modo=exportar_pie --arma=ninguna
   --salida=cuerpo.json` y `blender -b -P montar.py -- cuerpo.json cuerpo.blend`):
-  `blender -b cuerpo.blend -P movimiento/ver_mov.py -- andar 6.5 1.0 24 "0,0.15,9;60,0.15,9" prueba` y
+  `blender -b cuerpo.blend -P movimiento/ver_mov.py -- andar 6.5 1.0 24 "0,0.15,9;60,0.15,9" prueba` (cuerpo y
+  piernas animadas; en Blender la cadera no baja, en el juego sí cuando la pierna no llega) y
   `blender -b cuerpo.blend -P movimiento/ver_tierra.py -- "t:0,0.3,0.5,0.7,1" "90,0.12,10" prueba --ik`
   (este último imprime cuánto se meten en el suelo los pies, las rodillas y las manos).
 - Al juego: `python3 movimiento/a_gd_mov.py ../../scripts/jugador/movimientos.gd` (`Movimientos`, generado: no
   editar a mano). Lo usa el Animador: `_ciclo`, `_brazo_ciclo`, `_curva_pie`, el salto (`air_tj`), las piernas al
-  tumbarse (IK a sitios del suelo) y las curvas de vallas/trepar. Los pies siguen anclados al suelo como antes.
+  tumbarse (IK a sitios del suelo) y las curvas de vallas/trepar. En marcha, las piernas son la animación `PIERNAS`
+  (`_marcha_animada`); parado, los pies quedan anclados y dan pasitos de ajuste.
 - Medir: `tests/visual.gd --registro=x.csv` + `python3 tests/fluidez.py x.csv` (tirón del cuerpo y de los pies) y
   `--contactos` (cuánto se mete cada pieza en el suelo).

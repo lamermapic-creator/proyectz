@@ -1299,6 +1299,11 @@ func update_character(dt: float) -> void:
 		speed *= clampf(1.0 - 0.45 * pend_ef, 0.5, 1.0)
 	else:
 		speed *= clampf(1.0 + 0.2 * pend_ef, 0.75, 1.0)
+	# (2026-11-03) en una escalera se pisa un escalón por paso (corriendo, dos): como mucho ~3,4 pasos por segundo
+	# andando y ~4 corriendo (si no, las piernas tendrían que ir a toda velocidad o saltarse escalones)
+	var an_esc := get_node_or_null("Animador") as Animador
+	if an_esc != null and an_esc.esc_fondo > 0.0 and en_suelo and stance != 2:
+		speed = minf(speed, an_esc.esc_fondo * (8.0 if sprinting else 3.4))
 
 	# ladeo (Q izquierda / E derecha, mantener): no se puede corriendo ni tumbado;
 	# una pared en ese lado limita cuánto te puedes asomar

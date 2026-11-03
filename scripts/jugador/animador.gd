@@ -67,6 +67,12 @@ var crawl_amt := 0.0
 var roll_t := 0.0
 var roll_side := 1.0
 var rl := 0.0
+# MOVERSE BOCA ARRIBA (2026-11-03, Movimientos.BOCA_ARRIBA)
+var sup_ph := 0.0           # fase del ciclo (0..1)
+var sup_amt := 0.0          # 0 quieto, 1 moviéndose
+var sup_dir := Vector2(1, 0) # dirección de la marcha respecto al cuerpo (x derecha, y hacia atrás = hacia los pies)
+var sup_mov_k := 0.0        # peso del ciclo este fotograma (para los brazos)
+static var _sup_c := NAN    # centrado de las curvas (media de φ - cadera)
 var last_prone_t := -9.0
 ## estado del suavizado "de muelle" (smooth_j2) de cada articulación
 var muelle_q := {}   # estado del muelle de cada articulación (giro), aparte de lo que se muestra
@@ -130,6 +136,24 @@ var gait01 := 0.0       # reloj de la marcha (0..1): marca cuándo despega y apo
 var reloj_activo := false
 var ultimo_pie := ""     # el último pie que dio un paso con el reloj (el siguiente siempre es el otro)
 var ritmo_periodo := 1.0
+# PIERNAS ANIMADAS (2026-11-03): en marcha los pies siguen la animación de Blender (Movimientos.PIERNAS)
+var anim_w := 0.0              # 0 pies anclados (parado), 1 piernas animadas (mezcla corta al arrancar)
+var anim_sentido := 1.0        # 1 la animación va hacia delante; -1 al revés (andar hacia atrás)
+var anim_cruce := 0.0          # mezcla al cambiar de sentido
+var anim_cruce_desde := {}     # posición de cada pie (respecto al cuerpo) al cambiar de sentido
+var anim_local := {}           # posición de cada pie respecto al cuerpo en el último fotograma
+var anim_aire := false         # viene de un salto o caída (al aterrizar, sin mezcla)
+const ANIM_MIN_X := 0.24
+const SUP_CURVA := 1.0       # signo de la curva de la espalda al moverse boca arriba (comprobado en el juego)
+var anim_zan := 0.0            # zancada usada (cambia suave: al llegar a una escalera, al acelerar...)
+var anim_parando := 0.0
+var aire_corto_t := 0.0        # se está parando: el pie que iba en el aire termina el paso (segundos)
+# ESCALERAS (2026-11-03): un escalón por paso (corriendo, uno o dos)
+var esc_fondo := 0.0           # fondo de los escalones de la escalera por la que va (0 = no hay escalera)
+var esc_bordes: Array = []     # bordes de los escalones (puntos del mundo) a lo largo de la marcha
+var esc_dir := Vector3.ZERO    # dirección (mundo) en la que se midieron
+var esc_visto := -10.0
+var _esc_n := 0       # distancia mínima de cada pie a la línea del centro (corriendo se pisa casi en línea)
 var air_tj := 0.0      # fase del salto (0 despegue .. 1 a punto de aterrizar), para Movimientos.SALTOS
 var sw_prev := {"L": false, "R": false}
 var last_step_t := -9.0
@@ -454,6 +478,12 @@ static func set_end(L: Limb, lower_cf: Transform3D, desired: Transform3D, w: flo
 	L.fin.transform = L.fin.transform.interpolate_with(t, w) if w < 0.999 else t
 
 
+## sin vallar, colgarse ni tumbarse (para tomar un escalón hacia abajo como suelo)
+func va_sin_pie_aire() -> bool:
+	var L: Dictionary = jugador.L
+	return L.vault == null and L.get("hang") == null and float(L.proneP) < 0.01 and not bool(L.knocked)
+
+
 ## ---------------------------------------------------------------- suelo
 func ground(pos: Vector3) -> Array:
 	var hit := jugador.raycast(pos + Vector3(0, 2.5, 0), Vector3(0, -14, 0))
@@ -609,7 +639,10 @@ func update_feet(root_cf: Transform3D, vel: Vector3, speed: float, dt: float, gr
 			replant = true
 	if replant:
 		replant = false
+		anim_w = 0.0
+		anim_aire = false
 		for s in feet:
+			feet[s].anim = false
 			var f: Dictionary = feet[s]
 			f.pos = _ideal(frame, f, vel_h, lead, -lead)[0]
 			# (2026-10-30) un pie no se queda apoyado sobre una cuesta muy empinada (se metía dentro):
@@ -643,7 +676,7 @@ func update_feet(root_cf: Transform3D, vel: Vector3, speed: float, dt: float, gr
 	# avanzar pasos en curso
 	for f in [L, R]:
 		var sw = f.swing
-		if sw != null:
+		if sw != null and not sw.has("anim"):
 			sw.t += dt
 			var u := clampf(sw.t / sw.dur, 0, 1)
 			var idl := _ideal(frame, f, vel_h, float(sw.get("lead", lead)), sw.dur - sw.t)
@@ -698,66 +731,38 @@ func update_feet(root_cf: Transform3D, vel: Vector3, speed: float, dt: float, gr
 				f.yaw = body_yaw
 				f.swingYaw = null
 	if not grounded:
-		# (en el aire el reloj se para; al aterrizar vuelve a arrancar con el pie que quedó más atrás)
+		# (en el aire el reloj se para; al aterrizar vuelve a arrancar con el pie que va delante)
 		reloj_activo = false
 		ultimo_pie = ""
+		if anim_w > 0.0:
+			anim_w = 0.0
+			anim_aire = true
+			for k in ["L", "R"]:
+				var fa: Dictionary = feet[k]
+				fa.anim = false
+				if fa.get("cur") != null:
+					fa.pos = fa.cur
+				fa.cur = null
+				fa.swing = null
+				fa.u = null
 		return
-	# PASOS POR EL RELOJ DE LA MARCHA (2026-11-02, v2; ritmo diseñado en Blender: Movimientos.ZANCADA y
-	# FRACCION_AIRE). En marcha, los pasos ya no se deciden "cuando un pie se queda atrás" (corriendo, eso hacía que
-	# a veces las dos piernas fueran a la vez hacia delante): un reloj avanza con la distancia recorrida y cada pie
-	# despega y apoya en su momento, SIEMPRE alternando (la izquierda apoya en φ = 0,25 y la derecha en φ = 0,75).
-	# Dónde apoya sigue saliendo de _ideal (suelo real, escalones, paredes). Parado, como antes (pasos de ajuste).
-	if speed >= 0.6:
-		idle_t = 0
-		var zan := lerpf(Movimientos.zancada("andar", speed), Movimientos.zancada("correr", speed), run01)
-		var fr: float = lerpf(Movimientos.FRACCION_AIRE.andar, Movimientos.FRACCION_AIRE.correr, run01)
-		if crouch_b > 0.001:
-			zan = lerpf(zan, Movimientos.zancada("agachado", speed), crouch_b)
-			fr = lerpf(fr, Movimientos.FRACCION_AIRE.agachado, crouch_b)
-		# de lado, con fatiga, en escaleras y cuestas o tropezando: pasos más cortos
-		zan *= (1.0 - 0.35 * lat_f) * (1.0 - 0.2 * fw_k) * clampf(1.0 - 0.4 * absf(jugador.pendiente), 0.55, 1.0)
-		if stumble_until > ahora():
-			zan *= 0.7
-		# acelerando, pasos más rápidos (como al arrancar a correr: pasos cortos y seguidos); si no, los pies se
-		# quedaban atrás mientras el cuerpo ya iba deprisa
-		var lv_d := Rbx.vec_to_obj(frame, vel_h).normalized() if speed > 0.1 else Vector3.FORWARD
-		var acel := absf(Vector3(acc.x, 0, acc.z).dot(lv_d))   # (frenando, igual: pasos cortos y seguidos)
-		var periodo := maxf(zan / (speed + acel * 0.35), 0.3)
-		if not reloj_activo:
-			# arranca: da el primer paso el pie que se quedó más atrás respecto a hacia donde va
-			reloj_activo = true
-			var dir_v := vel_h.normalized() if vel_h.length() > 0.05 else Rbx.look(frame)
-			var atras_L := -(Vector3(L.pos) - root_cf.origin).dot(dir_v)
-			var atras_R := -(Vector3(R.pos) - root_cf.origin).dot(dir_v)
-			var primero := "L" if atras_L >= atras_R else "R"
-			gait01 = fposmod((0.25 if primero == "L" else 0.75) - fr - 0.02, 1.0)
-		# red de seguridad: un pie apoyado al que la pierna ya no llega (giro brusco, empujón) despega ya si el otro está
-		# apoyado (el reloj se adelanta hasta su despegue: sigue alternando)
-		for k in ["L", "R"]:
-			var f2: Dictionary = feet[k]
-			var otro: Dictionary = feet["R" if k == "L" else "L"]
-			if f2.swing == null and bool(f2.get("overreach", false)) and k != ultimo_pie:
-				var desp := fposmod((0.25 if k == "L" else 0.75) - fr, 1.0)
-				if otro.swing == null:
-					if fposmod(desp - gait01, 1.0) > 0.12:
-						gait01 = fposmod(desp - 0.001, 1.0)
-				elif otro.get("u") != null and float(otro.u) > 0.7 and fposmod(desp - gait01, 1.0) < 0.3:
-					# el otro pie está a punto de apoyar: este despega ya (un instante de vuelo, como al correr)
-					gait01 = fposmod(desp - 0.001, 1.0)
-		var antes := gait01
-		gait01 += dt / periodo
-		for k in ["L", "R"]:
-			var f: Dictionary = feet[k]
-			var despega := fposmod((0.25 if k == "L" else 0.75) - fr, 1.0)
-			var d_c := fposmod(despega - antes, 1.0)
-			if f.swing == null and d_c > 0.0 and d_c <= gait01 - antes and k != ultimo_pie:
-				ultimo_pie = k
-				_registrar_paso(k, run01)
-				f.swing = {"from": f.pos, "t": 0.0, "dur": fr * periodo, "fromYaw": f.get("yaw") if f.get("yaw") != null else body_yaw,
-					"idle": false, "roll0": f.get("roll", 0.0), "lead": periodo * (1.0 - fr) * 0.5 * lerpf(1.0, 0.7, run01)}
-		gait01 = fposmod(gait01, 1.0)
-		ritmo_periodo = periodo
+	# PIERNAS ANIMADAS (2026-11-03, a pedido de KangooG: "la animación normal, olvidando los pasos procedurales al
+	# 95 %"): en marcha cada pie sigue la animación hecha en Blender (Movimientos.PIERNAS) respecto a la cadera; el juego
+	# solo hace avanzar la fase con la distancia recorrida (el pie de apoyo no resbala) y pone el pie a la altura del
+	# suelo que pisa. Parado, los pies se quedan anclados y dan pasitos de ajuste como siempre.
+	if speed >= (0.4 if anim_w > 0.0 else 0.8):
+		anim_parando = 0.0
+		_marcha_animada(root_cf, frame, vel_h, speed, dt, run01, fw_k, lat_f, body_yaw)
 		return
+	if anim_w > 0.0:
+		# parándose: si un pie va en el aire, termina su paso con la animación (sin cortarlo) y luego se queda quieto
+		var en_aire := bool(feet.L.get("ap_paso", false)) or bool(feet.R.get("ap_paso", false))
+		anim_parando += dt
+		if en_aire and anim_parando < 0.5 and anim_w >= 1.0:
+			_marcha_animada(root_cf, frame, vel_h, speed, dt, run01, fw_k, lat_f, body_yaw)
+			return
+		anim_parando = 0.0
+		_parar_animada(body_yaw)
 	reloj_activo = false
 	ultimo_pie = ""
 	# decidir el siguiente paso (parado: pasos de ajuste)
@@ -890,6 +895,362 @@ func update_feet(root_cf: Transform3D, vel: Vector3, speed: float, dt: float, gr
 		mover.swing = {"from": mover.pos, "t": 0.0, "dur": 0.3 if speed < 0.6 else step_dur, "fromYaw": mover.get("yaw") if mover.get("yaw") != null else body_yaw, "idle": speed < 0.6, "roll0": mover.get("roll", 0.0)}
 
 
+## parámetro de las piernas animadas mezclado andar / agachado / correr (como _curva_pie)
+func _par_pierna(nombre: String, run01: float) -> float:
+	var v: float = Movimientos.PIERNAS.andar[nombre]
+	if crouch_b > 0.001:
+		v = lerpf(v, Movimientos.PIERNAS.agachado[nombre], crouch_b)
+	if run01 > 0.001:
+		v = lerpf(v, Movimientos.PIERNAS.correr[nombre], run01)
+	return v
+
+
+func _curva_pierna(nombre: String, x: float, run01: float) -> float:
+	var v := Movimientos.pierna("andar", nombre, x)
+	if crouch_b > 0.001:
+		v = lerpf(v, Movimientos.pierna("agachado", nombre, x), crouch_b)
+	if run01 > 0.001:
+		v = lerpf(v, Movimientos.pierna("correr", nombre, x), run01)
+	return v
+
+
+## Pie k de la animación (Blender, Movimientos.PIERNAS / diseno_mov.pierna) en la fase phi: [avance respecto a la
+## cadera en studs (+ = hacia donde va), altura, inclinación (rad), en el aire, u (aire) o s (apoyo)]. En el apoyo el
+## pie va hacia atrás en línea recta a la velocidad del cuerpo (en el mundo, quieto); en el aire vuelve con la forma de
+## Blender más la velocidad con la que despegó (sin tirones).
+func _pierna_anim(en_paso: bool, x: float, zan: float, fr: float, run01: float, speed: float) -> Array:
+	var delante := _par_pierna("delante", run01)
+	var dd := zan * (1.0 - fr)
+	if not en_paso:
+		var sa := x
+		return [dd * (delante - sa), 0.0, _curva_pierna("inclina_apoyo", sa, run01), false, sa]
+	var u := x
+	var m0 := -fr / (1.0 - fr)
+	var a := _curva_pierna("avance", u, run01) + m0 * (u * u * u - 2.0 * u * u + u) + _par_pierna("retrae", run01) * m0 * (u * u * u - u * u)
+	var k_alto := clampf(speed / _par_pierna("v_ref", run01), 0.5, 1.15)
+	return [dd * (delante - 1.0 + a), _curva_pierna("alto", u, run01) * k_alto, _curva_pierna("inclina_aire", u, run01), true, u]
+
+
+## posición del tobillo respecto al cuerpo (marco del rumbo) para un avance z de la animación
+func _tobillo_anim(k: String, z: float, eje: Vector3, desp_x: float, estrecha: float) -> Vector3:
+	var side: float = feet[k].side
+	# (frenando de correr a andar, el paso de andar más largo hacía que el pie apoyara demasiado lejos y la cadera se
+	# hundía): por delante, el pie no va más allá de lo que alcanza la pierna con la cadera casi a su altura
+	if z > 1.1:
+		z = 1.1 + 0.3 * tanh((z - 1.1) / 0.3)
+	var x := side * (hip_x - estrecha) + eje.x * z + side * desp_x
+	if x * side < ANIM_MIN_X:
+		x = side * ANIM_MIN_X
+	return Vector3(x, 0.0, eje.z * z)
+
+
+## Cada pie lleva su propio avance (apoyo s / paso u) y no la fase global directamente: así, al pasar de andar a correr
+## (cambia la parte del ciclo que va en el aire) ningún pie salta de golpe de apoyado a en el aire; un pequeño ajuste
+## lo mantiene a la par de la fase global (siempre alternando).
+func _avanza_pie(f: Dictionary, dpsi: float, fr: float) -> void:
+	var paso: bool = f.ap_paso
+	var x: float = f.ap_x
+	var resto := dpsi
+	for _i in 4:
+		var span := fr if paso else (1.0 - fr)
+		var nx := x + resto / span
+		if nx > 1.0:
+			resto = (nx - 1.0) * span
+			paso = not paso
+			x = 0.0
+		elif nx < 0.0:
+			resto = nx * span
+			paso = not paso
+			x = 1.0
+		else:
+			x = nx
+			break
+	f.ap_paso = paso
+	f.ap_x = clampf(x, 0.0, 1.0)
+
+
+func _pie_en_fase(f: Dictionary, psi: float, fr: float) -> void:
+	f.ap_paso = psi >= 1.0 - fr
+	f.ap_x = (psi - (1.0 - fr)) / fr if f.ap_paso else psi / (1.0 - fr)
+
+
+## ESCALERAS: mira el suelo a lo largo de la marcha (cada 0,125 studs) y busca bordes de escalón seguidos, del mismo
+## sentido y con huellas parecidas. esc_fondo = fondo del escalón (0 si no es una escalera)
+func _mirar_escalera(origen: Vector3, dir_w: Vector3, body_gy: float) -> void:
+	var d0 := -1.0
+	var paso := 0.125
+	var n := 38
+	var hs: Array = []
+	for i in n:
+		var pt := origen + dir_w * (d0 + i * paso)
+		var hit := jugador.raycast(Vector3(pt.x, body_gy + 2.6, pt.z), Vector3(0, -5.5, 0))
+		hs.append((hit.position as Vector3).y if not hit.is_empty() else NAN)
+	var bordes: Array = []
+	var saltos: Array = []
+	for i in n - 1:
+		var a: float = hs[i]
+		var b: float = hs[i + 1]
+		if is_nan(a) or is_nan(b):
+			continue
+		var dh := b - a
+		if absf(dh) > 0.15 and absf(dh) < 1.3:
+			bordes.append(d0 + (i + 0.5) * paso)
+			saltos.append(dh)
+	var fondo := 0.0
+	if bordes.size() >= 2:
+		var ok := true
+		var esp: Array = []
+		for i in bordes.size() - 1:
+			if signf(saltos[i]) != signf(saltos[i + 1]):
+				ok = false
+			esp.append(float(bordes[i + 1]) - float(bordes[i]))
+		if ok:
+			esp.sort()
+			var m: float = esp[esp.size() / 2]
+			if m >= 0.5 and m <= 2.2 and float(esp[0]) > m * 0.7 and float(esp[esp.size() - 1]) < m * 1.35:
+				fondo = m
+	var now := ahora()
+	if fondo > 0.0:
+		esc_fondo = fondo if esc_fondo <= 0.0 else lerpf(esc_fondo, fondo, 0.3)
+		esc_visto = now
+	elif not (now - esc_visto < 0.5 or (not bordes.is_empty() and now - esc_visto < 1.5)):
+		esc_fondo = 0.0
+	esc_dir = dir_w
+	esc_bordes.clear()
+	for d in bordes:
+		esc_bordes.append(origen + dir_w * float(d))
+
+
+## centro de la huella más cercana a un punto (a lo largo de la marcha), o null
+func _centro_huella(punto: Vector3) -> Variant:
+	if esc_fondo <= 0.0 or esc_bordes.is_empty():
+		return null
+	var mejor = null
+	var md := INF
+	for b in esc_bordes:
+		for sgn in [-0.5, 0.5]:
+			var c: Vector3 = (b as Vector3) + esc_dir * esc_fondo * sgn
+			var d := absf((c - punto).dot(esc_dir))
+			if d < md:
+				md = d
+				mejor = c
+	return mejor
+
+
+func _suelo_pie(p: Vector3, body_gy: float) -> Array:
+	var g := ground(p)
+	if not _suelo_valido(g[0], body_gy):
+		return [body_gy, Vector3.UP]
+	return g
+
+
+func _marcha_animada(root_cf: Transform3D, frame: Transform3D, vel_h: Vector3, speed: float, dt: float, run01: float, fw_k: float, lat_f: float, body_yaw: float) -> void:
+	idle_t = 0
+	# ritmo (Blender, Movimientos.ZANCADA / FRACCION_AIRE): de lado, con fatiga, en escaleras o tropezando, pasos cortos
+	var zan := lerpf(Movimientos.zancada("andar", speed), Movimientos.zancada("correr", speed), run01)
+	var fr: float = lerpf(Movimientos.FRACCION_AIRE.andar, Movimientos.FRACCION_AIRE.correr, run01)
+	if crouch_b > 0.001:
+		zan = lerpf(zan, Movimientos.zancada("agachado", speed), crouch_b)
+		fr = lerpf(fr, Movimientos.FRACCION_AIRE.agachado, crouch_b)
+	var vel_dir := vel_h.normalized() if vel_h.length() > 0.05 else Rbx.look(frame)
+	var body_gy0: float = frame.origin.y - jugador.center_cur
+	_esc_n += 1
+	if _esc_n % 3 == 0:
+		_mirar_escalera(Vector3(frame.origin.x, 0.0, frame.origin.z), vel_dir, body_gy0)
+	if esc_fondo > 0.0:
+		# escalera: UN escalón por paso (corriendo, de dos en dos); la zancada es exactamente eso
+		var nn := 2 if speed > esc_fondo * 5.0 else 1
+		zan = 2.0 * nn * esc_fondo
+	else:
+		zan *= clampf(1.0 - 0.4 * absf(jugador.pendiente), 0.55, 1.0)
+		zan *= (1.0 - 0.2 * fw_k)
+		if stumble_until > ahora():
+			zan *= 0.7
+	zan *= 1.0 - 0.5 * lat_f
+	zan = maxf(zan, 0.8)
+	# la zancada no cambia de golpe (si no, el pie que va en el aire cambia de sitio de repente)
+	anim_zan = zan if anim_w <= 0.0 or anim_zan <= 0.0 else Rbx.damp(anim_zan, zan, 5.0, dt)
+	zan = anim_zan
+	# parándose: el pie que va en el aire termina su paso a un ritmo normal
+	var v_fase := maxf(speed, 3.0) if anim_parando > 0.0 else speed
+	# dirección de la marcha respecto al cuerpo; hacia atrás, la animación se reproduce al revés
+	var lv := Rbx.vec_to_obj(frame, vel_h)
+	var dir := Vector3(lv.x, 0.0, lv.z).normalized() if speed > 0.05 else Vector3.FORWARD
+	var sentido := anim_sentido
+	if -dir.z < -0.35:
+		sentido = -1.0
+	elif -dir.z > 0.35:
+		sentido = 1.0
+	var arranca := anim_w <= 0.0
+	if arranca:
+		anim_sentido = sentido
+		anim_cruce = 0.0
+	elif sentido != anim_sentido:
+		anim_sentido = sentido
+		anim_cruce = 1.0
+		anim_cruce_desde = anim_local.duplicate()
+	var eje := dir * anim_sentido
+	if arranca:
+		var contacto_de := func(k: String) -> float: return 0.25 if k == "L" else 0.75
+		if anim_aire:
+			# aterriza: apoya el pie que venía delante en el salto
+			gait01 = contacto_de.call(jump_lead if jump_lead != "" else "L")
+			anim_w = 1.0
+		else:
+			# arranca: despega primero el pie que está más atrás respecto a hacia donde va
+			var dv := vel_h.normalized() if vel_h.length() > 0.05 else Rbx.look(frame)
+			var atras_L := -(Vector3(feet.L.pos) - root_cf.origin).dot(dv)
+			var atras_R := -(Vector3(feet.R.pos) - root_cf.origin).dot(dv)
+			var primero := "L" if atras_L >= atras_R else "R"
+			gait01 = fposmod(contacto_de.call(primero) + ((1.0 - fr) if anim_sentido > 0.0 else 0.0), 1.0)
+		for k in ["L", "R"]:
+			_pie_en_fase(feet[k], fposmod(gait01 - (0.25 if k == "L" else 0.75), 1.0), fr)
+			feet[k].erase("anim_paso")
+			feet[k].anim_pos0 = feet[k].get("cur") if feet[k].get("cur") != null else feet[k].pos
+			feet[k].anim_roll0 = feet[k].get("roll", 0.0)
+			# (el pie que está apoyado al arrancar sigue donde estaba: no resbala hasta su sitio de la animación)
+			var p0: Vector3 = feet[k].anim_pos0
+			feet[k].anim_lock = Vector3(p0.x, 0.0, p0.z)
+			feet[k].anim_off = Vector3.ZERO
+		anim_aire = false
+	anim_w = minf(1.0, anim_w + dt / 0.18)
+	anim_cruce = maxf(0.0, anim_cruce - dt / 0.25)
+	var dphi := anim_sentido * v_fase * dt / zan
+	gait01 = fposmod(gait01 + dphi, 1.0)
+	for k in ["L", "R"]:
+		var fk: Dictionary = feet[k]
+		var psi_obj := fposmod(gait01 - (0.25 if k == "L" else 0.75), 1.0)
+		if not fk.has("ap_paso"):
+			_pie_en_fase(fk, psi_obj, fr)
+			continue
+		var psi_f: float = (1.0 - fr) + float(fk.ap_x) * fr if fk.ap_paso else float(fk.ap_x) * (1.0 - fr)
+		var e := wrapf(psi_obj - psi_f, -0.5, 0.5)
+		# el pie apoyado avanza exactamente con el cuerpo (si no, se queda atrás estirando la pierna); el ajuste para
+		# ir a la par de la fase global solo se hace en el aire (paso un poco más rápido o más lento)
+		var corr := absf(dphi) * clampf(e * 3.0, -0.35, 0.6) if fk.ap_paso else 0.0
+		# pie apoyado que se quedó demasiado atrás (frenada, giro): despega ya
+		if not fk.ap_paso and fk.get("anim_lock") != null and anim_w >= 1.0:
+			var hip_g := frame * Vector3(fk.side * hip_x, 0.0, 0.0)
+			var lk: Vector3 = fk.anim_lock
+			if Vector2(lk.x - hip_g.x, lk.z - hip_g.z).length() > leg_len * 0.95 and Vector3(lk.x - hip_g.x, 0.0, lk.z - hip_g.z).dot(vel_dir * anim_sentido) < 0.0:
+				fk.ap_paso = true
+				fk.ap_x = 0.0
+				continue
+		_avanza_pie(fk, dphi + corr, fr)
+	ritmo_periodo = zan / maxf(v_fase, 0.1)
+	reloj_activo = true
+	ultimo_pie = ""
+	var dd := zan * (1.0 - fr)
+	var delante := _par_pierna("delante", run01)
+	var estrecha := _par_pierna("estrecha", run01)
+	var body_gy: float = frame.origin.y - jugador.center_cur
+	var w := Rbx.smooth(anim_w)
+	for k in ["L", "R"]:
+		var f: Dictionary = feet[k]
+		var pa := _pierna_anim(bool(f.ap_paso), float(f.ap_x), zan, fr, run01, v_fase)
+		# de lado: cada pie se separa hacia su lado lo justo para no cruzarse con el otro (paso lateral)
+		var z_ext := minf(f.side * eje.x * dd * (delante - 1.15), f.side * eje.x * dd * delante)
+		var desp_x := maxf(0.0, ANIM_MIN_X - (hip_x - estrecha) - z_ext)
+		var loc := _tobillo_anim(k, pa[0], eje, desp_x, estrecha)
+		if anim_cruce > 0.0 and anim_cruce_desde.has(k):
+			loc = loc.lerp(anim_cruce_desde[k], Rbx.smooth(anim_cruce))
+		anim_local[k] = loc
+		var fyaw := Rbx.ang(0, body_yaw + f.side * -0.1, 0).basis
+		var ank_w := frame * loc
+		var p := ank_w + fyaw * Vector3(0, 0, -0.2)   # centro del pie (el tobillo está 0,2 por detrás)
+		var en_paso: bool = pa[3]
+		var era_paso = f.get("anim_paso")
+		var y: float
+		if not en_paso:
+			# EL 5 % PROCEDURAL: el pie apoyado se queda clavado donde pisó (al frenar, acelerar o girar la animación lo
+			# movería un poco); solo se acerca despacio a donde lo pone la animación, y lo que le falte lo recupera en
+			# el paso siguiente
+			var p_an := Vector3(p.x, 0.0, p.z)
+			if era_paso == true or f.get("anim_lock") == null:
+				# apoya donde terminó el paso (con lo que se movió para pisar el centro del escalón)
+				var eo: Vector3 = f.get("esc_off_v", Vector3.ZERO)
+				f.anim_lock = p_an + Vector3(eo.x, 0.0, eo.z)
+				f.esc_off_v = Vector3.ZERO
+			else:
+				var k_lock := 0.0 if (esc_fondo > 0.0 or anim_parando > 0.0) else 2.5
+				f.anim_lock = (f.anim_lock as Vector3).lerp(p_an, minf(1.0, dt * k_lock))
+			f.anim_off = (f.anim_lock as Vector3) - p_an
+			p = Vector3(f.anim_lock.x, p.y, f.anim_lock.z)
+			if era_paso == null or era_paso == true:
+				# apoya: el pie se queda a la altura del suelo que pisa hasta despegar
+				var g := _suelo_pie(p, body_gy)
+				f.anim_suelo = g[0]
+				f.normal = g[1]
+				if era_paso == true and anim_w >= 1.0:
+					Ruido.emitir(jugador, p, Ruido.radio_paso(step_k, false), Ruido.PASO, jugador)
+					var v_paso := clampf(step_k, 0.12, 1.0)
+					Efectos.sonido(jugador, "Step", p, 0.25 + 0.75 * v_paso, 0.92 + step_k * 0.12)
+					_registrar_paso(k, run01)
+			y = f.anim_suelo
+		else:
+			if era_paso == null or era_paso == false:
+				f.anim_desde = f.get("anim_suelo", body_gy)
+				if era_paso == null:
+					f.anim_off = Vector3.ZERO
+			# dónde apoyará: el suelo de ese sitio (escalones, cuestas)
+			var u: float = pa[4]
+			# lo que el pie se apartó de la animación mientras estaba apoyado se recupera en la primera mitad del paso
+			var off_p: Vector3 = f.get("anim_off", Vector3.ZERO)
+			p += off_p * (1.0 - Rbx.smooth(u / 0.6))
+			var t_rest := (1.0 - u) * fr * ritmo_periodo
+			var aterriza := frame * _tobillo_anim(k, dd * delante, eje, desp_x, estrecha) + vel_h * t_rest + fyaw * Vector3(0, 0, -0.2)
+			# escalera: el pie apoya en el centro de la huella (no en el borde ni a medias); el escalón se elige al
+			# despegar y el pie se va acercando a él durante el paso
+			if era_paso != true:
+				f.esc_obj = _centro_huella(aterriza)
+			if f.get("esc_obj") != null and esc_fondo > 0.0:
+				var off_e := clampf(((f.esc_obj as Vector3) - aterriza).dot(esc_dir), -esc_fondo * 0.6, esc_fondo * 0.6)
+				f.esc_off_v = esc_dir * off_e * Rbx.smooth(u / 0.85)
+				p += f.esc_off_v
+				aterriza += esc_dir * off_e
+			else:
+				f.esc_off_v = Vector3.ZERO
+			var g := _suelo_pie(aterriza, body_gy)
+			var y0: float = f.anim_desde
+			var rise: float = g[0] - y0
+			var hu := Rbx.smooth((u - 0.05) / 0.5) if rise > 0 else Rbx.smooth(u / lerpf(1.0, 0.55, clampf(-rise / 1.5, 0.0, 1.0)))
+			y = y0 + rise * hu + float(pa[1])
+			f.anim_suelo = g[0]
+			f.normal = Vector3.UP.lerp(g[1], u)
+		f.anim_paso = en_paso
+		var pos := Vector3(p.x, y, p.z)
+		var roll: float = pa[2]
+		if w < 1.0:
+			pos = (f.anim_pos0 as Vector3).lerp(pos, w)
+			roll = lerpf(float(f.anim_roll0), roll, w)
+		f.anim = true
+		f.cur = pos
+		f.pos = pos
+		f.roll = roll
+		f.u = pa[4] if en_paso else null
+		f.swing = {"anim": true} if en_paso else null
+		f.yaw = body_yaw
+		f.swingYaw = null
+		f.overreach = false
+
+
+## se para: los pies se quedan donde están (el que iba en el aire termina su paso hasta donde le toca de pie)
+func _parar_animada(body_yaw: float) -> void:
+	anim_w = 0.0
+	anim_aire = false
+	reloj_activo = false
+	for k in ["L", "R"]:
+		var f: Dictionary = feet[k]
+		f.anim = false
+		var c: Vector3 = f.cur if f.get("cur") != null else f.pos
+		if f.swing != null:
+			f.swing = {"from": c, "t": 0.0, "dur": 0.22, "fromYaw": body_yaw, "idle": true, "roll0": f.get("roll", 0.0)}
+		else:
+			f.pos = Vector3(c.x, f.get("anim_suelo", c.y), c.z)
+			f.cur = null
+			f.u = null
+
+
 func _registrar_paso(k: String, run01: float) -> void:
 	var now := ahora()
 	var c := now - float(step_start[k])
@@ -941,7 +1302,7 @@ func foot_cf(f: Dictionary, yaw: float) -> Transform3D:
 ## Pie apoyado lejos de la cadera: en vez de bajar la pelvis (rodillas dobladas), el pie de atrás
 ## despega el talón y el de delante apoya con el talón (punta arriba), como al andar de verdad.
 func update_roll(f: Dictionary, s: String, hip: Vector3, yaw: float, yaw_only: Transform3D, dt: float) -> void:
-	if f.swing != null:
+	if f.swing != null or bool(f.get("anim", false)):
 		return
 	var reach := leg_len * 0.994
 	var prev: float = f.get("roll", 0.0)
@@ -1507,6 +1868,16 @@ func update_rig(dt: float) -> void:
 		var gy_r: float = ground(root_cf.origin)[0]
 		if root_cf.origin.y - gy_r > J.hip_height + J.root_size.y / 2 + 0.7:
 			grounded = false
+	# (2026-11-03) bajando escaleras (o pasando un hueco pequeño) el cuerpo "cae" un instante de escalón en escalón: no
+	# es un salto, la marcha sigue (antes las piernas se recogían y el ciclo volvía a empezar). Un salto o una caída
+	# de verdad (más de 0,3 s, o deprisa) sí cuentan
+	if grounded:
+		aire_corto_t = 0.0
+	elif J.estado != "Jumping" and anim_w > 0.0 and va_sin_pie_aire() and vel.y > -9.0 and aire_corto_t < 0.3:
+		aire_corto_t += dt
+		grounded = true
+	else:
+		aire_corto_t = 9.0
 	if mt != null:
 		grounded = false
 
@@ -1720,7 +2091,37 @@ func update_rig(dt: float) -> void:
 			drop = (pelvis_stand_y - (gy + 0.4)) * Movimientos.levantar("abajo_baja", pb)
 		# al rodar, a mitad del giro el cuerpo queda de costado (el centro sube un poco)
 		var lift := sin(PI * rlv) * 0.3
-		Mr.transform = Rbx.cf(0, -drop + lift, zoff) * Rbx.ang(tilt, sway * lay + sweep * (1 - rlv), roll * lay) * Rbx.ang(0, PI * rlv * side, 0)
+		# MOVERSE BOCA ARRIBA (2026-11-03, diseño de Blender: Movimientos.BOCA_ARRIBA): pasito de lado con cada pie,
+		# puente con la cadera que se lleva de lado y luego arrastra los hombros. El cuerpo (el Jugador) avanza
+		# continuo; aquí la cadera, los pies y los hombros van a tirones respecto a él, cada uno en su momento
+		var yaw_p0 := Rbx.cfp(root_cf.origin) * yaw_cf
+		var sup_k := Rbx.smooth(clampf((rlv - 0.85) / 0.15, 0.0, 1.0)) if (lev_up == null and pb > 0.98 and not subiendo) else 0.0
+		var vloc := Rbx.vec_to_obj(yaw_p0, Vector3(vel.x, 0.0, vel.z))
+		var vs := Vector2(vloc.x, vloc.z).length()
+		var mov_sup := sup_k > 0.0 and vs > 0.08
+		sup_amt = Rbx.damp(sup_amt, 1.0 if mov_sup else 0.0, 4.0 if mov_sup else 2.5, dt)
+		if mov_sup:
+			var dn := Vector2(vloc.x, vloc.z) / vs
+			sup_dir = sup_dir.lerp(dn, minf(1.0, dt * 8.0)).normalized() if sup_amt > 0.05 else dn
+			sup_ph = fposmod(sup_ph + vs * dt / Movimientos.BOCA_ARRIBA_PASO, 1.0)
+		sup_mov_k = sup_amt * sup_k
+		var sup_off := Vector3.ZERO
+		var sup_rel_g := 0.0
+		if sup_mov_k > 0.001:
+			if is_nan(_sup_c):
+				var acc_c := 0.0
+				for i in 64:
+					var x := (i + 0.5) / 64.0
+					acc_c += x - Movimientos.boca_arriba("cadera", x)
+				_sup_c = acc_c / 64.0
+			sup_rel_g = Movimientos.BOCA_ARRIBA_PASO * (Movimientos.boca_arriba("cadera", sup_ph) - sup_ph + _sup_c)
+			var puente := maxf(0.0, Movimientos.boca_arriba("cadera_sube", sup_ph))
+			sup_off = (Vector3(sup_dir.x, 0.0, sup_dir.y) * sup_rel_g + Vector3(0, puente, 0)) * sup_mov_k
+			# los hombros se quedan atrás mientras la cadera avanza y luego se arrastran (la espalda se curva de lado)
+			var rel_h := Movimientos.BOCA_ARRIBA_PASO * (Movimientos.boca_arriba("hombros", sup_ph) - Movimientos.boca_arriba("cadera", sup_ph))
+			waistR += SUP_CURVA * asin(clampf(rel_h * sup_dir.x * sup_mov_k / 1.9, -0.6, 0.6))
+			neckP -= 0.35 * maxf(0.0, Movimientos.boca_arriba("hombros_sube", sup_ph)) * sup_mov_k
+		Mr.transform = Rbx.cf(sup_off.x, -drop + lift + sup_off.y, zoff + sup_off.z) * Rbx.ang(tilt, sway * lay + sweep * (1 - rlv), roll * lay) * Rbx.ang(0, PI * rlv * side, 0)
 		smooth_j(Mr, "Root", 9 if lev_up == null else 30, dt)
 		waistY -= sweep * 1.3 # el pecho se queda apuntando mientras la cadera barre
 		pelvis_cf = fk(root_cf, Mr)
@@ -1789,6 +2190,28 @@ func update_rig(dt: float) -> void:
 				Lg.top.transform = Lg.top.transform.interpolate_with(hip_up, rlv)
 				Lg.mid.transform = Lg.mid.transform.interpolate_with(Rbx.ang(-1.1, 0, 0), rlv)
 				Lg.fin.transform = Lg.fin.transform.interpolate_with(Rbx.ang(0.45, 0, 0), rlv)
+			if sup_mov_k > 0.001:
+				# moviéndose boca arriba: cada pie da su pasito (Movimientos.BOCA_ARRIBA) desde donde lo deja la pose de
+				# tumbado, plantado en el suelo el resto del ciclo; las piernas por IK con las rodillas arriba
+				var fk_t: Array = [Lg.top.transform, Lg.mid.transform, Lg.fin.transform]
+				var up_cf := fk(pelvis_cf, Lg.top)
+				var lo_cf := fk(up_cf, Lg.mid)
+				var pie_fk := fk(lo_cf, Lg.fin)
+				var off_w := yaw_p0.basis * sup_off
+				var base_a := (lo_cf * Lg.fin.c0).origin - off_w
+				var d_w := yaw_p0.basis * Vector3(sup_dir.x, 0.0, sup_dir.y)
+				# el pie del lado hacia donde va da el primer paso
+				var lado_pie := (hip_s - root_cf.origin).dot(Rbx.right(yaw_p0))
+				var prim := "pie_a" if (signf(lado_pie) == signf(sup_dir.x) or absf(sup_dir.x) < 0.3 and s == "R") else "pie_b"
+				var rel_p := Movimientos.BOCA_ARRIBA_PASO * (Movimientos.boca_arriba(prim, sup_ph) - sup_ph + _sup_c)
+				var g_p: float = ground(base_a)[0]
+				var obj := Vector3(base_a.x, g_p + 0.3, base_a.z) + d_w * rel_p + Vector3(0, maxf(0.0, Movimientos.boca_arriba(prim + "_sube", sup_ph)), 0)
+				var F2 := Transform3D(pie_fk.basis.orthonormalized(), obj) * Rbx.cfp(-(ankle_in_foot[s] as Vector3))
+				var res_s := solve(Lg, pelvis_cf, obj, hip_s + Vector3(0, 3.0, 0) + atras * 2.0)
+				set_end(Lg, res_s[1], F2)
+				Lg.top.transform = (fk_t[0] as Transform3D).interpolate_with(Lg.top.transform, sup_mov_k)
+				Lg.mid.transform = (fk_t[1] as Transform3D).interpolate_with(Lg.mid.transform, sup_mov_k)
+				Lg.fin.transform = (fk_t[2] as Transform3D).interpolate_with(Lg.fin.transform, sup_mov_k)
 		# (sin suavizar: van por IK a sitios fijos del suelo; suavizadas se quedaban atrás y se metían en el suelo)
 		for s in ["L", "R"]:
 			var Lg3: Limb = leg[s]
@@ -1829,7 +2252,8 @@ func update_rig(dt: float) -> void:
 		var fwd_speed := -lv.z
 		var fwd_acc := -acc.z
 		if grounded:
-			S.leanP.target = clampf(-(fwd_speed * 0.011) - fwd_acc * 0.005, -0.36, 0.16)
+			# (2026-11-03: menos que antes; al arrancar el torso se adelantaba a las piernas)
+			S.leanP.target = clampf(-(fwd_speed * 0.008) - fwd_acc * 0.0025, -0.24, 0.1)
 			S.leanR.target = clampf(yaw_rate * speed * 0.004, -0.25, 0.25)
 		else:
 			S.leanP.target = -0.08
@@ -1949,6 +2373,9 @@ func update_rig(dt: float) -> void:
 		if pelvis_drop < 0.0:
 			pelvis_drop = 0.0
 			pelvis_drop_v = maxf(pelvis_drop_v, 0.0)
+		elif pelvis_drop > 0.6:
+			pelvis_drop = 0.6
+			pelvis_drop_v = minf(pelvis_drop_v, 0.0)
 		# preparación del salto: flexiona las rodillas y adelanta el torso
 		crouch += 0.38 * prep_k
 		# recoger: flexiona rodillas y cadera, el torso se inclina sobre el objeto
@@ -2865,7 +3292,15 @@ func update_rig(dt: float) -> void:
 			if (s == "L" and not left_free) or (s == "R" and not right_free):
 				continue
 			var sgn := -1.0 if s == "L" else 1.0
-			hand_ik[s] = {"pos": (chest_cf * Rbx.cf(sgn * 0.22, -0.45, -0.5)).origin, "pole": (chest_cf * Rbx.cf(sgn * 1.4, 0, 0.6)).origin, "w": rl_now}
+			var pos_m := (chest_cf * Rbx.cf(sgn * 0.22, -0.45, -0.5)).origin
+			var polo_m := (chest_cf * Rbx.cf(sgn * 1.4, 0, 0.6)).origin
+			if sup_mov_k > 0.001:
+				# moviéndose boca arriba: las manos (con los codos) se apoyan en el suelo junto a la cadera y empujan
+				var p_s := (chest_cf * Rbx.cf(sgn * 0.95, -1.0, 0.0)).origin
+				p_s.y = float(ground(p_s)[0]) + 0.2
+				pos_m = pos_m.lerp(p_s, sup_mov_k)
+				polo_m = polo_m.lerp((chest_cf * Rbx.cf(sgn * 2.0, 0.6, 0.4)).origin, sup_mov_k)
+			hand_ik[s] = {"pos": pos_m, "pole": polo_m, "w": rl_now}
 		left_free = false
 		right_free = false
 	if hands_down > 0.01:

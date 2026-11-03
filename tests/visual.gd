@@ -44,6 +44,12 @@ const ESC := {
 	"levantarse_boca_abajo": [Vector3(-100, 3.2, 100), 0.0, 7.0, [[0.2, KEY_Z, true], [0.25, KEY_Z, false], [2.6, KEY_SPACE, true], [2.65, KEY_SPACE, false], [4.4, KEY_SPACE, true], [4.45, KEY_SPACE, false]]],
 	"salto_parado": [Vector3(-100, 3.2, 100), 0.0, 3.5, [[0.8, KEY_SPACE, true], [0.85, KEY_SPACE, false], [2.2, KEY_SPACE, true], [2.25, KEY_SPACE, false]]],
 	"salto_correr": [Vector3(-100, 3.2, 100), 0.0, 4.5, [[0.3, KEY_W, true], [0.3, KEY_SHIFT, true], [1.6, KEY_SPACE, true], [1.65, KEY_SPACE, false], [3.0, KEY_SPACE, true], [3.05, KEY_SPACE, false]]],
+	# 2026-11-03: piernas animadas (andar hacia atrás y en diagonal)
+	"escalera_c": [Vector3(-64.5, 3.2, 4), PI, 4.0, [[0.3, KEY_W, true], [0.3, KEY_SHIFT, true]]],
+	# 2026-11-03: moverse de lado boca arriba (tumbarse, mirar atrás para quedar boca arriba, A y luego D)
+	"boca_arriba_lado": [Vector3(-100, 3.2, 100), 0.0, 10.0, [[0.2, KEY_Z, true], [0.25, KEY_Z, false], [3.4, KEY_A, true], [6.2, KEY_A, false], [6.6, KEY_D, true], [9.4, KEY_D, false]]],
+	"atras": [Vector3(-100, 3.2, 100), 0.0, 4.0, [[0.3, KEY_S, true]]],
+	"diagonal_atras": [Vector3(-100, 3.2, 100), 0.0, 4.0, [[0.3, KEY_S, true], [0.3, KEY_D, true]]],
 	"transiciones": [Vector3(-100, 3.2, 100), 0.0, 7.0, [[0.3, KEY_W, true], [1.8, KEY_SHIFT, true], [3.6, KEY_SHIFT, false], [5.0, KEY_W, false]]],
 	"correr_rifle": [Vector3(-100, 3.2, 100), 0.0, 5.0, [[1.4, KEY_W, true], [1.4, KEY_SHIFT, true]]],
 	"andar_pistola": [Vector3(-100, 3.2, 100), 0.0, 5.0, [[1.4, KEY_W, true]]],
@@ -135,6 +141,9 @@ func _process(dt: float) -> void:
 			set_meta("vuelta2", true)
 			j.yaw -= PI
 		j.aiming = (t > 4.0 and t < 5.4) or t > 6.6
+	if esc == "boca_arriba_lado" and t > 1.8 and not get_meta("vuelta", false):
+		set_meta("vuelta", true)
+		j.yaw += PI
 	if esc == "tumbado_rifle":
 		j.aiming = t > 3.0 and t < 3.6 or t > 4.8
 	if OS.get_cmdline_user_args().has("--logcam") and Engine.get_process_frames() % 15 == 0:
@@ -209,6 +218,11 @@ func _process(dt: float) -> void:
 		r = Basis(Vector3.UP, j.yaw) * Vector3(0.45, 0, 1).normalized()
 		dist_c = 11.0
 		alto = 4.0
+	elif OS.get_cmdline_user_args().has("--cam=arriba"):
+		# desde arriba (moverse tumbado)
+		r = Vector3(0.35, 0, 0.6).normalized()
+		dist_c = 4.5
+		alto = 8.0
 	elif OS.get_cmdline_user_args().has("--cam=frente"):
 		r = Basis(Vector3.UP, j.yaw) * Vector3(0.25, 0, -1).normalized()
 		dist_c = 11.0
@@ -243,6 +257,29 @@ func _process(dt: float) -> void:
 		var rr := Rbx.right(j.root_cf())
 		cam.global_position = j.global_position + bk * 11 + rr * 6 + Vector3(0, 3, 0)
 		cam.look_at(j.global_position + Vector3(0, 1.0, 0), Vector3.UP)
+	if OS.get_cmdline_user_args().has("--geom") and t > 1.0 and not get_meta("geom", false):
+		set_meta("geom", true)
+		var an3 := j.get_node("Animador") as Animador
+		var hm: RigPersonaje.Motor = j.rig.M.RightHip
+		var am: RigPersonaje.Motor = j.rig.M.RightAnkle
+		print("GEOM leg=%.3f hip_x=%.3f min_x=%.3f foot_half=%.3f ankle=%s body_y=%.3f center=%.3f hip=%s ankle_w=%s foot=%s size=%s" % [an3.leg_len, an3.hip_x, an3.min_foot_x, an3.foot_half, an3.ankle_in_foot.R, j.global_position.y, j.center_cur, (j.rig.P[hm.part0] as Node3D).global_transform * hm.c0.origin, (j.rig.P[am.part0] as Node3D).global_transform * am.c0.origin, (j.rig.P.RightFoot as Node3D).global_position, j.rig.P.RightFoot.get_meta("size")])
+	if OS.get_cmdline_user_args().has("--pisadas"):
+		# cada vez que un pie apoya: en qué altura (escalón) y dónde
+		var an4 := j.get_node("Animador") as Animador
+		for sp in ["L", "R"]:
+			var fp: Dictionary = an4.feet[sp]
+			var ap := fp.swing == null
+			if ap and not get_meta("ap_" + sp, true):
+				print("PISA t=%.2f pie=%s y=%.2f pos=%s esc=%.2f v=%.1f" % [t, sp, float(fp.pos.y), fp.pos, an4.esc_fondo, Vector2(j.velocity.x, j.velocity.z).length()])
+			set_meta("ap_" + sp, ap)
+	if OS.get_cmdline_user_args().has("--curL"):
+		var an5 := j.get_node("Animador") as Animador
+		var fl5: Dictionary = an5.feet.L
+		var nl: Node3D = j.rig.P.LeftFoot
+		print("CL t=%.3f sw=%s pos=%s talon=%s v=%.2f" % [t, str(fl5.swing != null), fl5.pos, nl.global_transform * Vector3(0, -0.15, 0.5), Vector2(j.velocity.x, j.velocity.z).length()])
+	if OS.get_cmdline_user_args().has("--logtorso"):
+		var an6 := j.get_node("Animador") as Animador
+		print("TOR t=%.2f ph=%.2f k=%.2f root=%.3f low=%.3f up=%.3f head=%.3f lowy=%.3f" % [t, an6.sup_ph, an6.sup_mov_k, j.global_position.x, (j.rig.P.LowerTorso as Node3D).global_position.x, (j.rig.P.UpperTorso as Node3D).global_position.x, (j.rig.P.Head as Node3D).global_position.x, (j.rig.P.LowerTorso as Node3D).global_position.y])
 	if t > e[2]:
 		get_tree().quit()
 
@@ -250,6 +287,8 @@ func _process(dt: float) -> void:
 ## --registro=<ruta>: cada fotograma, la posición de las piezas principales (respecto al cuerpo, en el marco de su
 ## rumbo, y en el mundo), para medir lo suave que es el movimiento (tests/fluidez.py)
 var _reg: FileAccess = null
+
+
 func _registrar() -> void:
 	var ruta := ""
 	for a in OS.get_cmdline_user_args():

@@ -336,11 +336,13 @@ def colgado(canal, phi):
 # en el aire un momento, pero nunca a la vez hacia delante). Zancada = distancia de un ciclo (dos pasos), en studs,
 # según la velocidad (studs/s). Valores de personas reales a escala del personaje (1,76 m; 1 stud = 0,31 m).
 RITMO = {
-	"andar_zancada": [(0.0, 1.6), (2.0, 2.84), (4.0, 4.08), (6.5, 5.63), (9.0, 7.2)],
-	"correr_zancada": [(7.0, 7.0), (10.0, 8.2), (14.0, 9.8), (18.5, 11.6), (22.0, 13.0)],
-	"agachado_zancada": [(0.0, 1.4), (2.0, 2.6), (3.5, 3.6), (6.0, 5.1), (9.0, 6.6)],
+	# (2026-11-03) zancadas algo más cortas que antes: con piernas animadas la pierna de apoyo llega cómoda de delante
+	# a detrás sin que la cadera tenga que hundirse (antes, al andar deprisa y correr, se estiraba de más)
+	"andar_zancada": [(0.0, 1.6), (2.0, 2.6), (4.0, 3.75), (6.5, 5.2), (9.0, 6.6)],
+	"correr_zancada": [(7.0, 6.6), (10.0, 7.8), (14.0, 9.4), (18.5, 11.0), (22.0, 12.2)],
+	"agachado_zancada": [(0.0, 1.4), (2.0, 2.5), (3.5, 3.4), (6.0, 4.8), (9.0, 6.2)],
 	"andar_fraccion": 0.40,
-	"correr_fraccion": 0.70,
+	"correr_fraccion": 0.74,
 	"agachado_fraccion": 0.42,
 }
 
@@ -392,3 +394,102 @@ def levantar(canal, x):
 	if canal.endswith(("_rodilla", "baja", "manos", "_z", "pies", "mano_atras", "mano_rodilla")) and not canal.endswith("manos_z"):
 		v = max(0.0, min(1.0, v))
 	return R(v) if LEVANTAR_GRADOS(canal) else v
+
+
+# ================================================================= PIERNAS ANIMADAS (2026-11-03, a pedido de KangooG:
+# "que la animación de las piernas sea normal, olvidando los pasos procedurales al 95 %")
+# Las piernas ya no las decide el juego paso a paso: cada pie sigue una ANIMACIÓN cíclica fija respecto a la cadera,
+# como en cualquier juego con animaciones hechas a mano. El juego solo (el 5 %) pone el pie a la altura del suelo que
+# pisa (escalones, cuestas) y hace avanzar la fase con la distancia recorrida, así el pie de apoyo no resbala.
+# Por pie (el izquierdo apoya en φ = 0,25 y el derecho en φ = 0,75; ψ = φ - contacto):
+#   APOYO (ψ de 0 a 1 - aire; s = 0..1): el pie va hacia atrás en línea recta respecto a la cadera, a la velocidad
+#     del cuerpo (en el mundo, quieto). Apoya "delante" (fracción del recorrido de apoyo por delante de la cadera).
+#   PASO (u = 0..1): vuelve hacia delante con la forma "avance" (sin velocidad en los extremos; el juego le suma la
+#     velocidad con la que despega, que es la de ir hacia atrás, para que no haya tirón: el pie sigue un poco hacia
+#     atrás al despegar y, corriendo, "araña" hacia atrás un poco antes de apoyar: "retrae" = cuánto).
+#   alto: altura de la punta/planta sobre el suelo (studs, a la velocidad "v_ref"; el juego la escala algo con la
+#     velocidad). inclina: giro del pie (< 0 talón arriba girando sobre la punta; > 0 punta arriba sobre el talón).
+#   estrecha: cuánto se acercan los pies a la línea del centro (studs; corriendo se pisa casi en línea).
+# El juego mezcla andar / correr / agachado según la velocidad (las curvas a la misma u o s, y aire, delante y zancada).
+PIERNAS = {
+	"andar": {
+		"v_ref": 6.5, "delante": 0.42, "retrae": 0.6, "estrecha": 0.03,
+		"avance": [(0.0, 0.0), (0.2, 0.1), (0.5, 0.5), (0.8, 0.9), (1.0, 1.0)],
+		"alto": [(0.0, 0.0), (0.1, 0.09), (0.3, 0.3), (0.5, 0.28), (0.72, 0.15), (0.9, 0.04), (1.0, 0.0)],
+		"inclina_aire": [(0.0, -36.0), (0.18, -30.0), (0.42, -8.0), (0.7, 6.0), (0.9, 12.0), (1.0, 12.0)],
+		"inclina_apoyo": [(0.0, 12.0), (0.12, 2.0), (0.2, 0.0), (0.55, 0.0), (0.78, -8.0), (0.9, -20.0), (1.0, -36.0)],
+	},
+	"correr": {
+		"v_ref": 18.5, "delante": 0.36, "retrae": 0.6, "estrecha": 0.08,
+		"avance": [(0.0, 0.0), (0.15, 0.03), (0.4, 0.3), (0.65, 0.75), (0.85, 0.96), (1.0, 1.0)],
+		"alto": [(0.0, 0.0), (0.08, 0.18), (0.25, 0.68), (0.42, 0.82), (0.6, 0.66), (0.8, 0.3), (0.93, 0.07), (1.0, 0.0)],
+		"inclina_aire": [(0.0, -48.0), (0.2, -56.0), (0.45, -32.0), (0.72, -2.0), (0.9, 6.0), (1.0, 5.0)],
+		"inclina_apoyo": [(0.0, 5.0), (0.15, 0.0), (0.45, 0.0), (0.72, -16.0), (0.88, -32.0), (1.0, -48.0)],
+	},
+	"agachado": {
+		"v_ref": 3.5, "delante": 0.45, "retrae": 0.6, "estrecha": 0.0,
+		"avance": [(0.0, 0.0), (0.2, 0.1), (0.5, 0.52), (0.8, 0.9), (1.0, 1.0)],
+		"alto": [(0.0, 0.0), (0.12, 0.07), (0.35, 0.24), (0.55, 0.22), (0.78, 0.1), (0.92, 0.03), (1.0, 0.0)],
+		"inclina_aire": [(0.0, -26.0), (0.25, -16.0), (0.5, -3.0), (0.8, 6.0), (1.0, 6.0)],
+		"inclina_apoyo": [(0.0, 6.0), (0.15, 0.0), (0.65, 0.0), (0.85, -10.0), (1.0, -26.0)],
+	},
+}
+CURVAS_PIERNA = ["avance", "alto", "inclina_aire", "inclina_apoyo"]
+
+
+def curva_pierna(tipo, nombre, x):
+	v = cur(PIERNAS[tipo][nombre], x)
+	return R(v) if nombre.startswith("inclina") else v
+
+
+def _h10(u):
+	return u * u * u - 2 * u * u + u
+
+
+def _h11(u):
+	return u * u * u - u * u
+
+
+def pierna(tipo, lado, phi, v):
+	"""pie respecto a la cadera (proyectada al suelo) a la velocidad v: (z delante en studs, alto, inclina en rad).
+	Es exactamente lo que hace el juego (Animador._pierna_anim) con un solo tipo de marcha."""
+	P = PIERNAS[tipo]
+	fr = RITMO[tipo + "_fraccion"]
+	S = zancada(tipo, v)
+	D = S * (1.0 - fr)
+	contacto = 0.25 if lado == "L" else 0.75
+	psi = (phi - contacto) % 1.0
+	k_alto = max(0.5, min(1.15, v / P["v_ref"]))
+	if psi < 1.0 - fr:
+		s = psi / (1.0 - fr)
+		return D * (P["delante"] - s), 0.0, curva_pierna(tipo, "inclina_apoyo", s)
+	u = (psi - (1.0 - fr)) / fr
+	m0 = -fr / (1.0 - fr)
+	a = curva_pierna(tipo, "avance", u) + m0 * _h10(u) + P["retrae"] * m0 * _h11(u)
+	return D * (P["delante"] - 1.0 + a), curva_pierna(tipo, "alto", u) * k_alto, curva_pierna(tipo, "inclina_aire", u)
+
+
+# ================================================================= MOVERSE BOCA ARRIBA (2026-11-03, a pedido de KangooG:
+# "una animación para moverse de costado boca arriba")
+# Como una persona tumbada de espaldas que se desplaza ("gamba"): con las rodillas dobladas y los pies apoyados,
+#   1) da un pasito de lado con el pie de ese lado y luego con el otro,
+#   2) levanta un poco la cadera (puente) y la lleva de lado,
+#   3) la baja y arrastra los hombros / la espalda hasta quedar recto otra vez.
+# Sirve para cualquier dirección (de lado, hacia la cabeza o hacia los pies: las mismas fases a lo largo de la marcha).
+# Curvas por la fase φ (0..1) de cada ciclo: cuánto ha avanzado cada parte (0 = donde empezó el ciclo, 1 = un paso
+# entero más allá, BOCA_ARRIBA_PASO studs). Entre medias está quieta en el suelo. "sube" = altura (studs).
+BOCA_ARRIBA_PASO = 0.9
+BOCA_ARRIBA = {
+	"pie_a": [(0.0, 0.0), (0.04, 0.0), (0.12, 0.45), (0.2, 0.95), (0.24, 1.0), (1.0, 1.0)],      # pie del lado hacia donde va
+	"pie_a_sube": [(0.0, 0.0), (0.04, 0.0), (0.12, 0.3), (0.22, 0.0), (1.0, 0.0)],
+	"pie_b": [(0.0, 0.0), (0.18, 0.0), (0.26, 0.45), (0.34, 0.95), (0.38, 1.0), (1.0, 1.0)],     # el otro pie
+	"pie_b_sube": [(0.0, 0.0), (0.18, 0.0), (0.26, 0.3), (0.36, 0.0), (1.0, 0.0)],
+	"cadera": [(0.0, 0.0), (0.38, 0.0), (0.46, 0.25), (0.54, 0.75), (0.62, 1.0), (1.0, 1.0)],
+	"cadera_sube": [(0.0, 0.0), (0.36, 0.0), (0.45, 0.24), (0.53, 0.3), (0.62, 0.05), (0.66, 0.0), (1.0, 0.0)],
+	"hombros": [(0.0, 0.0), (0.64, 0.0), (0.74, 0.35), (0.84, 0.85), (0.92, 1.0), (1.0, 1.0)],
+	"hombros_sube": [(0.0, 0.0), (0.64, 0.0), (0.74, 0.12), (0.84, 0.1), (0.92, 0.0), (1.0, 0.0)],
+}
+
+
+def boca_arriba(canal, phi):
+	return cur(BOCA_ARRIBA[canal], phi)
