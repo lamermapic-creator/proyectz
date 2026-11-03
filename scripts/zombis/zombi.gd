@@ -1,13 +1,13 @@
 class_name Zombi
 extends CharacterBody3D
-## ZOMBI v0 (guía completa en docs/RUIDO_Y_ZOMBIS.md). De momento solo OYE (no tiene vista):
-## reacciona a los ruidos del sistema Ruido y nota al jugador si lo tiene pegado (Contacto).
+## ZOMBI (guía completa en docs/RUIDO_Y_ZOMBIS.md). OYE los ruidos del sistema Ruido, VE al jugador (cono de
+## visión + periférica según la postura, con una "sospecha" que sube poco a poco) y lo nota si lo tiene pegado.
 ##
-##   DEAMBULAR ──oye algo──► INVESTIGAR ──llega──► BUSCAR ──nada en "Buscar" s──► DEAMBULAR
-##                             │    ▲
-##        ruidos del jugador   │    │ deja de oírle "PerseguirMemoria" s
-##        seguidos, alerta alta▼    │
-##                            PERSEGUIR ──a "Alcance"──► ATACAR ──► PERSEGUIR
+##   DEAMBULAR ──oye / ve algo──► INVESTIGAR ──llega──► BUSCAR (varios sitios) ──nada──► DEAMBULAR
+##                                   │    ▲
+##     le ve del todo, o ruidos del  │    │ le pierde: va a donde iba el jugador (anticipa)
+##     jugador seguidos (alerta alta)▼    │ o deja de oírle "PerseguirMemoria" s
+##                                  PERSEGUIR ──a "Alcance"──► ATACAR ──► PERSEGUIR
 ##   cualquiera ──bate──► CAIDO ──se levanta──► PERSEGUIR      cualquiera ──vida 0──► MUERTO
 ##
 ## Al empezar a perseguir gruñe: el gruñido es un ruido más, y los zombis cercanos van a ver qué pasa.
@@ -28,6 +28,8 @@ const NOMBRE_ESTADO := ["DEAMBULAR", "INVESTIGAR", "PERSEGUIR", "BUSCAR", "ATACA
 
 ## pruebas: todos los zombis ignoran los ruidos (F7 en desarrollo)
 static var sordos := false
+## pruebas: todos los zombis están ciegos (F8 en desarrollo)
+static var ciegos := false
 
 ## si es false se queda en su sitio cuando no oye nada (útil en pruebas)
 @export var deambula := true
@@ -54,6 +56,7 @@ var max_health: float = C.ZOMBI.Vida
 var alerta := 0.0               # 0 tranquilo .. 1 furioso; baja sola con el tiempo
 var oido := 1.0                 # multiplicador de los radios de ruido (cada zombi ±15 %)
 var pista: Pista = null
+var sospecha := 0.0             # 0..1: cuánto cree haber visto al jugador (1 = le ha visto)
 var casa := Vector3.ZERO        # punto del suelo alrededor del que deambula
 var reloj := 0.0                # reloj propio (se para con la pausa)
 var rig: RigPersonaje
@@ -90,6 +93,22 @@ var _fase := 0.0                # fase de la zancada
 var _brazos := 0.0              # 0 colgando .. 1 al frente
 var _var := 0.0                 # variación individual (desfase de los movimientos)
 var _j: Node3D = null
+# vista e ingenio (v1)
+var _visto := false             # le está viendo ahora mismo (sospecha llena)
+var _ultima_vista_t := -99.0
+var _ultima_vista_pos := Vector3.ZERO
+var _ultima_vista_vel := Vector3.ZERO
+var _vista_t := 0.0             # próxima comprobación de vista
+var _vislumbre_t := -99.0       # última vez que "le pareció ver algo"
+var _reaccion_hasta := 0.0      # girándose hacia lo que ha oído/visto antes de moverse
+var _busqueda: Array[Vector3] = []   # sitios que le quedan por registrar
+var _busqueda_dir := Vector3.ZERO    # hacia dónde creía que iba el jugador
+var _mirar_hasta := 0.0         # mirando alrededor en un sitio de la búsqueda
+var _buscar_limite := 6.0       # s máximos en BUSCAR (más si busca al jugador)
+var _desvio = null              # punto para rodear un obstáculo (Vector3 o null)
+var _desvio_t := 0.0
+var _rodeos := 0
+var _cono: MeshInstance3D = null # cono de visión (solo depuración, F6)
 var _forma: CollisionShape3D
 var _voz: AudioStreamPlayer3D
 var _etiqueta: Label3D
@@ -228,7 +247,7 @@ func _percibir(pos: Vector3, fuerza: float, del_jugador: bool) -> void:
 		# (un ruido fuerte del entorno, como una bala contra una pared, puede distraerle del jugador)
 		pista = Pista.new(pos, reloj, fuerza, del_jugador)
 		if estado == Estado.INVESTIGAR or estado == Estado.PERSEGUIR:
-			_ir_a(pos)
+			_ir_a_si_cambia(pos)
 	if estado == Estado.DEAMBULAR or estado == Estado.BUSCAR:
 		_cambiar(Estado.INVESTIGAR)
 	if estado == Estado.INVESTIGAR and _toca_perseguir():
@@ -249,6 +268,117 @@ func _sentir_contacto() -> void:
 		_percibir(j.global_position, 1.0, true)
 
 
+## ---------------------------------------------------------------- vista (v1)
+## Cada "VistaIntervalo" s mira si ve al jugador. Lo que ve llena la SOSPECHA (0..1): más deprisa cuanto más
+## cerca, más en el centro de la vista, más se mueva el jugador y más alerta esté el zombi. Con la sospecha
+## a medias "le parece ver algo" y se acerca a mirar; llena, le ha visto y le persigue sabiendo dónde está.
+## Si le pierde de vista, va a donde estaría el jugador si siguió igual (anticipa) y luego le busca.
+func _paso_vista() -> void:
+	if reloj < _vista_t:
+		return
+	var intervalo := float(C.ZOMBI.VistaIntervalo)
+	_vista_t = reloj + intervalo
+	var ve := 0.0 if ciegos else _cuanto_ve()
+	if ve > 0.0:
+		sospecha = minf(1.0, sospecha + ve * intervalo)
+	else:
+		sospecha = maxf(0.0, sospecha - float(C.ZOMBI.VistaOlvido) * intervalo)
+	var j := _jugador()
+	if ve > 0.0 and sospecha >= 1.0:
+		# le ha visto: sabe dónde está y hacia dónde va
+		_visto = true
+		_ultima_vista_t = reloj
+		_ultima_vista_pos = j.global_position
+		_ultima_vista_vel = j.get("vel_real")
+		_percibir(j.global_position, 1.0, true)
+	elif _visto and reloj - _ultima_vista_t > 0.4:
+		_perder_vista()
+	elif ve > 0.0 and sospecha >= float(C.ZOMBI.VistaSospecha) and reloj - _vislumbre_t > 0.5:
+		_vislumbre_t = reloj
+		_vislumbrar(j.global_position)
+
+
+## sospecha por segundo que le da lo que ve ahora mismo (0 = no ve al jugador)
+func _cuanto_ve() -> float:
+	var j := _jugador()
+	if j == null or float(j.get("health")) <= 0.0:
+		return 0.0
+	# de pie, agachado o tumbado: hasta dónde se le ve y cuánto se le nota alrededor (ZConfig.STANCE)
+	var postura: Dictionary = C.STANCE[clampi(int(j.get("stance")), 0, 2)]
+	var ojos := global_position + Vector3(0, 2.0, 0)
+	var hacia := j.global_position - ojos
+	var d := hacia.length()
+	var alcance := float(C.ZOMBI.VistaAlcance) * float(postura.Sight) * (1.0 + 0.3 * alerta)
+	var periferica := float(C.ZOMBI.VistaPeriferica) * float(postura.Near)
+	if d > maxf(alcance, periferica):
+		return 0.0
+	var plano := Rbx.flat(hacia)
+	var ang := rad_to_deg(Rbx.flat(Rbx.look(global_transform)).angle_to(plano)) if plano.length() > 0.05 else 0.0
+	var en_cono := ang <= float(C.ZOMBI.VistaAngulo) and d <= alcance
+	if not en_cono and d > periferica:
+		return 0.0
+	var visible := _fraccion_visible(j, ojos)
+	if visible <= 0.0:
+		return 0.0
+	var k_dist := 0.3 + 1.4 * clampf(1.0 - d / maxf(alcance, 0.1), 0.0, 1.0)
+	var k_ang := (0.6 + 0.4 * (1.0 - ang / float(C.ZOMBI.VistaAngulo))) if en_cono else 0.5
+	var rapidez_j := Rbx.flat(j.get("vel_real")).length()
+	var k_mov := 0.7 if rapidez_j < 0.5 else 1.0 + minf(rapidez_j / 14.0, 1.0) * 0.8 # quieto se ve menos
+	return float(C.ZOMBI.VistaRapidez) * visible * k_dist * k_ang * k_mov * (1.0 + 0.8 * alerta)
+
+
+## parte del jugador a la vista (0..1): rayos a su cabeza, pecho y cadera (las piezas reales del muñeco, así
+## agachado o tumbado están más bajas). Tapa el escenario (capa 1); los cuerpos de los dos no cuentan.
+func _fraccion_visible(j: Node3D, ojos: Vector3) -> float:
+	var r = j.get("rig")
+	if r == null:
+		return 0.0
+	var piezas: Dictionary = r.P
+	var excluir: Array[RID] = [get_rid()]
+	if j is CollisionObject3D:
+		excluir.append((j as CollisionObject3D).get_rid())
+	var espacio := get_world_3d().direct_space_state
+	var vistas := 0
+	for n in ["Head", "UpperTorso", "LowerTorso"]:
+		var nd: Node3D = piezas.get(n)
+		if nd == null:
+			continue
+		var q := PhysicsRayQueryParameters3D.create(ojos, nd.global_position, 1)
+		q.exclude = excluir
+		if espacio.intersect_ray(q).is_empty():
+			vistas += 1
+	return vistas / 3.0
+
+
+## le parece haber visto algo: va a mirar, sin saber todavía que es el jugador (no le persigue)
+func _vislumbrar(pos: Vector3) -> void:
+	if estado == Estado.PERSEGUIR or estado == Estado.ATACAR:
+		return
+	alerta = maxf(alerta, 0.3)
+	var actual := pista.fuerza * exp(-(reloj - pista.t) / 4.0) if pista != null else 0.0
+	if pista == null or 0.3 >= actual * 0.6:
+		pista = Pista.new(pos, reloj, 0.3, false)
+		if estado == Estado.INVESTIGAR:
+			_ir_a_si_cambia(pos)
+	if estado == Estado.DEAMBULAR or estado == Estado.BUSCAR:
+		_cambiar(Estado.INVESTIGAR)
+
+
+## le ha perdido de vista: va a donde ESTARÍA el jugador si siguió igual (anticipa) y luego le busca por allí
+func _perder_vista() -> void:
+	_visto = false
+	var v := Rbx.flat(_ultima_vista_vel)
+	var destino := _ultima_vista_pos
+	_busqueda_dir = Vector3.ZERO
+	if v.length() > 1.0:
+		_busqueda_dir = v.normalized()
+		destino += _busqueda_dir * minf(v.length() * float(C.ZOMBI.Anticipar), 12.0)
+	destino = _punto_navegable(destino)
+	pista = Pista.new(destino, reloj, 1.0, true)
+	if estado == Estado.PERSEGUIR or estado == Estado.INVESTIGAR:
+		_ir_a(destino)
+
+
 ## ---------------------------------------------------------------- cerebro (paso de física)
 func _physics_process(dt: float) -> void:
 	reloj += dt
@@ -263,6 +393,7 @@ func _physics_process(dt: float) -> void:
 	alerta = maxf(0.0, alerta - float(C.ZOMBI.AlertaDecae) * dt)
 	if not sordos:
 		_sentir_contacto()
+	_paso_vista()
 	_dir = Vector3.ZERO
 	_vel = 0.0
 	match estado:
@@ -286,6 +417,8 @@ func _cambiar(nuevo: Estado) -> void:
 	estado = nuevo
 	_estado_t = reloj
 	_atascos = 0
+	_rodeos = 0
+	_desvio = null
 	_progreso_t = reloj
 	_progreso_pos = global_position
 	match nuevo:
@@ -293,12 +426,20 @@ func _cambiar(nuevo: Estado) -> void:
 			_destino = null
 			casa = _pies()
 			_pausa_hasta = reloj + _rng.randf_range(1.0, 4.0)
+			_busqueda.clear()
+			_busqueda_dir = Vector3.ZERO
 		Estado.INVESTIGAR, Estado.PERSEGUIR:
 			if pista != null:
 				_ir_a(pista.pos)
+			# estando tranquilo, primero se gira hacia lo que ha oído o visto (da un respiro al jugador)
+			if antes == Estado.DEAMBULAR:
+				_reaccion_hasta = reloj + float(C.ZOMBI.Reaccion)
 			if nuevo == Estado.PERSEGUIR and antes != Estado.ATACAR:
 				_grunir(true)
-		Estado.BUSCAR, Estado.ATACAR:
+		Estado.BUSCAR:
+			_destino = null
+			_preparar_busqueda()
+		Estado.ATACAR:
 			_destino = null
 			_golpe_hecho = false
 	estado_cambiado.emit(nuevo)
@@ -332,7 +473,9 @@ func _paso_investigar() -> void:
 	if _toca_perseguir():
 		_cambiar(Estado.PERSEGUIR)
 		return
-	if _destino == null or _llegado(2.5) or _atascado():
+	if _reaccionando():
+		return
+	if _destino == null or _llegado(2.5) or (_atascado() and not _rodear()):
 		_cambiar(Estado.BUSCAR)
 		return
 	# cuanto más alerta, más prisa
@@ -348,7 +491,9 @@ func _paso_perseguir() -> void:
 	if pista == null or reloj - pista.t > float(C.ZOMBI.PerseguirMemoria):
 		_cambiar(Estado.INVESTIGAR)
 		return
-	if _destino == null or _llegado(1.5) or _atascado():
+	if _reaccionando():
+		return
+	if _destino == null or _llegado(1.5) or (_atascado() and not _rodear()):
 		# está donde lo oyó y no hay nada nuevo: mira alrededor
 		if reloj - pista.t > 0.8:
 			_cambiar(Estado.BUSCAR)
@@ -356,12 +501,59 @@ func _paso_perseguir() -> void:
 	_seguir_camino(float(C.ZOMBI.Correr))
 
 
+## Registra la zona. Si buscaba al jugador, recorre varios sitios cercanos (el primero, hacia donde creía que
+## iba) y en cada uno mira alrededor; si solo era un ruido cualquiera, mira alrededor un rato y se va.
 func _paso_buscar() -> void:
-	# quieto, girando la cabeza (y el cuerpo) a un lado y a otro
-	var giro := sin((reloj - _estado_t) * 1.3 + _var) * 1.2
-	rotation.y = Rbx.wrap_a(rotation.y + giro * 0.8 * get_physics_process_delta_time())
-	if reloj - _estado_t > float(C.ZOMBI.Buscar):
+	if reloj - _estado_t > _buscar_limite:
 		_cambiar(Estado.DEAMBULAR)
+		return
+	if reloj < _mirar_hasta or (_destino == null and _busqueda.is_empty()):
+		# quieto, girando la cabeza (y el cuerpo) a un lado y a otro
+		var giro := sin((reloj - _estado_t) * 1.3 + _var) * 1.2
+		rotation.y = Rbx.wrap_a(rotation.y + giro * 0.8 * get_physics_process_delta_time())
+		if _destino == null and _busqueda.is_empty() and reloj >= _mirar_hasta \
+				and reloj - _estado_t > float(C.ZOMBI.Buscar):
+			_cambiar(Estado.DEAMBULAR) # ya lo ha registrado todo
+		return
+	if _destino == null:
+		_ir_a(_busqueda.pop_front())
+	if _llegado(2.0) or (_atascado() and not _rodear()):
+		_destino = null
+		_mirar_hasta = reloj + float(C.ZOMBI.BuscarMirar)
+		return
+	_seguir_camino(float(C.ZOMBI.Andar) * 1.15)
+
+
+
+## sitios a registrar: al buscar al jugador, BuscarPuntos sitios alrededor de donde le perdió
+func _preparar_busqueda() -> void:
+	_busqueda.clear()
+	_mirar_hasta = reloj + float(C.ZOMBI.BuscarMirar)
+	_buscar_limite = float(C.ZOMBI.Buscar)
+	if pista == null or not pista.del_jugador:
+		return
+	_buscar_limite = float(C.ZOMBI.BuscarTiempo)
+	var base := pista.pos
+	var dir := _busqueda_dir
+	if dir.length() < 0.1:
+		# no sabe hacia dónde iba: supone que se alejaba de él
+		dir = Rbx.flat(base - global_position)
+		dir = dir.normalized() if dir.length() > 0.1 else Vector3(sin(_var), 0, cos(_var))
+	var radio := float(C.ZOMBI.BuscarRadio)
+	for i in int(C.ZOMBI.BuscarPuntos):
+		# el primero, hacia donde iba; los demás, a un lado y a otro y algo más lejos
+		var ang := 0.0 if i == 0 else _rng.randf_range(0.6, 1.6) * (1.0 if i % 2 == 1 else -1.0)
+		var dist := radio * (0.5 if i == 0 else _rng.randf_range(0.6, 1.0))
+		_busqueda.append(_punto_navegable(base + dir.rotated(Vector3.UP, ang) * dist))
+
+
+## estando tranquilo, al oír o ver algo primero se gira hacia allí (sin moverse) un instante
+func _reaccionando() -> bool:
+	if reloj >= _reaccion_hasta:
+		return false
+	if pista != null:
+		_mirar_hacia(pista.pos, float(C.ZOMBI.Giro) * 1.5)
+	return true
 
 
 func _paso_atacar() -> void:
@@ -442,6 +634,29 @@ func _ir_a(p: Vector3) -> void:
 	_progreso_pos = global_position
 
 
+## como _ir_a, pero sin rehacer el camino si el sitio nuevo está casi donde el anterior (ruidos seguidos)
+func _ir_a_si_cambia(p: Vector3) -> void:
+	if _destino == null or (p - (_destino as Vector3)).length() > 1.5:
+		_ir_a(p)
+	else:
+		_destino = p
+
+
+## atascado (otro zombi, un muñeco, una esquina): prueba a rodearlo por un lado (2 veces como mucho)
+func _rodear() -> bool:
+	if _rodeos >= 2 or _destino == null:
+		return false
+	var hacia := Rbx.flat((_destino as Vector3) - global_position)
+	if hacia.length() < 0.1:
+		return false
+	_rodeos += 1
+	_atascos = 0
+	var lado := hacia.normalized().cross(Vector3.UP) * (1.0 if _rng.randf() < 0.5 else -1.0)
+	_desvio = _punto_navegable(global_position + lado * 5.0 + hacia.normalized() * 1.5)
+	_desvio_t = reloj
+	return true
+
+
 func _recalcular_camino() -> void:
 	_camino_t = reloj
 	_camino = PackedVector3Array()
@@ -456,6 +671,16 @@ func _recalcular_camino() -> void:
 func _seguir_camino(velocidad: float) -> void:
 	if _destino == null:
 		return
+	# rodeando un obstáculo: primero al punto de desvío
+	if _desvio != null:
+		var dd := Rbx.flat((_desvio as Vector3) - global_position)
+		if dd.length() < 1.2 or reloj - _desvio_t > 2.5:
+			_desvio = null
+			_camino_t = -9.0
+		else:
+			_dir = dd.normalized()
+			_vel = velocidad
+			return
 	if reloj - _camino_t > 1.0:
 		_recalcular_camino()
 	var meta: Vector3 = _destino
@@ -625,8 +850,9 @@ func _process(dt: float) -> void:
 	rig.aplicar()
 	_etiqueta.visible = Ruido.ver
 	if Ruido.ver:
-		_etiqueta.text = "%s\nalerta %.2f" % [NOMBRE_ESTADO[estado], alerta]
+		_etiqueta.text = "%s\nalerta %.2f · vista %.2f" % [NOMBRE_ESTADO[estado], alerta, sospecha]
 		_etiqueta.modulate = Color(1, 1.0 - alerta * 0.7, 1.0 - alerta * 0.8)
+	_dibujar_cono()
 
 
 ## ---------------------------------------------------------------- aspecto
@@ -791,6 +1017,44 @@ static func _sintetizar(semilla: int) -> AudioStreamWAV:
 	w.stereo = false
 	w.data = bytes
 	return w
+
+
+## ---------------------------------------------------------------- depuración (F6)
+## cono de visión (alcance de pie y semiángulo) a la altura de los ojos; amarillo -> rojo con la sospecha
+func _dibujar_cono() -> void:
+	if not Ruido.ver or estado == Estado.MUERTO:
+		if _cono:
+			_cono.visible = false
+		return
+	if _cono == null:
+		_cono = MeshInstance3D.new()
+		_cono.mesh = ImmediateMesh.new()
+		_cono.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.vertex_color_use_as_albedo = true
+		m.no_depth_test = true
+		_cono.material_override = m
+		_cono.position = Vector3(0, 2.0, 0)
+		add_child(_cono)
+	_cono.visible = true
+	var im := _cono.mesh as ImmediateMesh
+	im.clear_surfaces()
+	im.surface_begin(Mesh.PRIMITIVE_LINES)
+	im.surface_set_color(Color(1.0, 1.0 - sospecha, 0.2 * (1.0 - sospecha)))
+	var alcance := float(C.ZOMBI.VistaAlcance) * (1.0 + 0.3 * alerta)
+	var a := deg_to_rad(float(C.ZOMBI.VistaAngulo))
+	var previo := Vector3.ZERO
+	for i in 13:
+		var p := Vector3(0, 0, -alcance).rotated(Vector3.UP, lerpf(-a, a, i / 12.0))
+		if i == 0 or i == 12:
+			im.add_vertex(Vector3.ZERO)
+			im.add_vertex(p)
+		if i > 0:
+			im.add_vertex(previo)
+			im.add_vertex(p)
+		previo = p
+	im.surface_end()
 
 
 ## ---------------------------------------------------------------- utilidades

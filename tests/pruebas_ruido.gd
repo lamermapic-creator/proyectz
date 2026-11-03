@@ -1,5 +1,6 @@
 extends SceneTree
-## PRUEBAS AUTOMÁTICAS del sistema de ruido y de los zombis, más regresión de lo que ya existía.
+## PRUEBAS AUTOMÁTICAS del sistema de ruido, de los zombis (oído, vista e ingenio) y regresión de lo que ya
+## existía. Las pruebas de oído dejan a los zombis ciegos y las de vista, sordos, para medir cada sentido aparte.
 ## Guía: docs/RUIDO_Y_ZOMBIS.md (sección "Pruebas").
 ##   Una prueba:  godot --headless --path . --fixed-fps 60 -s res://tests/pruebas_ruido.gd -- <modo>
 ##   Todas:       tests/ejecutar_pruebas.sh [ruta/a/godot]
@@ -7,7 +8,10 @@ extends SceneTree
 ## resultado. Escribe "OK <modo>" o "FALLO <modo>: ..." y sale con código 0 o 1.
 
 const MODOS := ["unidad", "pasos", "disparo", "oye_disparo", "sigilo", "oclusion", "jauria", "navegacion",
-	"ataque_y_muerte", "regeneracion", "danio_zombi", "maniqui", "andar", "cadencia", "completo", "rendimiento"]
+	"ataque_y_muerte", "regeneracion", "danio_zombi", "maniqui", "andar", "cadencia", "completo", "rendimiento",
+	# vista e ingenio (v1)
+	"vista_frente", "vista_espalda", "vista_pared", "vista_lejos", "vista_postura", "vista_sigue", "anticipar",
+	"busqueda", "reaccion", "indicador"]
 
 var modo := ""
 var nivel: Node3D
@@ -56,6 +60,16 @@ func _correr() -> void:
 		"cadencia": await _cadencia()
 		"completo": await _completo()
 		"rendimiento": await _rendimiento()
+		"vista_frente": await _vista_frente()
+		"vista_espalda": await _vista_espalda()
+		"vista_pared": await _vista_pared()
+		"vista_lejos": await _vista_lejos()
+		"vista_postura": await _vista_postura()
+		"vista_sigue": await _vista_sigue()
+		"anticipar": await _anticipar()
+		"busqueda": await _busqueda()
+		"reaccion": await _reaccion()
+		"indicador": await _indicador()
 	if fallos.is_empty():
 		print("OK ", modo)
 		quit(0)
@@ -105,6 +119,22 @@ func _zombi_a(dir: Vector3, lejos: float) -> Zombi:
 
 
 ## pared (capa 1, escenario). mirando = hacia dónde mira su cara ancha (por defecto, eje Z)
+## zombi quieto a "lejos" studs en la dirección "dir", mirando AL jugador (o de espaldas a él)
+func _zombi_mirando(dir: Vector3, lejos: float, de_espaldas := false) -> Zombi:
+	var d := dir.normalized()
+	var giro := rad_to_deg(atan2(-d.x, -d.z) if de_espaldas else atan2(d.x, d.z))
+	return dz.crear_zombi(_pies() + d * lejos, giro, false)
+
+
+## espera hasta que el zombi esté en alguno de los estados (o pase "max_s"); devuelve los segundos que tardó
+func _esperar_estado(z: Zombi, estados: Array, max_s: float) -> float:
+	var t := 0.0
+	while t < max_s and not (z.estado in estados):
+		await process_frame
+		t += 1.0 / 60.0
+	return t
+
+
 func _pared(centro: Vector3, tam: Vector3, mirando := Vector3.ZERO) -> StaticBody3D:
 	var sb := StaticBody3D.new()
 	var cs := CollisionShape3D.new()
@@ -235,6 +265,7 @@ func _disparo() -> void:
 
 func _oye_disparo() -> void:
 	await _cargar()
+	Zombi.ciegos = true # prueba solo del oído (la vista tiene sus propias pruebas)
 	var z := _zombi_a(Vector3(1, 0, 0), 60.0)
 	await _esperar(2.0)
 	_comprobar(z.estado == Zombi.Estado.DEAMBULAR and z.alerta == 0.0, "con el jugador quieto, el zombi no se entera")
@@ -251,6 +282,7 @@ func _oye_disparo() -> void:
 
 func _sigilo() -> void:
 	await _cargar()
+	Zombi.ciegos = true # prueba solo del oído (la vista tiene sus propias pruebas)
 	# todo en la zona despejada (hacia -X); ojo: un obstáculo en medio amortiguaría el ruido (oclusión)
 	var z := _zombi_a(Vector3(0, 0, 1), 22.0)
 	await _esperar(0.5)
@@ -283,6 +315,7 @@ func _sigilo() -> void:
 
 func _oclusion() -> void:
 	await _cargar()
+	Zombi.ciegos = true # prueba solo del oído (la vista tiene sus propias pruebas)
 	var z := _zombi_a(Vector3(1, 0, 0), 20.0)
 	# pared larga entre los dos, paralela a la carrera del jugador
 	_pared(_pies() + Vector3(10, 6, -20), Vector3(1, 12, 80))
@@ -299,6 +332,7 @@ func _oclusion() -> void:
 
 func _jauria() -> void:
 	await _cargar()
+	Zombi.ciegos = true # prueba solo del oído (la vista tiene sus propias pruebas)
 	var a := _zombi_a(Vector3(1, 0, 0), 6.0)
 	var b := _zombi_a(Vector3(1, 0, 0), 41.0)
 	await _esperar(0.5)
@@ -312,6 +346,7 @@ func _jauria() -> void:
 
 func _navegacion() -> void:
 	await _cargar()
+	Zombi.ciegos = true # prueba solo de la navegación: que no se distraiga viendo al jugador
 	print("  malla de navegación: %d polígonos, horneada en %d ms" % [dz.region.navigation_mesh.get_polygon_count(), int(dz.tiempo_horneado_ms)])
 	_comprobar(dz.region.navigation_mesh.get_polygon_count() > 50, "hay malla de navegación")
 	# zombi detrás de la pared alta del nivel (z = 20 m, 16 m de ancho): tiene que rodearla
@@ -424,6 +459,159 @@ func _maniqui() -> void:
 	_comprobar(m.health < 100.0, "el bate golpea al maniquí (vida %.0f)" % m.health)
 
 
+## ---------------------------------------------------------------- vista e ingenio (v1)
+const PERSIGUE := [Zombi.Estado.PERSEGUIR, Zombi.Estado.ATACAR]
+
+
+func _vista_frente() -> void:
+	await _cargar()
+	Zombi.sordos = true # prueba solo de la vista
+	J.invencible = true
+	var z := _zombi_mirando(Vector3(-1, 0, 0), 25.0)
+	await _esperar(0.3)
+	_comprobar(z.sospecha < 1.0 and z.estado == Zombi.Estado.DEAMBULAR, "no es instantáneo: a los 0,3 s aún no le ha visto (sospecha %.2f)" % z.sospecha)
+	var t: float = await _esperar_estado(z, PERSIGUE, 5.0)
+	_comprobar(z.estado in PERSIGUE, "de frente a 25 studs (de pie, quieto) le ve y le persigue (%.1f s)" % (t + 0.3))
+	_comprobar(t + 0.3 > 0.8, "tarda un poco en verle (%.1f s, más de 0,8)" % (t + 0.3))
+	var dp := Vector2(z.pista.pos.x - J.global_position.x, z.pista.pos.z - J.global_position.z).length() if z.pista else 999.0
+	_comprobar(dp < 3.0, "sabe dónde está el jugador (pista a %.1f studs de él)" % dp)
+
+
+func _vista_espalda() -> void:
+	await _cargar()
+	Zombi.sordos = true
+	var z := _zombi_mirando(Vector3(-1, 0, 0), 25.0, true)
+	await _esperar(3.0)
+	_comprobar(z.sospecha == 0.0 and z.estado == Zombi.Estado.DEAMBULAR, "de espaldas a 25 studs no le ve (sospecha %.2f)" % z.sospecha)
+
+
+func _vista_pared() -> void:
+	await _cargar()
+	Zombi.sordos = true
+	_pared(_pies() + Vector3(-12, 6, 0), Vector3(0.5, 12, 20))
+	var z := _zombi_mirando(Vector3(-1, 0, 0), 25.0)
+	await _esperar(3.0)
+	_comprobar(z.sospecha == 0.0 and z.estado == Zombi.Estado.DEAMBULAR, "con una pared en medio no le ve (sospecha %.2f)" % z.sospecha)
+
+
+func _vista_lejos() -> void:
+	await _cargar()
+	Zombi.sordos = true
+	var z := _zombi_mirando(Vector3(-1, 0, 0), 75.0)
+	await _esperar(4.0)
+	_comprobar(z.sospecha == 0.0, "de frente pero a 75 studs (~23 m) no le ve (sospecha %.2f)" % z.sospecha)
+
+
+func _vista_postura() -> void:
+	await _cargar()
+	Zombi.sordos = true
+	J.invencible = true
+	# cuerpo a tierra antes de que aparezca el zombi
+	_tecla(KEY_Z, true)
+	_tecla(KEY_Z, false)
+	await _esperar(2.0)
+	var z := _zombi_mirando(Vector3(-1, 0, 0), 30.0)
+	await _esperar(4.0)
+	_comprobar(z.sospecha < float(Zombi.C.ZOMBI.VistaSospecha) and z.estado == Zombi.Estado.DEAMBULAR, "tumbado a 30 studs de frente no le ve (sospecha %.2f)" % z.sospecha)
+	J.set_stance(0)
+	var t: float = await _esperar_estado(z, PERSIGUE, 5.0)
+	_comprobar(z.estado in PERSIGUE, "de pie a la misma distancia sí le ve (%.1f s)" % t)
+
+
+func _vista_sigue() -> void:
+	await _cargar()
+	Zombi.sordos = true # no le oye: todo lo que sabe es por la vista
+	J.invencible = true
+	var z := _zombi_mirando(Vector3(-1, 0, 0), 25.0)
+	await _esperar_estado(z, PERSIGUE, 5.0)
+	var d0 := z.global_position.distance_to(J.global_position)
+	J.yaw = 0.0 # se aparta hacia -Z, agachado y en silencio
+	_tecla(KEY_C, true)
+	_tecla(KEY_C, false)
+	await _esperar(0.6)
+	_tecla(KEY_W, true)
+	await _esperar(2.0)
+	_tecla(KEY_W, false)
+	var dp := Vector2(z.pista.pos.x - J.global_position.x, z.pista.pos.z - J.global_position.z).length() if z.pista else 999.0
+	_comprobar(dp < 3.0, "sin oírle, le sigue con la vista (pista a %.1f studs del jugador)" % dp)
+	_comprobar(d0 - z.global_position.distance_to(J.global_position) > 8.0, "y se le acerca (%.1f -> %.1f studs)" % [d0, z.global_position.distance_to(J.global_position)])
+
+
+func _anticipar() -> void:
+	await _cargar()
+	Zombi.sordos = true
+	J.invencible = true
+	var z := _zombi_mirando(Vector3(-1, 0, 0), 25.0)
+	await _esperar_estado(z, PERSIGUE, 5.0)
+	# el jugador echa a correr de lado (hacia -Z) y, de golpe, el zombi deja de verle
+	J.yaw = 0.0
+	_tecla(KEY_SHIFT, true)
+	_tecla(KEY_W, true)
+	await _esperar(1.2)
+	Zombi.ciegos = true
+	await _esperar(0.6)
+	_tecla(KEY_W, false)
+	_tecla(KEY_SHIFT, false)
+	var adelanto := (z.pista.pos - z._ultima_vista_pos).dot(Vector3(0, 0, -1)) if z.pista else 0.0
+	_comprobar(adelanto > 6.0, "al perderle va a donde estaría si siguió corriendo (%.1f studs por delante de donde le vio)" % adelanto)
+	_comprobar(z.estado in PERSIGUE or z.estado == Zombi.Estado.INVESTIGAR, "sigue tras él (%s)" % z.nombre_estado())
+
+
+func _busqueda() -> void:
+	await _cargar()
+	Zombi.sordos = true
+	J.invencible = true
+	var z := _zombi_mirando(Vector3(-1, 0, 0), 20.0)
+	await _esperar_estado(z, PERSIGUE, 5.0)
+	# el jugador "desaparece" lejos (zona de tiro, a ~100 studs): el zombi le pierde
+	J.teletransportar(Vector3(24.2, 0, 0) / 0.31, -PI / 2)
+	var t: float = await _esperar_estado(z, [Zombi.Estado.BUSCAR], 15.0)
+	_comprobar(z.estado == Zombi.Estado.BUSCAR, "al perderle se pone a buscar (%.1f s)" % t)
+	var recorrido := 0.0
+	var antes := z.global_position
+	var t2 := 0.0
+	while z.estado == Zombi.Estado.BUSCAR and t2 < 30.0:
+		await _esperar(0.25)
+		t2 += 0.25
+		recorrido += Vector2(z.global_position.x - antes.x, z.global_position.z - antes.z).length()
+		antes = z.global_position
+	_comprobar(recorrido > 8.0, "registra varios sitios, no se queda quieto (recorre %.1f studs)" % recorrido)
+	_comprobar(z.estado == Zombi.Estado.DEAMBULAR, "al no encontrarle se rinde (%s tras %.1f s buscando)" % [z.nombre_estado(), t2])
+	_comprobar(t2 <= float(Zombi.C.ZOMBI.BuscarTiempo) + 1.0, "y no busca más de BuscarTiempo (%.1f s)" % t2)
+
+
+func _reaccion() -> void:
+	await _cargar()
+	Zombi.ciegos = true
+	var z := _zombi_mirando(Vector3(-1, 0, 0), 30.0, true)
+	await _esperar(0.5)
+	Ruido.emitir(J, J.global_position, 180.0, Ruido.DISPARO, J)
+	await _esperar(0.25)
+	var v0 := Vector2(z.velocity.x, z.velocity.z).length()
+	_comprobar(z.estado != Zombi.Estado.DEAMBULAR and v0 < 0.8, "al oír algo, primero se gira sin moverse (%s, %.2f studs/s)" % [z.nombre_estado(), v0])
+	await _esperar(1.5)
+	var v1 := Vector2(z.velocity.x, z.velocity.z).length()
+	_comprobar(v1 > 1.5, "y después va hacia allí (%.1f studs/s)" % v1)
+
+
+func _indicador() -> void:
+	await _cargar()
+	Zombi.sordos = true
+	J.invencible = true
+	var medidor: MedidorRuido = J.get_node("MedidorRuido")
+	await _esperar(0.3)
+	_comprobar(medidor.visto == 0.0, "sin zombis mirando, el indicador 'visto' está vacío")
+	var z := _zombi_mirando(Vector3(-1, 0, 0), 25.0)
+	await _esperar(0.8)
+	_comprobar(medidor.visto > 0.0 and medidor.visto < 1.0, "se va llenando mientras el zombi le mira (%.2f)" % medidor.visto)
+	await _esperar_estado(z, PERSIGUE, 5.0)
+	await _esperar(0.2)
+	_comprobar(medidor.visto >= 1.0, "lleno cuando le ha visto")
+	Zombi.ciegos = true
+	await _esperar(4.0)
+	_comprobar(medidor.visto < 0.2, "baja cuando deja de verle (%.2f)" % medidor.visto)
+
+
 ## regresión de la auditoría: andar 4 s desde parado (antes de estos cambios: 17,97 studs a 60 FPS)
 func _andar() -> void:
 	await _cargar()
@@ -487,9 +675,11 @@ func _rendimiento() -> void:
 	await _cargar()
 	await _esperar(1.0)
 	var base: float = await _medir(4.0)
+	# al alcance de la vista (le ven, le persiguen y le atacan: el jugador es invencible), para medir todo
+	J.invencible = true
 	for i in 30:
 		var a := TAU * i / 30.0
-		dz.crear_zombi(_pies() + Vector3(cos(a), 0, sin(a)) * (60.0 + 4.0 * (i % 5)), 0.0, true)
+		dz.crear_zombi(_pies() + Vector3(cos(a), 0, sin(a)) * (30.0 + 4.0 * (i % 5)), rad_to_deg(a) + 90.0, true)
 	await _esperar(1.0)
 	var con: float = await _medir(4.0)
 	print("  sin zombis: %.2f ms por fotograma · con 30 zombis: %.2f ms (~%.3f ms por zombi)" % [base, con, (con - base) / 30.0])

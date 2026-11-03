@@ -1,8 +1,9 @@
 # Proyecto Z
 
 Juego de zombis en tercera persona, realista y de sigilo, hecho en **Godot 4.7.2** (empezó en Roblox).
-Estado: prototipo de movimiento, combate y zombis v0 que se guían por el ruido (nivel de pruebas; aún sin mapa).
-Todo lo que haces suena: agachado no te oyen, corriendo o disparando sí. Ver `docs/RUIDO_Y_ZOMBIS.md`.
+Estado: prototipo de movimiento, combate y zombis que te oyen y te ven (nivel de pruebas; aún sin mapa).
+Todo lo que haces suena y se ve: agachado y quieto cuesta descubrirte; corriendo o disparando, te descubren enseguida.
+Ver `docs/RUIDO_Y_ZOMBIS.md`.
 
 ## Abrir el proyecto
 1. Instala **Godot 4.7.2** (versión estándar, no .NET): https://godotengine.org/download/archive/
@@ -15,11 +16,11 @@ WASD moverse · Shift correr (tumbado: reptar rápido) · Espacio saltar/sortear
 Z cuerpo a tierra · Q/E asomarse · Rueda acercar/alejar cámara · 1-4 armas · Clic der. apuntar · Clic izq. disparar/golpear · R recargar ·
 X apoyar el arma · F recoger · V cambiar de hombro · Colgado: A/D moverse, Espacio subir, S soltarse · Esc pausa.
 Solo en el editor: F1 menú de trucos, F4 estamina infinita, F5 balas infinitas, F6 ver el ruido y el estado de los zombis,
-F7 zombis sordos.
+F7 zombis sordos, F8 zombis ciegos.
 
 ## Pruebas automáticas
 `tests/ejecutar_pruebas.sh <ruta a Godot 4.7.2>` importa el proyecto, compila todos los scripts, pasa las
-16 pruebas (ruido, zombis y regresión) y arranca el menú y el nivel buscando errores (~1 minuto, sin
+26 pruebas (ruido, vista, zombis y regresión) y arranca el menú y el nivel buscando errores (~2 minutos, sin
 ventana). En Windows se ejecuta con Git Bash. Detalle en `docs/RUIDO_Y_ZOMBIS.md`, sección "Pruebas".
 
 ## Trabajar con Claude en Godot (opcional)

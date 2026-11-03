@@ -1,8 +1,9 @@
-# Ruido y zombis — guía del sistema (v0)
+# Ruido, vista y zombis — guía del sistema (v1)
 
 > **Para quién:** cualquier persona o Claude que vaya a tocar el sigilo, los zombis o añadir algo que
-> haga ruido. **Estado:** v0 terminada y probada el 2026-10-23 (16 pruebas automáticas en verde).
-> Si cambias algo de esto, actualiza este documento en el mismo commit.
+> haga ruido. **Estado:** v0 (oído) el 2026-10-23; **v1 (vista e ingenio) el 2026-10-24**, probada con 26
+> pruebas automáticas en verde. Si cambias algo de esto, actualiza este documento en el mismo commit.
+> (El archivo conserva su nombre, `RUIDO_Y_ZOMBIS.md`, porque otros documentos lo enlazan.)
 
 ## Índice
 1. [La idea en 30 segundos](#1-la-idea-en-30-segundos)
@@ -10,7 +11,8 @@
 3. [Arquitectura](#3-arquitectura)
 4. [El sistema de ruido (`Ruido`)](#4-el-sistema-de-ruido-ruido)
 5. [Qué hace ruido y cuánto](#5-qué-hace-ruido-y-cuánto)
-6. [El zombi v0 (`Zombi`)](#6-el-zombi-v0-zombi)
+6. [El zombi (`Zombi`)](#6-el-zombi-zombi)
+   - [Vista (v1)](#vista-v1) · [Ingenio (v1)](#ingenio-v1) · [Dificultad: cuánto tarda en verte](#dificultad-cuánto-tarda-en-verte)
 7. [El director (`DirectorZombis`) y la navegación](#7-el-director-directorzombis-y-la-navegación)
 8. [Contrato de objetivo (lo que deben cumplir los blancos de las armas)](#8-contrato-de-objetivo)
 9. [Daño, vida y muerte del jugador](#9-daño-vida-y-muerte-del-jugador)
@@ -45,6 +47,16 @@ Lo que se nota al jugar:
 - Una bala que golpea una pared **suena allí**: disparar lejos sirve para distraerlos.
 - Un **medidor de ruido** bajo la estamina enseña cuánto ruido acabas de hacer.
 
+**Desde la v1 también VEN.** *Analogía:* como alguien que te ve de reojo. Primero "le parece ver algo" y se
+acerca a mirar; si te tiene delante un rato, te reconoce y va a por ti. Cuanto más lejos, más al borde de su
+vista, más agachado o tumbado y más quieto estés, más le cuesta.
+- De pie te ven hasta ~15 m de frente; agachado ~9 m; tumbado ~5 m. Pegado a ellos (de pie ~3 m, agachado
+  ~1,7 m) te notan aunque no te miren.
+- Si te pierden de vista, van **a donde estarías** si seguiste igual y luego **registran la zona** (varios
+  sitios), en vez de quedarse plantados donde te vieron.
+- Al oír algo tardan **medio segundo** en reaccionar (se giran primero): un respiro para el jugador.
+- Un indicador **"visto"** bajo el de ruido avisa cuando un zombi te está mirando, antes de que te descubra.
+
 ---
 
 ## 2. Plan seguido y estado
@@ -59,6 +71,17 @@ Lo que se nota al jugar:
 | 6 | Medidor de ruido en el HUD | ✅ |
 | 7 | 16 pruebas automáticas + regresión de lo existente | ✅ |
 | 8 | Documentación (esta guía, `CLAUDE.md`, `CAMBIOS.md`, `README.md`) | ✅ |
+
+**v1 — vista e inteligencia (2026-10-24, terminada).** Objetivo: zombis que ven, buscan con cabeza y son algo
+más listos **sin disparar la dificultad** (las velocidades no cambian y verte lleva su tiempo).
+
+| Fase | Qué | Estado |
+|---|---|---|
+| 9 | Vista: cono de visión y visión periférica según la postura (`ZConfig.STANCE[].Sight/Near`), rayos a cabeza, pecho y cadera, y **sospecha gradual** (lejos, al borde de la vista, agachado o quieto tarda más) | ✅ |
+| 10 | Ingenio: al perderte de vista va hacia donde ibas (anticipa); búsqueda por varios puntos; rodea si se atasca; tarda un instante en reaccionar a un ruido | ✅ |
+| 11 | Jugador y depuración: indicador "visto" en el HUD; F8 zombis ciegos (y en el menú de trucos F1); F6 dibuja el cono de visión | ✅ |
+| 12 | Pruebas de vista + regresión (las 16 de antes y las escenas de prueba de KangooG, comparadas antes/después) | ✅ |
+| 13 | Documentación | ✅ |
 
 Reglas respetadas: **no se han tocado escenas `.tscn` ni `project.godot`** (todo se crea por código);
 los cambios en archivos que ya existían son pequeños y están listados en la [sección 14](#14-archivos-tocados).
@@ -156,18 +179,18 @@ Medido en el juego (prueba `pasos`): agachado **5,2**, andando **12,4**, corrien
 
 ---
 
-## 6. El zombi v0 (`Zombi`)
+## 6. El zombi (`Zombi`)
 
 `scripts/zombis/zombi.gd`. Un `CharacterBody3D` con el **mismo muñeco R15** que el superviviente (sin
-mochila ni equipo, piel enferma y ropa sucia). De momento **solo oye**: no tiene vista.
+mochila ni equipo, piel enferma y ropa sucia). **Oye** (v0), **ve** (v1) y nota al jugador si lo tiene pegado.
 
 ### Máquina de estados
 ```
-DEAMBULAR ──oye algo──► INVESTIGAR ──llega──► BUSCAR ──nada en "Buscar" s──► DEAMBULAR
-                          │    ▲
-     ruidos del jugador   │    │ deja de oírle "PerseguirMemoria" s
-     seguidos, alerta alta▼    │
-                         PERSEGUIR ──a "Alcance"──► ATACAR ──► PERSEGUIR
+DEAMBULAR ──oye / ve algo──► INVESTIGAR ──llega──► BUSCAR (varios sitios) ──nada──► DEAMBULAR
+                                │    ▲
+  le ve del todo, o ruidos del  │    │ le pierde: va a donde iba el jugador (anticipa)
+  jugador seguidos (alerta alta)▼    │ o deja de oírle "PerseguirMemoria" s
+                               PERSEGUIR ──a "Alcance"──► ATACAR ──► PERSEGUIR
 cualquiera ──bate──► CAIDO ──se levanta──► PERSEGUIR      cualquiera ──vida 0──► MUERTO
 ```
 
@@ -194,6 +217,57 @@ cualquiera ──bate──► CAIDO ──se levanta──► PERSEGUIR      cu
   cuando deambula; cojea de la pierna derecha.
 
 Todos los números están en **`ZConfig.ZOMBI`**.
+
+### Vista (v1)
+
+Cada `VistaIntervalo` (0,1 s) el zombi comprueba si ve al jugador (`Zombi._paso_vista`):
+
+1. **¿Está a su alcance?** El alcance depende de la postura del jugador: `VistaAlcance` (50 studs) ×
+   `STANCE[postura].Sight` (de pie 1, agachado 0,6, tumbado 0,35), y crece un 30 % si el zombi está alerta.
+2. **¿Está en su campo de visión?** Dentro del cono (`VistaAngulo` = 60° a cada lado, 120° en total) o, aunque
+   no mire, muy cerca: la **periférica** es `VistaPeriferica` × `STANCE[postura].Near` (de pie ~10 studs,
+   agachado ~5,6, tumbado ~3,2).
+3. **¿Hay algo en medio?** Tres rayos (capa 1, el escenario) desde los ojos del zombi a la **cabeza, el pecho y
+   la cadera** del jugador (sus piezas reales: agachado o tumbado están más bajas). La parte visible (0, ⅓, ⅔
+   o todo) multiplica lo que ve. Los cuerpos del zombi y del jugador no tapan.
+4. **Sospecha.** Lo que ve llena la `sospecha` (0..1), más deprisa cuanto más cerca, más en el centro de la
+   vista, más se mueva el jugador (quieto ×0,7, corriendo ×1,8) y más alerta esté el zombi. Si no le ve, baja
+   (`VistaOlvido`). Con `VistaSospecha` (0,45) "le parece ver algo": va a mirar despacio **sin saber que es el
+   jugador**. Llena (1) **le ha visto**: alerta máxima, gruñe y le persigue sabiendo dónde está en cada momento,
+   aunque el jugador no haga ruido.
+
+La vista y el oído se suman: un zombi que te persigue por el ruido también te sigue con la vista, y al revés.
+
+### Ingenio (v1)
+- **Anticipa:** si te pierde de vista (te escondes tras una esquina), no va a donde te vio sino a donde
+  **estarías** si seguiste igual: tu última posición + tu velocidad × `Anticipar` (1,2 s, máx. 12 studs).
+- **Registra la zona:** al buscarte (`BUSCAR`) recorre `BuscarPuntos` (3) sitios alrededor de donde te perdió,
+  el primero hacia donde ibas y los demás a los lados, y en cada uno mira alrededor (`BuscarMirar`). Se rinde a
+  los `BuscarTiempo` (20 s) como mucho. Si solo era un ruido cualquiera, mira alrededor y se va (como en v0).
+- **Reacciona con un instante de retraso:** estando tranquilo, al oír o ver algo primero se gira hacia allí
+  (`Reaccion`, 0,5 s) y luego se mueve. Da un respiro al jugador.
+- **Rodea obstáculos:** si se atasca (otro zombi, un muñeco, una esquina), prueba a rodearlo por un lado (hasta
+  2 veces) antes de rendirse.
+- **No se repite:** si los ruidos o lo que ve están casi en el mismo sitio, no rehace el camino (antes lo
+  recalculaba con cada pisada).
+
+### Dificultad: cuánto tarda en verte
+
+Calculado con la fórmula del código (y comprobado en las pruebas: de pie y quieto a 25 studs, 2,0 s), con el
+jugador **en el centro de su vista y a la vista entero**. Las velocidades de los zombis **no han cambiado**: te
+persigue a 7,5 studs/s y tú corres a 14, así que corriendo puedes escapar, y luego te busca y se rinde.
+
+| Postura y movimiento | 10 studs (3 m) | 20 (6 m) | 30 (9 m) | 45 (14 m) | 20 studs, al borde de la vista |
+|---|---:|---:|---:|---:|---:|
+| De pie, quieto | 1,3 s | 1,6 s | 2,1 s | 3,8 s | 2,4 s |
+| De pie, andando | 0,8 s | 0,9 s | 1,2 s | 2,1 s | 1,4 s |
+| De pie, corriendo | 0,6 s | 0,7 s | 0,9 s | 1,5 s | 1,0 s |
+| Agachado, quieto | 1,5 s | 2,3 s | 5,3 s | no le ve | 3,5 s |
+| Agachado, andando | 0,9 s | 1,5 s | 3,3 s | no le ve | 2,1 s |
+| Tumbado, quieto | 2,0 s | no le ve | no le ve | no le ve | no le ve |
+
+De espaldas no te ve (salvo la periférica, muy cerca). Medio cuerpo tapado (un muro bajo) lo hace más lento.
+Para ajustar la dificultad, toca primero `VistaRapidez` y `VistaAlcance` en `ZConfig.ZOMBI`.
 
 ---
 
@@ -262,18 +336,23 @@ Solo en compilaciones de desarrollo (desde el editor):
 
 | Tecla | Qué hace |
 |---|---|
-| **F6** | Ver el ruido: un anillo con el radio de cada ruido (color según el tipo) y, encima de cada zombi, su estado y su alerta |
+| **F6** | Ver el ruido y la vista: un anillo con el radio de cada ruido (color según el tipo), el **cono de visión** de cada zombi (amarillo → rojo con la sospecha) y, encima, su estado, su alerta y su sospecha |
 | **F7** | Zombis sordos: ignoran todos los ruidos (para probar otras cosas sin que te molesten) |
+| **F8** | Zombis ciegos: no ven (v1) |
 
-`Ruido.ver` y `Zombi.sordos` son variables estáticas: se mantienen al reiniciar el nivel.
+Los tres están también como casillas en el **menú de trucos (F1)** de KangooG ("Ver ruido y zombis", "Zombis
+sordos", "Zombis ciegos"); ahí también está la acción "Zombi delante" (que ahora te ve y viene a por ti).
+`Ruido.ver`, `Zombi.sordos` y `Zombi.ciegos` son variables estáticas: se mantienen al reiniciar el nivel.
 
 ---
 
 ## 11. Pruebas
 
 Por primera vez, las pruebas **están en el repositorio**:
-- `tests/pruebas_ruido.gd`: 16 pruebas. Cada una carga el nivel real, simula teclas y comprueba el resultado.
-- `tests/ejecutar_pruebas.sh`: lo ejecuta todo (importar, compilar cada script, las 16 pruebas y arrancar el
+- `tests/pruebas_ruido.gd`: 26 pruebas (16 de oído y regresión, v0; 10 de vista e ingenio, v1). Cada una carga
+  el nivel real, simula teclas y comprueba el resultado. **Las de oído dejan a los zombis ciegos y las de vista,
+  sordos**, para medir cada sentido por separado.
+- `tests/ejecutar_pruebas.sh`: lo ejecuta todo (importar, compilar cada script, las 26 pruebas y arrancar el
   menú y el nivel 10 s buscando errores) y da un resumen. Sale con código 0 si todo va bien: listo para
   GitHub Actions.
 
@@ -300,7 +379,17 @@ tests/ejecutar_pruebas.sh /ruta/a/Godot_v4.7.2 sigilo    # solo una
 | `andar` | el movimiento recorre exactamente lo mismo que antes (17,97 studs en 4 s) |
 | `cadencia` | la cadencia del rifle es la misma que antes (regresión) |
 | `completo` | partida con los 4 zombis del nivel: el disparo alerta a alguno, sin errores |
-| `rendimiento` | coste por zombi (informativo; falla si pasa de 0,5 ms) |
+| `rendimiento` | coste por zombi con 30 zombis que te ven y te persiguen (informativo; falla si pasa de 0,5 ms) |
+| `vista_frente` | de frente a 25 studs, quieto: no le ve al instante, pero sí en ~2 s, y sabe dónde está |
+| `vista_espalda` | de espaldas a 25 studs no le ve |
+| `vista_pared` | con una pared en medio no le ve |
+| `vista_lejos` | a 75 studs (~23 m) no le ve |
+| `vista_postura` | tumbado a 30 studs de frente no le ve; de pie a la misma distancia sí |
+| `vista_sigue` | sordo, le sigue con la vista aunque el jugador se mueva en silencio |
+| `anticipar` | al perderle de vista corriendo, va a donde estaría (12 studs por delante de donde le vio) |
+| `busqueda` | al perderle registra la zona (recorre varios sitios) y se rinde antes de `BuscarTiempo` |
+| `reaccion` | al oír algo primero se gira sin moverse y después va hacia allí |
+| `indicador` | el indicador "visto" del HUD se llena mientras le miran, se llena del todo al verle y baja después |
 
 **Cuidado al escribir pruebas nuevas:** la oclusión funciona de verdad. Si el jugador corre hacia la fila de
 bloques naranjas del nivel, los bloques amortiguan sus pisadas y el zombi no le oye. Las pruebas usan la zona
@@ -309,6 +398,13 @@ despejada (hacia −X desde el inicio).
 Resultado del 2026-10-23 con Godot 4.7.2 (Linux, headless): **16/16 en verde**, menú y nivel sin errores. El
 script de la auditoría da exactamente los mismos números que antes en movimiento (18,011 / 17,972 / 17,927 studs
 a 20 / 60 / 144 FPS) y en cadencia.
+
+**v1 (2026-10-24): 26/26 en verde**, menú y nivel sin errores. Además, regresión de las **escenas de prueba de
+KangooG** (`tests/escena_*.tscn`), ejecutadas antes y después de los cambios y comparando su salida: `apoyo`,
+`choques`, `combate`, `salto`, `trucos` y `tunel` dan exactamente lo mismo; `canon` y `menu_test` solo varían en
+tiempos que ya cambian de una ejecución a otra; `cerca` cambiaba porque su zombi (de espaldas a 2,5 studs) ahora te
+nota con la visión periférica: se le añadió `Zombi.ciegos = true` para que siga midiendo lo mismo (vuelve a dar
+exactamente lo de antes).
 
 ---
 
@@ -319,8 +415,10 @@ Tiempo real por fotograma (CPU; en headless, así que **no** incluye dibujar):
 | Caso | ms por fotograma |
 |---|---:|
 | Nivel sin zombis | ~1,0 |
-| Con 30 zombis deambulando | ~3,6 |
-| **Coste de un zombi** | **~0,09** (animación ~0,05 + cerebro y física ~0,04) |
+| Con 30 zombis deambulando (v0) | ~3,6 |
+| **Coste de un zombi** (v0, deambulando) | **~0,09** (animación ~0,05 + cerebro y física ~0,04) |
+| Con 30 zombis que te ven, persiguen y atacan a la vez (v1) | ~4,3 |
+| **Coste de un zombi** (v1, viendo y persiguiendo: lo más caro) | **~0,11** (0,15 en la peor medición) |
 | Para comparar: el jugador (lógica + IK completa) | ~0,6-0,9 |
 
 Un zombi cuesta unas 10 veces menos que el jugador. Lo que falta medir es la **GPU**: cada zombi son ~50
@@ -334,9 +432,11 @@ fotogramas, como hace la prueba `rendimiento`.
 
 ## 13. Limitaciones conocidas y siguientes pasos
 
-Limitaciones de la v0:
-- **Sin vista:** el zombi solo oye (y nota el contacto). Siguiente paso natural: visión con los valores
-  `ZConfig.STANCE[].Sight`/`Near` que ya existen (más difícil de ver agachado o tumbado) y la luz.
+Limitaciones:
+- **La luz no cuenta todavía:** no hay día/noche ni linterna; cuando los haya, bastará con multiplicar el
+  alcance de la vista (`_cuanto_ve`) por la luz que recibe el jugador.
+- **La vista no distingue cuerpos:** otro zombi o un maniquí no tapan (solo el escenario, capa 1).
+- **Comunicación sencilla:** los zombis solo se avisan con gruñidos (que no dicen dónde está el jugador).
 - **Animación sencilla:** los pies pueden resbalar algo; sin IK ni reacciones elaboradas.
 - **Sin ragdoll** ni para el zombi ni para el jugador (caen "como un tronco", igual que el maniquí).
 - **Superficie:** todas las pisadas suenan igual (falta hierba/asfalto/metal: bastaría un multiplicador en
@@ -348,7 +448,7 @@ Limitaciones de la v0:
   reprodujo en ejecuciones repetidas.
 
 Siguientes pasos propuestos (por orden):
-1. Visión (con postura y luz) + memoria compartida entre zombis cercanos.
+1. Luz (día/noche, linterna) en la vista + memoria compartida entre zombis cercanos.
 2. Objetos arrojables para distraer (botellas, latas): son solo `Ruido.emitir` en el punto de impacto.
 3. LOD: zombis lejanos sin animar o a menos Hz; fusionar las ~50 mallas del muñeco en una con `Skeleton3D`.
 4. Sonidos reales y pisadas según superficie.
@@ -372,3 +472,16 @@ Siguientes pasos propuestos (por orden):
 | `scripts/jugador/arsenal.gd` | + ruidos de armas; blancos genéricos (grupo `objetivos`, meta `objetivo`) en vez de `Maniqui`; balas con `impacto_bala`; golpes sin atravesar paredes |
 | `scripts/nivel/maniqui.gd` | + grupo `objetivos` y meta `objetivo` (2 líneas; se conservan `maniquies` y `maniqui`) |
 | `scripts/nivel/nivel_pruebas.gd` | + `_crear_zombis()` (director + 4 zombis) |
+
+**v1 (vista e ingenio, 2026-10-24):**
+
+| Archivo | Cambio |
+|---|---|
+| `scripts/zombis/zombi.gd` | vista (`_paso_vista`, `_cuanto_ve`, `_fraccion_visible`, `_vislumbrar`, `_perder_vista`), búsqueda por sitios (`_preparar_busqueda`, `_paso_buscar`), reacción (`_reaccionando`), rodeo (`_rodear`), `_ir_a_si_cambia`, `Zombi.ciegos`, cono de depuración |
+| `scripts/config/zconfig.gd` | + claves `Vista*`, `Anticipar`, `Reaccion`, `Buscar*` en `ZOMBI` |
+| `scripts/zombis/director_zombis.gd` | + F8 (zombis ciegos) |
+| `scripts/ui/medidor_ruido.gd` | + indicador "visto" |
+| `scripts/ui/menu_trucos.gd` (KangooG) | + casilla "Zombis ciegos (F8)" (2 líneas) |
+| `scripts/jugador/jugador.gd` (KangooG) | "F8: zombis ciegos" en el texto de ayuda |
+| `tests/pruebas_ruido.gd`, `tests/ejecutar_pruebas.sh` | + 10 pruebas de vista; las de oído, con zombis ciegos |
+| `tests/cerca.gd` (KangooG) | + `Zombi.ciegos = true` (1 línea, para que su zombi siga quieto como antes) |

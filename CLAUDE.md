@@ -12,8 +12,8 @@ Responder SIEMPRE en español. Presupuesto 0 $: solo recursos gratuitos.
 5. No borrar ni reescribir código del otro sin hablarlo. Si algo suyo falla, anotarlo en "Problemas conocidos".
 6. Todo el juego usa **studs** (1 stud ≈ 0.31 m) y gravedad 35, como el original de Roblox.
 7. Probar antes de subir: abrir el juego desde el editor (F5) y comprobar que no hay errores en la Salida.
-   Además, si se puede ejecutar Godot por consola: `tests/ejecutar_pruebas.sh <ruta a Godot>` (16 pruebas
-   automáticas, ~1 min; en Windows con Git Bash). Si añades algo importante, añade su prueba.
+   Además, si se puede ejecutar Godot por consola: `tests/ejecutar_pruebas.sh <ruta a Godot>` (26 pruebas
+   automáticas, ~2 min; en Windows con Git Bash). Si añades algo importante, añade su prueba.
 
 8. Lee también **`AUDITORIA.md`** (2026-10-23): revisión técnica con fallos comprobados, deuda técnica,
    ideas de mejora y hoja de ruta. Al arreglar algo de ahí, anotarlo en `CAMBIOS.md`.
@@ -102,7 +102,9 @@ Responder SIEMPRE en español. Presupuesto 0 $: solo recursos gratuitos.
   - (Claude de Juan: escribe aquí)
 
 ## Problemas conocidos
-- `tests/moto.gd --modo=zombi` falla a veces (1 de cada ~8: el zombi deambula y la moto no lo pilla). No es un error.
+- `tests/escena_cerca.tscn -- --muneco`: el maniquí aparece en el origen (~141 studs del jugador) en vez de pegado
+  a él, porque `Maniqui` fija su sitio en `_ready` y la prueba le pone la posición después de `add_child`
+  (hay que ponerla antes). La prueba igualmente "le da". Anotado por Juan/Claude el 2026-10-24; no se ha tocado.
 
 ---
 
@@ -122,6 +124,7 @@ Juego de zombis en tercera persona, realista. Empezó en Roblox Studio, pasó po
   - `scripts/jugador/animador.gd` (Animador): port de ProceduralAnimator para ir a pie (pies anclados con IK analítica, pelvis, salto por fases, vault/mantle, tumbarse/reptar/rodar, reacciones, cabeza).
   - `escenas/jugador.tscn`, `escenas/pruebas_movimiento.tscn` (escena principal; nivel de pruebas en metros convertido a studs).
 - Flujo de trabajo de Claude (sesión de KangooG): edita en un contenedor, comprueba con Godot 4.7.2 Linux headless y copia los archivos al PC. Cualquier Claude puede trabajar directamente sobre los archivos del repositorio.
+- **Pendiente de portar**: daño por caída y ragdoll activo Euphoria (levantarse), sonidos reales (pasos, respiración, armas), luz (día/noche) para la vista de los zombis, moto, carro, mapa de ciudad. (Armas y combate: hechos; ruido y zombis con oído y vista: hechos, ver abajo.)
 - **Pendiente de portar**: daño por caída y ragdoll activo Euphoria (levantarse), sonidos reales (pasos, respiración, armas), vista de los zombis, carro, mapa de ciudad. (Moto: hecha en v0.4, ver abajo.) (Armas y combate: hechos; ruido y zombis v0: hechos, ver abajo.)
 
 ## Conexión Claude ↔ Godot (resuelta 2026-10-20)
@@ -138,8 +141,8 @@ Juego de zombis en tercera persona, realista. Empezó en Roblox Studio, pasó po
 ## Plan por etapas (en Godot)
 1. Personaje y cámara (hecho lo principal; faltan caídas/ragdoll y sonidos).
 2. Armas: disparo, apuntado, retroceso, apoyar arma, dispersión (hecho, con muñecos de prueba).
-3. Zombis: navegación, ataques, ragdoll activo, atropello. (v0 hecha el 2026-10-23: oído, navegación, ataques; faltan vista, ragdoll y atropello.)
-4. Vehículos: carro y moto (moto hecha en v0.4).
+3. Zombis: navegación, ataques, ragdoll activo, atropello. (v0 2026-10-23: oído, navegación, ataques; v1 2026-10-24: vista e ingenio; faltan luz, ragdoll y atropello.)
+4. Vehículos: carro y moto.
 5. Mapa de ciudad, iluminación, sonido, interfaz.
 6. Multijugador (opcional).
 
@@ -374,6 +377,20 @@ Freesound (sonidos), Poly Haven y ambientCG (texturas/HDRI), Quaternius y Kenney
   o el método `impacto_bala`). Los golpes ya no atraviesan paredes (AUDITORIA §7.1 arreglado).
 - **Jugador:** grupo `jugador`; `recibir_danio(cantidad, desde)`, regenera con `RegenDelay`/`RegenRate`, muere y el
   nivel se reinicia a los 4 s. Medidor de ruido bajo la estamina (`scripts/ui/medidor_ruido.gd`).
-- **Depuración (solo editor):** F6 ver ruidos y estado de los zombis; F7 zombis sordos.
-- **Pruebas:** `tests/pruebas_ruido.gd` + `tests/ejecutar_pruebas.sh` (16 pruebas, incluidas regresiones de movimiento,
+- **Depuración (solo editor):** F6 ver ruidos, cono de visión y estado de los zombis; F7 zombis sordos; F8 zombis ciegos
+  (también en el menú de trucos F1).
+- **Pruebas:** `tests/pruebas_ruido.gd` + `tests/ejecutar_pruebas.sh` (26 pruebas, incluidas regresiones de movimiento,
   cadencia y maniquí). Ojo: la oclusión es real; en el nivel, los bloques naranjas tapan el ruido.
+
+## Zombis v1: vista e ingenio (2026-10-24, a pedido de Juan) — detalle en `docs/RUIDO_Y_ZOMBIS.md` §6
+- **Vista:** cono de 120° y visión periférica según la postura del jugador (`ZConfig.STANCE[].Sight/Near`, que venían
+  de Roblox y no se usaban): de pie te ven hasta ~15 m, agachado ~9 m, tumbado ~5 m; pegado (de pie ~3 m) te notan
+  aunque no miren. Rayos a cabeza, pecho y cadera del jugador (tapa la capa 1). **Sospecha gradual** (`Zombi.sospecha`,
+  0..1): a 0,45 "le parece ver algo" y va a mirar; a 1 te ha visto y te persigue sabiendo dónde estás.
+- **Ingenio:** al perderte de vista va a donde estarías (`Anticipar`); `BUSCAR` registra 3 sitios alrededor (el
+  primero hacia donde ibas); tarda 0,5 s en reaccionar a un ruido estando tranquilo; rodea obstáculos si se atasca.
+- **Dificultad:** las velocidades no cambian. Tabla de cuánto tardan en verte en la guía; para ajustarla, `VistaRapidez`
+  y `VistaAlcance` en `ZConfig.ZOMBI`.
+- **HUD:** indicador "visto" bajo el de ruido (`MedidorRuido.visto`): blanco → naranja (va a mirar) → rojo (te ha visto).
+- **Ojo en pruebas propias:** los zombis ahora ven. Si una prueba necesita un zombi pasivo, pon `Zombi.ciegos = true`
+  además de `Zombi.sordos = true` (así se hizo en `tests/cerca.gd`).

@@ -3,8 +3,8 @@ extends Node3D
 ## Director de zombis (guía en docs/RUIDO_Y_ZOMBIS.md):
 ## · Hornea la malla de navegación del nivel al cargarlo (a partir de la colisión del escenario, capa 1).
 ## · Coloca zombis (crear_zombi) y, si "reaparecer" está activo, los repone un rato después de morir.
-## · Teclas de depuración (solo en desarrollo): F6 ver los ruidos y el estado de los zombis,
-##   F7 zombis sordos (para probar otras cosas sin que te molesten).
+## · Teclas de depuración (solo en desarrollo): F6 ver los ruidos, el cono de visión y el estado de los
+##   zombis, F7 zombis sordos y F8 zombis ciegos (para probar otras cosas sin que te molesten).
 ## Uso desde un nivel:
 ##   var dz := DirectorZombis.new(); add_child(dz); dz.preparar($Geometria); dz.crear_zombi(pies, giro)
 
@@ -89,6 +89,9 @@ func _unhandled_input(e: InputEvent) -> void:
 		KEY_F7:
 			Zombi.sordos = not Zombi.sordos
 			_avisar("Zombis sordos: " + ("SÍ" if Zombi.sordos else "NO"))
+		KEY_F8:
+			Zombi.ciegos = not Zombi.ciegos
+			_avisar("Zombis ciegos: " + ("SÍ" if Zombi.ciegos else "NO"))
 
 
 func _avisar(txt: String) -> void:
