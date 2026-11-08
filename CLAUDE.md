@@ -140,6 +140,13 @@ Juego de zombis en tercera persona, realista. Empezó en Roblox Studio, pasó po
 - Plugin **Godot AI v4.3.1** (hi-godot/godot-ai) en `addons/godot_ai`; puertos HTTP 8001 / WS 8002. uv en `C:\Users\ferna\.local\bin`.
 - La migración v3→v4 se quedaba trabada → `"clients_migrated": true` en `addons/.godot_ai_update/pending.json`. El botón Configure se cuelga → la config de Claude Desktop se pega a mano (Claude Desktop es MSIX y Claude no puede escribir su propia config).
 - `mcpServers` que funciona: `"godot-ai": {"command": "C:\\Users\\ferna\\.local\\bin\\uvx.exe", "args": ["--system-certs", "--from", "godot-ai==4.3.1", "godot-ai", "attach", "--port", "8001", "--ws-port", "8002"], "env": {"UV_CACHE_DIR": "C:\\Users\\ferna\\AppData\\Local\\uv\\cache", "UV_PYTHON_INSTALL_DIR": "C:\\Users\\ferna\\AppData\\Roaming\\uv\\python"}}, "Roblox_Studio": {"command": "cmd.exe", "args": ["/c", "C:\\Users\\ferna\\AppData\\Local\\Roblox\\mcp.bat"]}`
+- **Dock atascado en "Starting server…" (2026-11-07/08):** el servidor arranca bien (escucha en 8001/8002), pero al
+  comprobar el proceso el plugin lanzaba un PowerShell "pareja" (`McpPortResolver._capture_windows_process_snapshot_pair`)
+  que en el PC de KangooG se cuelga siempre (las consultas sueltas sí van; posible antivirus ReasonLabs), y el dock esperaba
+  para siempre. **Parche local** en `addons/godot_ai/utils/port_resolver.gd` (`capture_process_kill_grant`: `pair = []`,
+  marcado "Proyecto Z"): si se actualiza el plugin hay que volver a ponerlo. Si vuelve a pasar: Administrador de tareas →
+  Detalles → finalizar los `powershell.exe` hijos de Godot, cerrar y abrir Godot. Diagnóstico: `tests/diag_puertos.gd`
+  (Archivo → Ejecutar). Abrir Claude antes que Godot NO lo evita (el puente "attach" no lanza servidor).
 - Roblox Studio: Assistant → … → Manage MCP Servers → "Enable Studio as MCP server".
 - Herramientas: `mcp__remote-devices__godot-ai__*` y `mcp__remote-devices__Roblox_Studio__*` (tardan ~1 min tras abrir Claude; usar RefreshMcpTools).
 

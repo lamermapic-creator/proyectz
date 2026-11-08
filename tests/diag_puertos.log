@@ -1,0 +1,7 @@
+DIAG 2026-11-08T11:50:01 código 0
+HIJO 166532 uvx.exe desde 11:48:34 | C:\Users\ferna\.local\bin\uvx.exe --isolated --no-config --no-env-file --no-sources --no-build --index-strategy first-in
+HIJO 164560 powershell.exe desde 11:48:34 | C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$first = & { $row
+HIJO 133124 powershell.exe desde 11:49:50 | C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$first = & { $row
+HIJO 141744 powershell.exe desde 11:49:57 | powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Get-CimInstance Win32_Process | Where-Object { $_.ParentProc
+ESCUCHA 8002 pid=154056 python3.11
+ESCUCHA 8001 pid=154056 python3.11

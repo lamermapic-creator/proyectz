@@ -13,6 +13,15 @@ en el mismo commit que el cambio. Formato:
 
 ---
 
+## 2026-11-08 · KangooG · Claude — plugin Godot AI: dock atascado en "Starting server…"
+**Qué:** el plugin lanzaba el servidor bien, pero para comprobar el proceso ejecutaba un PowerShell con dos consultas
+seguidas que en este PC se queda colgado para siempre (comprobado: cada consulta sola tarda ~1,5 s; las dos juntas no
+terminan nunca), y el dock no pasaba de "Starting server…". Parche de una línea en el plugin: se hacen las dos consultas
+por separado.
+**Archivos:** `addons/godot_ai/utils/port_resolver.gd` (`capture_process_kill_grant`), `tests/diag_puertos.gd`
+(diagnóstico, solo mira), `CLAUDE.md`.
+**Pendiente / avisos:** al actualizar el plugin se pierde el parche (buscar "Proyecto Z" en `port_resolver.gd`).
+
 ## 2026-11-03 (10) — Desactivado apoyar el arma de lado contra paredes (KangooG)
 - KangooG: "que se desactive apoyar el arma en superficies verticales, como paredes" (primero se desactivó por error
   el apoyo horizontal; corregido). Con X ya no se apoya el arma de lado contra una pared o una esquina

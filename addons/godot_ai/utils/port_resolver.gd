@@ -759,7 +759,9 @@ static func capture_process_kill_grant(
 	if pid <= 1 or pid == OS.get_process_id():
 		diagnostics.append("invalid_pid")
 		return {}
-	var pair: Array = _capture_windows_process_snapshot_pair(pid, snapshot_diagnostics) if OS.get_name() == "Windows" else []
+	## Proyecto Z (2026-11-08): en el PC de KangooG el PowerShell "pareja" (dos consultas en una) se cuelga para siempre
+	## y el dock se queda en "Starting server..."; con la lista vacía se hacen dos consultas sueltas, que sí funcionan.
+	var pair: Array = []
 	var first: Variant = pair[0] if not pair.is_empty() else capture_process_snapshot(pid)
 	if capture_failed(first):
 		diagnostics.append("identity_unavailable")
