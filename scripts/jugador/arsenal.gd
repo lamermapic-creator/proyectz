@@ -371,6 +371,7 @@ func _unhandled_input(e: InputEvent) -> void:
 		if e.pressed:
 			var w := cfg()
 			if w.is_empty():
+				punetazo()
 				return
 			if w.Kind == "Gun":
 				J.firing = true
@@ -390,6 +391,7 @@ func _unhandled_input(e: InputEvent) -> void:
 			KEY_4: select_slot(3)
 			KEY_R: reload()
 			KEY_X: set_rest(rest == null)
+			KEY_G: patada()
 			KEY_F:
 				# junto a una moto (o en ella) F es subir/bajar (lo lleva el Jugador)
 				if J.moto == null and J.moto_cercana() == null:
@@ -704,6 +706,8 @@ func shoot() -> void:
 		return
 	if switching != null or ahora() < draw_until:
 		return
+	if cc.bloqueo or cc.accion != null:
+		return
 	var now := ahora()
 	# humanamente imposible disparar ahí: se bloquea (y se reintenta un instante mientras el arma se alinea)
 	if not aim_check()[0]:
@@ -882,7 +886,7 @@ func melee() -> void:
 	var w := cfg()
 	if w.is_empty() or w.Kind != "Melee" or J.health <= 0 or J.vaulting != null or J.ragdoll != null or J.L.gettingUp:
 		return
-	if switching != null or ahora() < draw_until:
+	if switching != null or ahora() < draw_until or cc.accion != null:
 		return
 	var now := ahora()
 	if now - last_melee < w.Cooldown:
@@ -894,6 +898,21 @@ func melee() -> void:
 	J.stamina = maxf(0.0, J.stamina - w.Stamina)
 	Efectos.sonido(J, "Swing", J.global_position, 0.8, 0.9 + randf() * 0.2)
 	Ruido.emitir(J, J.global_position, C.RUIDO.GolpeAire, Ruido.GOLPE, J)
+	# VARIEDAD (2026-11-08, 2): el golpe de siempre o uno de los nuevos de Blender (CombateCC.GOLPES), al azar sin
+	# repetir. En la moto, tumbado o en el aire, siempre el de siempre
+	var base_g := Armas.base(equipado)
+	var nuevos: Array = CombateCC.GOLPES.get(base_g, [])
+	var vg := 0
+	if J.moto == null and not nuevos.is_empty() and cc_puede():
+		vg = _cc_variante("golpe_" + equipado, nuevos.size() + 1)
+	if vg > 0:
+		var ag: Dictionary = nuevos[vg - 1]
+		var dur_g: float = maxf(float(w.Cooldown), float(ag.dur) * 0.9)
+		cc.accion = {"tipo": "golpe", "clase": cc_clase(), "base": base_g, "var": vg - 1, "t0": now, "dur": dur_g,
+			"avance_prev": 0.0, "extra": _cc_extra(float(w.Range) * 0.55) * 0.5}
+		cc_golpes.append([now + dur_g * float(ag.golpe), "golpe", {"arma": equipado}])
+		J.shake = minf(1.0, J.shake + 0.15)
+		return
 	anim.on_melee(equipado)
 	# el impacto llega en el punto de golpe de la animación
 	# (en la moto el golpe llega antes: a esa velocidad el blanco se queda atrás enseguida)
@@ -952,9 +971,455 @@ func _resolver_golpe(arma: String) -> void:
 		Efectos.sonido(J, "Blunt" if contundente else "Flesh", ppos, 1.1, 0.9 + randf() * 0.2)
 
 
+## ---------------------------------------------------------------- combate cuerpo a cuerpo (2026-11-08, KangooG)
+## Clic derecho mantenido: con arma blanca o sin arma, GUARDIA (con arma de fuego sigue siendo apuntar).
+## Con el clic derecho mantenido: Espacio mantenido = BLOQUEO (si se pone justo antes del golpe, PARADA: no hace daño
+## y el zombi se tambalea) y doble Espacio = EMPUJÓN (con las manos si el arma es corta; con el arma si es larga).
+## G = PATADA frontal (con cualquier arma, de pie): hace daño, empuja y puede tirarlo; gasta estamina.
+## Las animaciones salen de Blender (CombateCC, animaciones/blender/combate/); el Animador las pone (_paso_cc).
+const CC_DOBLE := 0.32            # s entre las dos pulsaciones de Espacio para el empujón
+const CC_PARADA := 0.28           # s: bloqueo puesto como mucho tanto antes del golpe = parada
+const CC_BLOQUEO_DANIO := 0.25    # parte del daño que pasa bloqueando
+const CC_BLOQUEO_GASTO := 0.9     # estamina por punto de daño parado
+const CC_EMPUJON := {"estamina": 8.0, "espera": 0.7, "alcance": 3.3, "empuje": 46.0, "tambaleo": 1.2, "danio": 0.0}
+const CC_EMPUJON_ARMA := {"estamina": 10.0, "espera": 0.8, "alcance": 3.5, "empuje": 50.0, "tambaleo": 1.2, "danio": 4.0}
+const CC_PATADA := {"estamina": 14.0, "espera": 0.9, "alcance": 3.6}
+const CC_PUNO := {"estamina": 4.0, "espera": 0.08, "alcance": 3.4, "seguido": 1.0}
+const CC_ACERCA := 0.7            # studs: si el blanco está algo más lejos, el cuerpo avanza algo más para llegar
+const CC_CONO := 0.45             # coseno: lo que está delante (unos 63° a cada lado)
+var cc := {"guardia": false, "bloqueo": false, "bloqueo_t0": -9.0, "accion": null}
+var _cc_espacio := false          # Espacio mantenido (con el clic derecho)
+var _cc_espacio_t := -9.0         # última pulsación de Espacio
+var _cc_listo_t := -9.0           # hasta cuándo no se puede empezar otra acción
+var _cc_roto_t := -9.0            # guardia rota (sin estamina): hasta cuándo no se puede bloquear
+var _cc_ultima := {}              # tipo -> última variante (para no repetir)
+var cc_golpes := []               # impactos pendientes [hora, tipo, datos]
+var _puno_n := 0                  # puñetazos seguidos (directo, cruzado, gancho, gancho de abajo)
+var _puno_t := -9.0
+var _puno_pedido := -9.0          # clic durante un puñetazo: el siguiente sale en cuanto termine (si fue hace poco)
+
+
+## animación (CombateCC) de una acción en curso
+func cc_anim(ac: Dictionary) -> Dictionary:
+	match str(ac.tipo):
+		"empujon":
+			return CombateCC.EMPUJON[ac.clase][ac["var"]]
+		"golpe":
+			return CombateCC.GOLPES[ac.base][ac["var"]]
+		"puno":
+			return CombateCC.PUNOS[ac["var"]]
+	return CombateCC.PATADA[ac["var"]]
+
+
+## clase de combate del arma en la mano (CombateCC): manos, corta, larga, fuego_corta, fuego_larga
+func cc_clase() -> String:
+	var w := cfg()
+	if w.is_empty():
+		return "manos"
+	if w.Kind == "Gun":
+		return "fuego_corta" if w.Slot == "Corta" else "fuego_larga"
+	return "corta" if w.Slot == "BlancaCorta" else "larga"
+
+
+## ¿puede pelear ahora? (de pie o agachado, en el suelo, sin estar ocupado)
+func cc_puede(de_pie := false) -> bool:
+	if J.health <= 0 or J.moto != null or J.vaulting != null or J.colgado != null or J.ragdoll != null:
+		return false
+	if J.L.get("knocked", false) or J.L.get("gettingUp", false) or J.levantando_moto != null:
+		return false
+	if J.stance == 2 or J.prone_p > 0.01 or (de_pie and J.stance != 0) or not J.en_suelo:
+		return false
+	if switching != null or ahora() < draw_until or recogiendo != null or rest != null:
+		return false
+	return true
+
+
+## Espacio con el clic derecho mantenido: el Jugador pregunta antes de saltar
+func cc_quiere_espacio() -> bool:
+	return J.aiming and cc_puede()
+
+
+func cc_espacio(pulsado: bool) -> void:
+	var now := ahora()
+	if not pulsado:
+		_cc_espacio = false
+		return
+	_cc_espacio = true
+	if now - _cc_espacio_t < CC_DOBLE:
+		_cc_espacio_t = -9.0
+		empujon()
+		return
+	_cc_espacio_t = now
+	if now >= _cc_roto_t:
+		cc.bloqueo_t0 = now
+
+
+func _cc_variante(tipo: String, n: int) -> int:
+	# "bolsa": salen todas las variantes en orden al azar antes de repetir ninguna (y nunca la misma dos veces seguidas)
+	if n <= 1:
+		return 0
+	var bolsa: Array = _cc_ultima.get(tipo + "_bolsa", [])
+	if bolsa.is_empty():
+		for i in n:
+			bolsa.append(i)
+		bolsa.shuffle()
+		if int(bolsa[0]) == int(_cc_ultima.get(tipo, -1)):
+			bolsa.push_back(bolsa.pop_front())
+	var v: int = bolsa.pop_front()
+	_cc_ultima[tipo + "_bolsa"] = bolsa
+	_cc_ultima[tipo] = v
+	return v
+
+
+func _cc_empezar(tipo: String, coste: float, espera: float) -> bool:
+	var now := ahora()
+	if now < _cc_listo_t or cc.accion != null or now - last_melee < 0.35:
+		return false
+	if J.stamina < coste * 0.5 and not J.estamina_infinita:
+		J.notify("Estás agotado")
+		return false
+	if not J.estamina_infinita:
+		J.stamina = maxf(0.0, J.stamina - coste)
+	_cc_listo_t = now + espera
+	if recargando > 0.0:
+		recargando = 0.0
+		anim.cancelar_recarga()
+	return true
+
+
+func empujon() -> void:
+	if not cc_puede():
+		return
+	var clase := cc_clase()
+	var lista: Array = CombateCC.EMPUJON[clase]
+	var con_arma := clase in ["larga", "fuego_larga"]
+	var p: Dictionary = CC_EMPUJON_ARMA if con_arma else CC_EMPUJON
+	if not _cc_empezar("empujon", p.estamina, p.espera):
+		return
+	var v := _cc_variante("empujon_" + clase, lista.size())
+	var a: Dictionary = lista[v]
+	var now := ahora()
+	cc.accion = {"tipo": "empujon", "clase": clase, "var": v, "t0": now, "dur": float(a.dur), "avance_prev": 0.0,
+		"extra": _cc_extra(float(p.alcance))}
+	cc_golpes.append([now + float(a.dur) * float(a.golpe), "empujon", p])
+	Efectos.sonido(J, "Swing", J.global_position, 0.6, 0.75 + randf() * 0.15)
+
+
+func patada() -> void:
+	if not cc_puede(true):
+		return
+	if not _cc_empezar("patada", CC_PATADA.estamina, CC_PATADA.espera):
+		return
+	var v := _cc_variante("patada", CombateCC.PATADA.size())
+	var a: Dictionary = CombateCC.PATADA[v]
+	var now := ahora()
+	cc.accion = {"tipo": "patada", "clase": cc_clase(), "var": v, "t0": now, "dur": float(a.dur), "avance_prev": 0.0,
+		"extra": _cc_extra(float(CC_PATADA.alcance))}
+	cc_golpes.append([now + float(a.dur) * float(a.golpe), "patada", a])
+	Efectos.sonido(J, "Swing", J.global_position, 0.7, 0.65 + randf() * 0.15)
+
+
+## SIN ARMA, clic izquierdo: puñetazos encadenados (directo, cruzado, gancho, gancho de abajo; si pasa un rato, vuelve
+## a empezar por el directo)
+func punetazo() -> void:
+	if equipado != "" or not cc_puede():
+		return
+	var now := ahora()
+	if cc.accion != null:
+		if cc.accion.tipo == "puno":
+			_puno_pedido = now
+		return
+	if not _cc_empezar("puno", CC_PUNO.estamina, CC_PUNO.espera):
+		return
+	if now - _puno_t > float(CC_PUNO.seguido):
+		_puno_n = 0
+	var v := _puno_n % CombateCC.PUNOS.size()
+	_puno_n += 1
+	_puno_t = now
+	var a: Dictionary = CombateCC.PUNOS[v]
+	cc.accion = {"tipo": "puno", "clase": "manos", "var": v, "t0": now, "dur": float(a.dur), "avance_prev": 0.0,
+		"extra": _cc_extra(float(CC_PUNO.alcance)) * 0.5}
+	var d := a.duplicate()
+	d["alcance"] = CC_PUNO.alcance
+	cc_golpes.append([now + float(a.dur) * float(a.golpe), "puno", d])
+	last_melee = now
+	Efectos.sonido(J, "Swing", J.global_position, 0.5, 1.1 + randf() * 0.2)
+	Ruido.emitir(J, J.global_position, C.RUIDO.GolpeAire, Ruido.GOLPE, J)
+
+
+## si hay un blanco delante un poco más lejos de lo que llega la animación, el cuerpo avanzará lo que falte
+func _cc_extra(alcance: float) -> float:
+	var b := _cc_blancos(alcance + CC_ACERCA)
+	if b.is_empty():
+		return 0.0
+	return clampf(float(b[0][0]) - alcance + 0.4, 0.0, CC_ACERCA)
+
+
+## la animación de la acción en curso (Animador): avance del cuerpo y fin
+func _cc_paso(dt: float) -> void:
+	var now := ahora()
+	_cc_seguir_miembros(dt)
+	# (sin arma, después de un puñetazo se queda un momento en guardia: los puños no bajan entre golpe y golpe)
+	cc.guardia = (J.aiming or (equipado == "" and now - _puno_t < 1.3)) and cc_clase() in ["manos", "corta", "larga"] and cc_puede()
+	cc.bloqueo = J.aiming and _cc_espacio and cc_puede() and now >= _cc_roto_t and cc.accion == null \
+		and now - last_melee > 0.3 and (J.stamina > 0.5 or J.estamina_infinita)
+	if not cc.bloqueo and not _cc_espacio:
+		cc.bloqueo_t0 = -9.0
+	var ac = cc.accion
+	if ac != null:
+		var u := (now - float(ac.t0)) / float(ac.dur)
+		if u >= 1.0 or not cc_puede(ac.tipo == "patada"):
+			cc.accion = null
+			# puñetazo pedido mientras daba el anterior: sale ya (combinación)
+			if ac.tipo == "puno" and now - _puno_pedido < 0.4:
+				_puno_pedido = -9.0
+				last_melee = -9.0
+				punetazo()
+		else:
+			# el cuerpo avanza lo que diga la animación (medio paso al empujar, la cadera al patear)
+			var a: Dictionary = cc_anim(ac)
+			var c: Dictionary = a.canales
+			if c.has("avance"):
+				# (más avance si el blanco está algo más lejos: el extra se reparte hasta el impacto)
+				var av := CombateCC._abierta(c.avance, u) + float(ac.extra) * Rbx.smooth(u / maxf(0.05, float(a.golpe)))
+				var dv := av - float(ac.avance_prev)
+				ac.avance_prev = av
+				if dv > 0.0:
+					# (se fija la velocidad hacia delante, no se acumula: J.empuje se gasta y se apaga cada fotograma)
+					var lk := Rbx.flat(Rbx.look(J.root_cf())).normalized()
+					J.empuje += lk * (dv / maxf(dt, 1e-3) - J.empuje.dot(lk))
+	# impactos: desde un poco antes del momento del golpe hasta un poco después, en cuanto el pie / la mano toca
+	for g in cc_golpes.duplicate():
+		var ventana := 0.0 if g[1] == "golpe" else 0.16
+		if now >= float(g[0]) - (0.0 if g[1] == "golpe" else 0.05):
+			var sigue: bool = cc.accion != null and cc.accion.tipo == g[1]
+			if not sigue:
+				cc_golpes.erase(g)
+			elif _cc_resolver(g[1], g[2]) or now >= float(g[0]) + ventana:
+				cc_golpes.erase(g)
+
+
+## blancos delante (zombis y muñecos): [distancia, nodo], el más cercano primero; nunca a través de paredes
+func _cc_blancos(alcance: float) -> Array:
+	var root := J.root_cf()
+	var look := Rbx.flat(Rbx.look(root)).normalized()
+	var pecho := root.origin + Vector3(0, 1.0, 0)
+	var res := []
+	for man in J.get_tree().get_nodes_in_group("objetivos"):
+		if not man.vivo():
+			continue
+		var off: Vector3 = man.centro() - root.origin
+		var flat := Rbx.flat(off)
+		if flat.length() < alcance and absf(off.y) < 5.0 and (flat.length() < 1.6 or flat.normalized().dot(look) > CC_CONO):
+			if not J.raycast(pecho, man.centro() - pecho).is_empty():
+				continue
+			res.append([flat.length(), man])
+	res.sort_custom(func(a, b): return a[0] < b[0])
+	return res
+
+
+func _cc_resolver(tipo: String, d: Dictionary) -> bool:
+	if tipo == "golpe":
+		# golpe con arma blanca de los nuevos (CombateCC.GOLPES): el daño, como el de siempre
+		if equipado == d.arma:
+			_resolver_golpe(d.arma)
+		return true
+	return _cc_impacto(tipo, d)
+
+
+## ---- IMPACTO CON FÍSICA (2026-11-08, 3: "que la patada y el empujón tengan física real al impactar")
+## Solo hay impacto si el pie / la mano que golpea LLEGA al cuerpo del otro (a una de sus piezas). Lo que le pasa sale
+## de la cantidad de movimiento: Δv = parte de la masa del jugador que va en el golpe · (velocidad del pie o la mano +
+## lo que el otro venía hacia él) / masa del otro. Con eso se echa hacia atrás y retrocede (empujar: frena solo), y
+## puede perder el equilibrio y caer (más cuanto más fuerte, más abajo le den y si ya iba tambaleándose); al caer, el
+## ragdoll sale con ese mismo impulso desde la pieza golpeada. El jugador nota un poco el retroceso.
+const CC_MASA_JUGADOR := 80.0
+const CC_MASA_BLANCO := 70.0
+# parte de la masa del jugador que va en el golpe (el empujón lleva el peso del cuerpo; la patada, la pierna y la
+# cadera; el puñetazo, el brazo y algo de hombro) y velocidad máxima real de la mano / el pie (studs/s: empujón ~4 m/s,
+# patada ~10 m/s, puñetazo ~9 m/s; la animación es más rápida que eso en el último instante)
+const CC_MASA_GOLPE := {"empujon": 0.55, "empujon_arma": 0.6, "patada": 0.34, "puno": 0.1}
+const CC_VEL_MAX := {"empujon": 14.0, "empujon_arma": 15.0, "patada": 32.0, "puno": 28.0}
+# cuánto tiempo va tambaleándose hacia atrás a esa velocidad antes de recuperar los pies (distancia = Δv · esto)
+const CC_TROPIEZO := {"empujon": 0.3, "empujon_arma": 0.32, "patada": 0.42, "puno": 0.22}
+const CC_FRENADO := 6.0           # lo que frenan solos los zombis y los muñecos al ser empujados (1/s)
+const CC_CAIDA_UMBRAL := 5.0      # studs/s de Δv por debajo de los cuales no se cae nunca
+const CC_CAIDA_RANGO := 15.0      # cuánto más hace falta para la probabilidad máxima
+const CC_CAIDA_MAX := 0.8
+const CC_ALTURA_CAIDA := {"Head": 0.7, "UpperTorso": 0.9, "LowerTorso": 1.0, "LeftUpperLeg": 1.3, "RightUpperLeg": 1.3,
+	"LeftLowerLeg": 1.4, "RightLowerLeg": 1.4}
+const CC_MIEMBROS := ["RightHand", "LeftHand", "RightFoot", "LeftFoot"]
+var _cc_miembro := {}             # pieza -> {pos, vels: [[hora, v]]}
+var _cc_desequilibrio := {}       # id del blanco -> hasta cuándo va tambaleándose (un segundo empujón lo tira antes)
+var cc_ultimo_impacto := {}       # (para las pruebas)
+
+
+func _cc_seguir_miembros(dt: float) -> void:
+	var now := ahora()
+	for n in CC_MIEMBROS:
+		var nd: Node3D = J.rig.P.get(n)
+		if nd == null:
+			continue
+		var p := nd.global_position
+		var m: Dictionary = _cc_miembro.get(n, {"pos": p, "vels": []})
+		var v: Vector3 = (p - (m.pos as Vector3)) / maxf(dt, 1e-3)
+		m.pos = p
+		var vs: Array = m.vels
+		vs.append([now, v])
+		while vs.size() > 0 and now - float(vs[0][0]) > 0.14:
+			vs.pop_front()
+		_cc_miembro[n] = m
+
+
+## velocidad del miembro hacia delante (lo más rápido de lo que lleva recorrido en el último instante)
+func _cc_vel_miembro(n: String, dir: Vector3) -> float:
+	var mx := 0.0
+	for e in (_cc_miembro.get(n, {}).get("vels", []) as Array):
+		mx = maxf(mx, (e[1] as Vector3).dot(dir))
+	return mx
+
+
+func _cc_impacto(tipo: String, d: Dictionary) -> bool:
+	var look := Rbx.flat(Rbx.look(J.root_cf())).normalized()
+	var ac = cc.accion
+	# qué golpea: el pie de la patada; si no, la mano (o el arma) más adelantada
+	var miembros: Array = []
+	if tipo == "patada":
+		miembros = ["LeftFoot" if str(d.get("lado", "R")) == "L" else "RightFoot"]
+	else:
+		miembros = ["RightHand", "LeftHand"]
+	var origen := J.root_cf().origin
+	var mejor := ""
+	var mejor_d := -INF
+	for n in miembros:
+		var nd: Node3D = J.rig.P.get(n)
+		if nd and (nd.global_position - origen).dot(look) > mejor_d:
+			mejor_d = (nd.global_position - origen).dot(look)
+			mejor = n
+	if mejor == "":
+		return false
+	var punto: Vector3 = (J.rig.P[mejor] as Node3D).global_position
+	if modelo_mano and tipo == "empujon" and cc_clase() in ["larga", "fuego_larga"]:
+		punto = modelo_mano.global_position.lerp(punto, 0.5)
+	# ¿llega al cuerpo de alguien? (la pieza más cercana al punto de contacto)
+	var man = null
+	var pieza := ""
+	# contacto de verdad: la distancia del pie / la mano a la caja de cada pieza (radio del pie o del puño + margen)
+	var dist := 0.55 if tipo == "patada" else 0.45
+	for b in _cc_blancos(float(d.get("alcance", CC_PATADA.alcance)) + 1.5):
+		var o = b[1]
+		for pn in o.rig.P:
+			# (los brazos del otro no cuentan: se le da en el cuerpo, las piernas o la cabeza)
+			if pn == "HumanoidRootPart" or "Arm" in pn or "Hand" in pn:
+				continue
+			var nd: Node3D = o.rig.P[pn]
+			var sz: Vector3 = nd.get_meta("size", Vector3.ONE)
+			var lp: Vector3 = nd.global_transform.affine_inverse() * punto
+			var fuera := Vector3(maxf(absf(lp.x) - sz.x * 0.5, 0.0), maxf(absf(lp.y) - sz.y * 0.5, 0.0), maxf(absf(lp.z) - sz.z * 0.5, 0.0))
+			var dd := fuera.length()
+			if dd < dist:
+				dist = dd
+				man = o
+				pieza = pn
+	if man == null:
+		return false
+	# Δv por la cantidad de movimiento
+	var v_golpe := maxf(_cc_vel_miembro(mejor, look), 0.0) + maxf(Rbx.flat(J.vel_real).dot(look), 0.0) * 0.5
+	var v_suya := 0.0
+	var vb = man.get("velocity")
+	if vb == null:
+		vb = man.get("_vel")
+	if vb is Vector3:
+		v_suya = maxf(-(vb as Vector3).dot(look), 0.0)
+	var clave := "empujon_arma" if (tipo == "empujon" and float(d.get("danio", 0.0)) > 0.0) else tipo
+	v_golpe = minf(v_golpe, float(CC_VEL_MAX.get(clave, 20.0)))
+	var dv := clampf(float(CC_MASA_GOLPE.get(clave, 0.3)) * CC_MASA_JUGADOR * (v_golpe + v_suya) / CC_MASA_BLANCO, 0.0, 20.0)
+	var ppos: Vector3 = (man.rig.P[pieza] as Node3D).global_position
+	var fuerte := tipo == "patada"
+	J.shake = minf(1.0, J.shake + (0.25 if fuerte else 0.12))
+	Ruido.emitir(J, ppos, C.RUIDO.GolpeContundente, Ruido.GOLPE, J)
+	Efectos.sonido(J, "Blunt", ppos, 1.0 if fuerte else 0.75, 0.8 + randf() * 0.2)
+	# retroceso para el jugador (empujar a alguien también te echa un poco atrás)
+	J.empuje -= look * minf(dv * CC_MASA_BLANCO / CC_MASA_JUGADOR * 0.12, 2.5)
+	# daño (patadas, puñetazos, empujón con el arma)
+	var danio := float(d.get("danio", 0.0))
+	if danio > 0.0:
+		var killed: bool = man.recibir_danio(danio, pieza, look * dv)
+		_confirmar(killed, false)
+		if killed:
+			cc_ultimo_impacto = {"tipo": tipo, "dv": dv, "pieza": pieza, "cae": false, "muere": true}
+			return true
+	if not man.en_pie():
+		return true
+	# ¿pierde el equilibrio?
+	var id: int = man.get_instance_id()
+	var now := ahora()
+	var tambaleando: bool = now < float(_cc_desequilibrio.get(id, -9.0))
+	var p_caer := clampf((dv - CC_CAIDA_UMBRAL) / CC_CAIDA_RANGO, 0.0, 1.0) * CC_CAIDA_MAX * float(CC_ALTURA_CAIDA.get(pieza, 1.0))
+	if tipo == "patada":
+		p_caer *= float(d.get("derribo", 0.3)) / 0.3
+	if tambaleando:
+		p_caer += 0.3
+	p_caer = clampf(p_caer, 0.0, 0.9)
+	var cae := randf() < p_caer
+	if cae:
+		# cae con el impulso del golpe (el ragdoll sale desde la pieza golpeada)
+		man.derribar((look * dv + Vector3(0, 1.5 + dv * 0.08, 0)) / 0.3, 1.6 + dv * 0.03)
+		_cc_desequilibrio.erase(id)
+	else:
+		# se echa hacia atrás y retrocede tambaleándose (lo que dure depende de lo fuerte que haya sido)
+		var tambaleo := 0.35 + dv * 0.06
+		man.empujar(look * dv * float(CC_TROPIEZO.get(clave, 0.3)) * CC_FRENADO, tambaleo)
+		_cc_desequilibrio[id] = now + tambaleo + 0.6
+	cc_ultimo_impacto = {"tipo": tipo, "dv": dv, "pieza": pieza, "cae": cae, "p": p_caer, "v_golpe": v_golpe, "t": now}
+	return true
+
+
+## lo llama Jugador.recibir_danio: ¿para el golpe? Devuelve la parte del daño que pasa (1 = no bloquea)
+func cc_bloquear(cantidad: float, desde: Vector3) -> float:
+	if not cc.bloqueo or desde == Vector3.ZERO:
+		return 1.0
+	var a_mi := Rbx.flat(desde - J.global_position)
+	if a_mi.length() > 0.01 and a_mi.normalized().dot(Rbx.flat(Rbx.look(J.root_cf())).normalized()) < 0.2:
+		return 1.0 # por detrás o de lado no se para
+	var now := ahora()
+	var atacante = _cc_atacante(desde)
+	if now - float(cc.bloqueo_t0) <= CC_PARADA:
+		# PARADA: a tiempo, no pasa nada y el zombi se queda vendido
+		J.notify("¡Parada!")
+		Efectos.sonido(J, "Blunt", J.global_position + Vector3(0, 1.5, 0), 0.9, 1.25)
+		if atacante != null:
+			atacante.empujar(-a_mi.normalized() * 26.0, 1.4)
+		cc.bloqueo_t0 = -9.0
+		return 0.0
+	var gasto := cantidad * CC_BLOQUEO_GASTO
+	if J.stamina < gasto and not J.estamina_infinita:
+		# sin fuerza para aguantarlo: la guardia se rompe
+		J.stamina = 0.0
+		_cc_roto_t = now + 1.2
+		J.notify("Guardia rota")
+		return 0.75
+	if not J.estamina_infinita:
+		J.stamina -= gasto
+	Efectos.sonido(J, "Blunt", J.global_position + Vector3(0, 1.5, 0), 0.7, 0.9)
+	return CC_BLOQUEO_DANIO
+
+
+func _cc_atacante(desde: Vector3):
+	var mejor = null
+	var md := 1.5
+	for man in J.get_tree().get_nodes_in_group("objetivos"):
+		var dd: float = Rbx.flat((man as Node3D).global_position - desde).length()
+		if dd < md:
+			md = dd
+			mejor = man
+	return mejor
+
+
 ## ---------------------------------------------------------------- cada fotograma
 func actualizar(dt: float) -> void:
 	var now := ahora()
+	_cc_paso(dt)
 	if recogiendo != null:
 		_paso_recoger()
 	# terminar de guardar el arma y sacar la siguiente
@@ -974,7 +1439,8 @@ func actualizar(dt: float) -> void:
 		if not g[2] and now >= g[0] - 0.09:
 			g[2] = true
 			# (en la moto no hay paso adelante)
-			var fuerza := {"Cuchillo": 9.0, "Machete": 8.0, "Bate": 6.0, "Hacha": 7.0, "Palanca": 7.5}.get(g[1], 6.0) as float
+			# (2026-11-08, 2: la mitad, "que el dash no sea tan agresivo")
+			var fuerza := {"Cuchillo": 4.5, "Machete": 4.0, "Bate": 3.0, "Hacha": 3.5, "Palanca": 3.8}.get(g[1], 3.0) as float
 			if J.moto == null:
 				J.empuje += Rbx.look(J.root_cf()) * fuerza
 		if now >= g[0]:

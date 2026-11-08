@@ -253,7 +253,7 @@ func _crear_hud() -> void:
 	capa.add_child(aviso)
 	_hud["aviso"] = aviso
 	var ayuda := Label.new()
-	ayuda.text = "1-4: armas · Clic der: apuntar · Clic izq: disparar/golpear · R: recargar · X: apoyar arma · F: recoger / subir a la moto · Shift: correr · C: agacharse · Z: cuerpo a tierra · Espacio: saltar/sortear · Q/E: asomarse · V: hombro · H: esta ayuda · Rueda: acercar/alejar cámara · Colgado: A/D moverse (Shift: rápido), Espacio subir, S soltarse · Esc: pausa" + (" · F1: trucos · F4: estamina infinita · F5: balas infinitas · F6: ver ruido · F7: zombis sordos · F8: zombis ciegos" if OS.is_debug_build() else "")
+	ayuda.text = "1-4: armas · Clic der: apuntar (arma de fuego) / guardia (arma blanca o sin arma) · Clic izq: disparar/golpear (sin arma: puñetazos) · Clic der + Espacio: bloquear (a tiempo: parada) · Clic der + doble Espacio: empujón · G: patada · R: recargar · X: apoyar arma · F: recoger / subir a la moto · Shift: correr · C: agacharse · Z: cuerpo a tierra · Espacio: saltar/sortear · Q/E: asomarse · V: hombro · H: esta ayuda · Rueda: acercar/alejar cámara · Colgado: A/D moverse (Shift: rápido), Espacio subir, S soltarse · Esc: pausa" + (" · F1: trucos · F4: estamina infinita · F5: balas infinitas · F6: ver ruido · F7: zombis sordos · F8: zombis ciegos" if OS.is_debug_build() else "")
 	# ayuda de controles: oculta (H la muestra/oculta), en un recuadro que no se sale de la pantalla
 	ayuda.add_theme_font_size_override("font_size", 15)
 	ayuda.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -399,8 +399,10 @@ func _unhandled_input(e: InputEvent) -> void:
 					set_stance(1 if stance == 2 else 2)
 				KEY_SPACE:
 					# agachado/tumbado sube un nivel; de pie salta o sortea el obstáculo de delante;
-					# colgado de una cornisa, sube
-					if colgado != null:
+					# colgado de una cornisa, sube. Con el clic derecho mantenido: bloquear (y doble = empujón; Arsenal)
+					if colgado == null and arsenal.cc_quiere_espacio():
+						arsenal.cc_espacio(true)
+					elif colgado != null:
 						trepar_cornisa()
 					elif stance > 0:
 						set_stance(stance - 1)
@@ -423,6 +425,8 @@ func _unhandled_input(e: InputEvent) -> void:
 			if k == KEY_ALT:
 				free_mouse = false
 				Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+			elif k == KEY_SPACE:
+				arsenal.cc_espacio(false)
 
 var _mouse_delta := Vector2.ZERO
 
@@ -503,9 +507,10 @@ func find_vault(lejos := false, en_aire := false):
 	var Cst: float = C.STANCE[0].Center
 	var feet_y := global_position.y - center_cur
 	var base := Vector3(global_position.x, 0, global_position.z)
-	# 1) cara del obstáculo delante (a la altura de la rodilla o de la cintura)
+	# 1) cara del obstáculo delante (a la altura de la rodilla o de la cintura; y más arriba, hasta la cabeza, para un
+	# muro con hueco debajo como el techo de un túnel o un dintel: antes los rayos pasaban por el hueco y no se veía; 2026-11-08)
 	var face := {}
-	for hgt in [0.9, 1.9]:
+	for hgt in [0.9, 1.9, 2.9, 3.9, 4.8]:
 		# corriendo se detecta desde más lejos (el salto empieza antes)
 		# "lejos": para decidir si al pulsar saltar hay que ir hasta la estructura y escalarla
 		var hs_v := Vector3(vel_real.x, 0, vel_real.z).length()
@@ -1159,6 +1164,15 @@ var _reiniciando := false
 func recibir_danio(cantidad: float, desde: Vector3 = Vector3.ZERO) -> void:
 	if health <= 0.0 or cantidad <= 0.0 or invencible:
 		return
+	# bloqueando de frente (Arsenal.cc_bloquear): pasa solo una parte; parado a tiempo, nada
+	var parte := arsenal.cc_bloquear(cantidad, desde) if arsenal != null else 1.0
+	var bloqueado := parte < 1.0
+	if parte <= 0.0:
+		var an0 := get_node_or_null("Animador") as Animador
+		if an0 and not an0.S.is_empty():
+			(an0.S.hitPitch as Rbx.Muelle).impulse(-1.5)
+		return
+	cantidad *= parte
 	health = maxf(0.0, health - cantidad)
 	_danio_t = reloj
 	shake = minf(1.0, shake + 0.45)
@@ -1173,7 +1187,7 @@ func recibir_danio(cantidad: float, desde: Vector3 = Vector3.ZERO) -> void:
 		# ya en el suelo: el golpe sacude el cuerpo
 		ragdoll.golpe("UpperTorso", dir.normalized() * minf(cantidad * 0.3, 8.0) + Vector3(0, 1, 0))
 	elif health > 0.0 and moto == null and ragdoll == null and cantidad >= 15.0 and reloj - _ragdoll_t > DERRIBO_ESPERA \
-			and colgado == null and vaulting == null:
+			and colgado == null and vaulting == null and not bloqueado:
 		# un golpe fuerte puede tirarte al suelo (más fácil si ya estás muy herido)
 		var prob := 0.12 + (0.3 if health < max_health * 0.35 else 0.0) + clampf((cantidad - 25.0) / 40.0, 0.0, 0.5)
 		if randf() < prob:
@@ -1285,6 +1299,11 @@ func update_character(dt: float) -> void:
 		speed = C.PLAYER.SprintSpeed
 	else:
 		speed = (C.PLAYER.AimSpeed if aiming else C.PLAYER.WalkSpeed) * C.STANCE[stance].Speed
+		# bloqueando o en plena patada / empujón: casi sin moverse (combate cuerpo a cuerpo, Arsenal.cc)
+		if arsenal.cc.bloqueo:
+			speed *= 0.55
+		elif arsenal.cc.accion != null:
+			speed *= 0.3
 	if sprinting:
 		# de frente a tope; de lado ~60 %; hacia atrás ~50 %
 		speed *= 0.6 + 0.4 * pow(fwd_k, 1.5) - 0.1 * back_k

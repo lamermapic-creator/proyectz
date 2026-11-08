@@ -13,6 +13,90 @@ en el mismo commit que el cambio. Formato:
 
 ---
 
+## 2026-11-08 (6) · KangooG · Claude — Versión 0.5
+**Qué:** el juego pasa a la versión **V0.5** (KangooG: "pon en todos lados que avanzamos a la V0.5"):
+`application/config/version = "0.5"` en project.godot (fuente única; se ve en el menú principal, la pausa y el título
+de la ventana). Exportación: `../versiones/v0.5/V0.5.exe`, versión de archivo y de producto 0.5.0.0. Incluye el combate
+cuerpo a cuerpo (guardia, bloqueo, parada, empujón, patada, puñetazos y golpes variados) con física al impactar.
+Las menciones antiguas "v0.4" en comentarios son historia y se dejan.
+**Archivos:** `project.godot`, `export_presets.cfg`, `CLAUDE.md`, `CAMBIOS.md`.
+**Cómo probarlo:** F5: el menú dice "V0.5 · prototipo" y la ventana "Proyecto Z · V0.5".
+
+## 2026-11-08 (5) · KangooG · Claude — física real en el empujón, la patada y los puñetazos
+**Qué:**
+- **Solo hay impacto si el pie o la mano llega de verdad al cuerpo** (a la caja de una de sus piezas, sin contar los
+  brazos), en una ventana alrededor del momento del golpe; si el blanco está fuera de alcance, el golpe falla.
+- **Lo que le pasa sale de la cantidad de movimiento:** Δv = parte de la masa del jugador que va en el golpe ×
+  (velocidad real del pie / la mano + lo que el otro venía hacia ti) / masa del otro (80 y 70 kg; el empujón lleva el
+  peso del cuerpo, la patada la pierna y la cadera, el puñetazo el brazo). Un zombi que viene hacia ti se lleva más.
+- **Empujón:** ya no lo manda lejos: retrocede ~2,5 studs (unos 75 cm) tambaleándose, **se echa hacia atrás** (unos
+  20°) y puede **perder el equilibrio y caer** (~20 %; si ya iba tambaleándose por otro empujón, bastante más).
+- **Patada:** retrocede más y cae más fácil cuanto más fuerte y más abajo le das (a las piernas, mucho más). La
+  frontal ahora sube la rodilla y extiende recta a la tripa (antes daba en el muslo).
+- Al caer, el ragdoll sale con ese mismo impulso desde la pieza golpeada. El jugador nota un poco de retroceso.
+**Archivos:** `scripts/jugador/arsenal.gd` (`_cc_impacto`, `_cc_seguir_miembros`, `CC_MASA_*`, `CC_VEL_MAX`,
+`CC_TROPIEZO`, `CC_CAIDA_*`), `scripts/zombis/zombi.gd` y `scripts/nivel/maniqui.gd` (`empujar`: se echan hacia atrás
+con los muelles de impacto), `animaciones/blender/combate/diseno_cc.py` (patadas), `scripts/jugador/combate_cc.gd`,
+`tests/fisica_cc.gd` + `tests/escena_fisica_cc.tscn` (nuevos), `tests/combate.gd`, `tests/ejecutar_pruebas.sh`.
+**Cómo probarlo:** junto a un zombi: clic derecho + doble Espacio varias veces seguidas (al segundo empujón seguido se
+cae más fácil), y patadas (G).
+**Pendiente / avisos:** tocamos `zombi.gd` (Juan) solo en `empujar` (ver el mensaje en `CLAUDE.md`).
+
+## 2026-11-08 (4) · KangooG · Claude — patadas lanzadas, empujón agresivo, golpes variados y puñetazos
+**Qué:**
+- **Patadas rediseñadas en Blender** (4: frontal derecha, frontal izquierda, alta, baja): recoge la rodilla de golpe,
+  la pierna sale entera con la planta por delante, la cadera empuja a través del blanco y el tronco se echa atrás. La
+  patada **empuja de verdad** (empuje 60-78, antes 34-46) y deja al zombi tambaleándose.
+- **Empujón con las manos más agresivo** (3 variantes: a dos manos, con el hombro y de abajo arriba): carga con los
+  codos atrás y sale de golpe con todo el cuerpo; empuja más (46).
+- **Menos "dash":** el cuerpo avanza la mitad al empujar, patear y golpear (avance de las animaciones, `CC_ACERCA`
+  0,7 y la acometida de los golpes de siempre a la mitad).
+- **Variedad de ataques:** cada arma blanca tiene 2 golpes nuevos además del de siempre (cuchillo: tajo de revés y
+  puñalada de arriba; machete, hacha y palanca: tajo horizontal y de arriba abajo; bate: de arriba abajo y de revés),
+  que salen en orden al azar sin repetir hasta haberlos usado todos. **Sin arma, clic izquierdo = puñetazos**
+  encadenados: directo, cruzado, gancho y gancho de abajo (y después de pegar se queda un momento en guardia).
+**Archivos:** `animaciones/blender/combate/diseno_cc.py` (PATADA, EMPUJON, GOLPES, PUNOS), `a_gd_cc.py`, `ver_cc.py`
+(`puno:`), `scripts/jugador/combate_cc.gd` (generado), `scripts/jugador/arsenal.gd` (`melee` con variantes,
+`punetazo`, `cc_anim`, bolsa de variantes), `scripts/jugador/animador.gd`, `tests/combate.gd` (`--cc=golpes`),
+`tests/ejecutar_pruebas.sh`, `README.md`, ayuda H.
+**Cómo probarlo:** junto al muñeco: G varias veces (patadas), clic derecho + doble Espacio (empujones), clic izquierdo
+sin arma (puñetazos) y con cada arma blanca (golpes distintos).
+
+## 2026-11-08 (3) · KangooG · Claude — combate cuerpo a cuerpo: guardia, bloqueo, parada, empujón y patada
+**Qué:**
+- **Guardia:** clic derecho mantenido con arma blanca o sin arma (con arma de fuego sigue siendo apuntar): puños
+  delante de la cara (sin arma), cuchillo adelante con la izquierda guardando, o el arma larga levantada.
+- **Bloqueo:** con el clic derecho, **Espacio mantenido**. Los golpes de frente hacen un 25 % del daño, gastan
+  estamina y no te tiran al suelo; sin estamina la guardia se rompe. Si lo pones **justo antes del golpe** (0,28 s) es
+  una **parada**: no hace daño y el zombi se tambalea. Con arma de fuego también se bloquea (antebrazo de través con la
+  pistola recogida, o el arma larga atravesada).
+- **Empujón:** con el clic derecho, **doble Espacio**. Arma corta o sin arma: con las manos (a dos manos, con el
+  hombro, la palma izquierda, el antebrazo); arma larga: con el arma (atravesada, con el pomo, culatazo). Aparta y
+  desequilibra (con el arma larga, algo de daño).
+- **Patada:** **G**, con cualquier arma, de pie: frontal, alta (al pecho) o baja con la izquierda. Daño (12-18),
+  empuje y a veces lo tira al suelo; gasta 14 de estamina. Si el blanco está algo lejos, el cuerpo avanza para llegar.
+- Varias variantes de cada acción que se alternan al azar (sin repetir la anterior). **Animaciones diseñadas en
+  Blender**: `animaciones/blender/combate/` (`diseno_cc.py` → `a_gd_cc.py` → `scripts/jugador/combate_cc.gd`;
+  `ver_cc.py` las enseña en Blender sobre el superviviente).
+**Archivos:** `scripts/jugador/combate_cc.gd` (nuevo, generado), `scripts/jugador/arsenal.gd` (sección "combate
+cuerpo a cuerpo", tecla G, no disparar ni golpear en plena acción), `scripts/jugador/animador.gd` (`_paso_cc`, brazos,
+arma, cadera, torso y pierna de la patada), `scripts/jugador/jugador.gd` (Espacio con clic derecho, bloqueo en
+`recibir_danio`, más lento bloqueando, ayuda H), `animaciones/blender/combate/*`, `tests/combate.gd` (`--cc=`),
+`tests/ejecutar_pruebas.sh` (5 pruebas nuevas), `README.md`.
+**Cómo probarlo:** junto al muñeco del inicio o a un zombi: clic derecho (guardia), G (patada), doble Espacio
+(empujón); con un zombi atacando, Espacio justo antes del golpe (parada) o mantenido (bloqueo).
+**Pendiente / avisos:** no se toca `zombi.gd`: la parada llama a `empujar()` del zombi más cercano al golpe.
+
+## 2026-11-08 (2) · KangooG · Claude — subirse a muros con hueco debajo (techo de los túneles)
+**Qué:** no se podía escalar el techo de los túneles (ni un dintel o cualquier muro cuya cara empieza a media altura):
+`Jugador.find_vault` buscaba la cara del obstáculo solo a la altura de la rodilla y la cintura y esos rayos pasaban por
+el hueco de debajo; solo se podían escalar las paredes laterales, que llegan al suelo. Ahora también mira más arriba
+(hasta la cabeza). El techo del túnel de 1,4 m (a la altura del pecho) se sube saltando: se agarra y se encarama; el de
+0,8 m, directamente con Espacio.
+**Archivos:** `scripts/jugador/jugador.gd` (`find_vault`), `tests/recorrido.gd` (escenarios `dintel`, `dintel_bajo`),
+`tests/ejecutar_pruebas.sh`.
+**Cómo probarlo:** F1 → túneles; ir de frente a la entrada de un túnel y pulsar Espacio.
+
 ## 2026-11-08 · KangooG · Claude — plugin Godot AI: dock atascado en "Starting server…"
 **Qué:** el plugin lanzaba el servidor bien, pero para comprobar el proceso ejecutaba un PowerShell con dos consultas
 seguidas que en este PC se queda colgado para siempre (comprobado: cada consulta sola tarda ~1,5 s; las dos juntas no

@@ -39,6 +39,9 @@ const ESC := {
 		[2.8, "ku", KEY_W], [2.8, "ku", KEY_SHIFT]]],
 	"trepar": [Vector3(0, 3.2, -17), 0.0, 5.0, [[0.3, "k", KEY_W], [0.3, "k", KEY_SHIFT], [1.0, "k", KEY_SPACE], [1.05, "ku", KEY_SPACE],
 		[3.0, "ku", KEY_W], [3.0, "ku", KEY_SHIFT]]],
+	# muro con hueco debajo (techo del túnel de 1,4 m: la cara empieza a la altura de la cabeza; 2026-11-08)
+	"dintel": [Vector3(12.9, 3.2, 17.0), PI, 5.0, [[0.3, "k", KEY_W], [1.3, "k", KEY_SPACE], [1.35, "ku", KEY_SPACE], [3.5, "ku", KEY_W]]],
+	"dintel_bajo": [Vector3(38.7, 3.2, 17.0), PI, 5.0, [[0.3, "k", KEY_W], [1.3, "k", KEY_SPACE], [1.35, "ku", KEY_SPACE], [3.5, "ku", KEY_W]]],
 	"cornisa": [Vector3(-112.9, 3.2, -76.4), 0.0, 8.0, [[0.4, "k", KEY_SPACE], [0.45, "ku", KEY_SPACE], [1.6, "k", KEY_A], [4.6, "ku", KEY_A],
 		[5.2, "k", KEY_SPACE], [5.25, "ku", KEY_SPACE]]],
 	"escalera": [Vector3(-64.5, 3.2, 4), PI, 8.0, [[0.3, "k", KEY_W], [4.0, "ku", KEY_W], [4.2, "giro", 3.14], [5.2, "giro", 0.0],
@@ -170,6 +173,12 @@ func _process(dt: float) -> void:
 		print("RECORRIDO %s cam_tiron=%.3f cam_dentro=%d pie_resbala=%.2f resbalones=%d ms_jugador=%.2f vmax=%.1f estado=%s vida=%.0f" % [
 			esc, medidas.cam_tiron, medidas.cam_dentro, medidas.pie_resbala, medidas.resbalones,
 			medidas.ms / maxf(1.0, medidas.n), medidas.vmax, j.estado, j.health])
+		if esc.begins_with("dintel"):
+			# tiene que acabar encima del techo del túnel (1,4 m: 5,48 studs; 0,8 m: 3,55)
+			var pies := j.global_position.y - j.center_cur
+			var alto := 5.48 if esc == "dintel" else 3.55
+			print("DINTEL pies_y=%.2f pos=%s" % [pies, str(j.global_position)])
+			print(("OK recorrido_" + esc) if absf(pies - alto) < 0.3 else ("MAL recorrido_%s: no subió (pies a %.2f, techo a %.2f)" % [esc, pies, alto]))
 		if esc == "derribo_llano":
 			print("AUDITORIA %s metido=%d (max pieza %s) tirones=%d max=%.2f %s" % [esc, aud.metido, str(aud.metido_pz), aud.tiron, aud.tiron_max, str(aud.tiron_pz)])
 			var fallos := []

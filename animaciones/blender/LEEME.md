@@ -85,3 +85,13 @@ blender -b -P personaje.py -- --nuevo --glb=../../../modelos/superviviente.glb
   (`_marcha_animada`); parado, los pies quedan anclados y dan pasitos de ajuste.
 - Medir: `tests/visual.gd --registro=x.csv` + `python3 tests/fluidez.py x.csv` (tirón del cuerpo y de los pies) y
   `--contactos` (cuánto se mete cada pieza en el suelo).
+
+## Combate cuerpo a cuerpo (2026-11-08): guardia, bloqueo, empujón y patada
+- `combate/diseno_cc.py`: **el diseño** (sin bpy). Poses fijas `GUARDIA` (manos, corta, larga) y `BLOQUEO` (y para
+  armas de fuego), y acciones por claves `EMPUJON` (por clase, con variantes), `PATADA` (frontal derecha e izquierda, alta, baja),
+  `GOLPES` (golpes nuevos de cuchillo, machete y bate) y `PUNOS` (directo, cruzado, gancho, gancho de abajo). Canales: manos y arma respecto al pecho, giro del tronco, cadera, y la pierna que patea respecto a
+  su cadera (ver la cabecera del archivo).
+- Ver en Blender (sobre el superviviente sin arma, `cuerpo.blend`, ver "Movimiento" arriba):
+  `blender -b cuerpo.blend -P combate/ver_cc.py -- "guardia:manos;bloqueo:manos;empujon:manos:0:0.24,0.44;patada:0:0.28,0.42" "90,0.1,10" renders/cc`
+  (las poses con arma se ven en el juego: `tests/combate.gd --cc=todo --arma=Bate --video` con `--write-movie`).
+- Pasar al juego: `python3 combate/a_gd_cc.py ../../scripts/jugador/combate_cc.gd` (`CombateCC`; lo usa `Animador._paso_cc`).

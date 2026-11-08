@@ -175,6 +175,17 @@ var levantarse = null     # tras un ragdoll: {t0, arriba} (ver Jugador._ragdoll_
 var pie_moto := 0.0      # en la moto, parado: el pie izquierdo baja al suelo (0-1)
 var moto_de_pie := 0.0   # en la moto, en el aire: se levanta sobre los estribos
 var correr_libre := false
+# combate cuerpo a cuerpo (2026-11-08; poses de Blender en CombateCC, reglas en Arsenal.cc): ver _paso_cc
+var cc_guard_w := 0.0       # guardia (0-1, suave)
+var cc_block_w := 0.0       # bloqueo (0-1, suave)
+var cc_pose := {}           # canales de este fotograma (brazos y arma: absolutos; cuerpo: se suman)
+var cc_w := 0.0             # cuánto mandan los brazos / el arma de CombateCC (0 = la pose de siempre)
+var cc_kick = null          # patada: {lado, w} (la pierna en cc_pose: pie_*, ro_*)
+var cc_rapido := false      # en plena acción: brazos sin retraso
+var cc_clase := ""
+var cc_handle_cf = null     # el Handle del arma este fotograma (para la mano izquierda en el arma larga)
+const CC_AGARRE := {"Machete": Vector3(0, 0.06, -0.95), "Palanca": Vector3(0, 0, -1.05), "Bate": Vector3(0, 0, -1.2),
+	"Hacha": Vector3(0, 0, -1.2), "Cuchillo": Vector3(0, 0, -0.3)}
 
 
 ## Una extremidad para la IK analítica (Motor6D)
@@ -1709,6 +1720,98 @@ func _arma_de_fuego_fuera(h: Transform3D, pts: Array, pelvis_cf: Transform3D, ch
 	return h
 
 
+## ---------------------------------------------------------------- combate cuerpo a cuerpo (CombateCC)
+## Mezcla la guardia, el bloqueo y la acción en curso (empujón / patada) en cc_pose. Los canales de brazos y arma son
+## posiciones (se mezclan con la pose de siempre por cc_w); los del cuerpo (cin_*, cue_*, cad_*, pel_*) se suman.
+const CC_CUERPO := ["cin_y", "cin_p", "cin_r", "cue_y", "cue_p", "cue_r", "cad_x", "cad_y", "cad_z", "pel_p", "pel_y", "pel_r"]
+
+static func _cc_env(u: float) -> float:
+	return Rbx.smooth(u / 0.16) * (1.0 - Rbx.smooth((u - 0.78) / 0.22))
+
+
+func _paso_cc(now: float, dt: float) -> void:
+	var ar = jugador.arsenal
+	var cc: Dictionary = ar.cc
+	cc_clase = ar.cc_clase()
+	var fuego := cc_clase.begins_with("fuego")
+	cc_guard_w = Rbx.damp(cc_guard_w, 1.0 if (cc.guardia and not fuego) else 0.0, 10.0, dt)
+	cc_block_w = Rbx.damp(cc_block_w, 1.0 if cc.bloqueo else 0.0, 18.0, dt)
+	var base := {}
+	var base_w := 0.0
+	var G: Dictionary = CombateCC.GUARDIA.get(cc_clase, {})
+	var B: Dictionary = CombateCC.BLOQUEO.get(cc_clase, {})
+	if fuego:
+		base = B
+		base_w = cc_block_w
+	elif not G.is_empty():
+		base = G.duplicate()
+		for k in B:
+			base[k] = lerpf(float(G.get(k, B[k])), float(B[k]), cc_block_w)
+		base_w = maxf(cc_guard_w, cc_block_w)
+	# respiración en guardia: los puños suben y bajan un poco
+	var resp := sin(now * 2.4) * 0.025 * cc_guard_w * (1.0 - cc_block_w)
+	cc_pose = {}
+	for k in base:
+		var v: float = base[k]
+		if k in CC_CUERPO:
+			v *= base_w
+		elif k == "mr_y" or k == "ml_y" or k == "a_py":
+			v += resp
+		cc_pose[k] = v
+	cc_w = base_w
+	cc_kick = null
+	cc_rapido = false
+	var ac = cc.accion
+	if ac == null:
+		return
+	var u := clampf((now - float(ac.t0)) / float(ac.dur), 0.0, 1.0)
+	var a: Dictionary = ar.cc_anim(ac)
+	var P := CombateCC.pose(a, u)
+	var e := _cc_env(u)
+	cc_rapido = true
+	var brazos_accion := false
+	for k in P:
+		if k == "avance" or k.begins_with("pie_") or k.begins_with("ro_"):
+			continue
+		var es_brazo: bool = k.begins_with("m") or k.begins_with("p") and not k.begins_with("pel") or k.begins_with("a_")
+		if es_brazo and ac.tipo == "patada" and cc_clase != "manos":
+			continue # con arma, la patada no mueve los brazos
+		var v: float = P[k]
+		if k in CC_CUERPO:
+			cc_pose[k] = lerpf(float(cc_pose.get(k, 0.0)), v, e)
+		else:
+			brazos_accion = true
+			cc_pose[k] = lerpf(float(cc_pose.get(k, v)), v, e) if base_w > 0.01 else v
+	if brazos_accion:
+		cc_w = lerpf(base_w, 1.0, e)
+	if ac.tipo == "patada":
+		for k in ["pie_x", "pie_y", "pie_z", "pie_inc", "ro_x", "ro_y", "ro_z"]:
+			cc_pose[k] = P[k]
+		cc_kick = {"lado": str(a.lado), "w": clampf(float(P.pie_w), 0.0, 1.0)}
+
+
+## mano de CombateCC (marco del pecho) -> objetivo de la IK
+func _cc_mano(k: String, kp: String, marco: Transform3D, w: float) -> Dictionary:
+	var c := cc_pose
+	var ik := {"pos": marco * Vector3(c[k + "x"], c[k + "y"], c[k + "z"]),
+		"pole": marco * Vector3(c.get(kp + "x", 0.0), c.get(kp + "y", -1.0), c.get(kp + "z", 0.0)), "w": w}
+	if float(c.get(k + "rw", 0.0)) > 0.05 and c.has(k + "dx"):
+		var d := marco.basis * Vector3(c[k + "dx"], c[k + "dy"], c[k + "dz"])
+		var bo := marco.basis * Vector3(c[k + "bx"], c[k + "by"], c[k + "bz"])
+		var y := -d.normalized()
+		var z := -bo.normalized()
+		z = (z - y * z.dot(y)).normalized()
+		ik.rot = Basis(y.cross(z), y, z)
+		ik.rot_w = float(c[k + "rw"])
+	return ik
+
+
+## el Handle del arma según CombateCC (marco del pecho)
+func _cc_handle() -> Transform3D:
+	var c := cc_pose
+	return Transform3D(Basis.looking_at(Vector3(c.a_fx, c.a_fy, c.a_fz).normalized(), Vector3(c.a_ux, c.a_uy, c.a_uz)), Vector3(c.a_px, c.a_py, c.a_pz))
+
+
 ## ---------------------------------------------------------------- eventos de armas (Anim.Fire)
 func on_shot(w: String) -> void:
 	match w:
@@ -2017,6 +2120,7 @@ func update_rig(dt: float) -> void:
 		mel_twist = Rbx.sample(mel_keys.twist, mel_t)
 		mel_lean = Rbx.sample(mel_keys.lean, mel_t)
 		mel_lunge = Rbx.sample(mel_keys.lunge, mel_t)
+	_paso_cc(now, dt)
 	if L.jumpPrep != null and grounded:
 		var k: float = (now - L.jumpPrep) / 0.11
 		if k >= 0 and k < 1.5:
@@ -2316,7 +2420,8 @@ func update_rig(dt: float) -> void:
 		var leanP: float = S.leanP.step(dt)
 		var leanR: float = S.leanR.step(dt)
 		# postura: tensión al apuntar, agotamiento, levantarse
-		var ct := 0.22 if aiming else 0.0
+		# (en guardia / bloqueando, la altura la pone la pose de Blender, CombateCC)
+		var ct := 0.22 * (1.0 - maxf(cc_guard_w, cc_block_w)) if aiming else 0.0
 		if exhausted:
 			ct = 0.45
 			waistP -= 0.6
@@ -2528,7 +2633,11 @@ func update_rig(dt: float) -> void:
 		waistR -= ln * 0.4
 		neckR += ln * 0.24
 		# acometida del golpe: la cadera avanza, baja un poco y gira con los hombros
-		Mr.transform = Rbx.cf(-ln * 0.14 + cic_x, -pelvis_drop + bob - crouch - absf(ln) * 0.06 - mel_lunge * 0.22, -mel_lunge * 0.35 + cic_z) * Rbx.ang(pelvis_pitch + cic_p, pelvis_yaw + mel_twist * 0.35 + cic_y, pelvis_roll + leanR * 0.3 + cic_r)
+		# combate cuerpo a cuerpo (CombateCC): la cadera baja en guardia, avanza al empujar y patear
+		var ccp := cc_pose
+		Mr.transform = Rbx.cf(-ln * 0.14 + cic_x + float(ccp.get("cad_x", 0.0)), -pelvis_drop + bob - crouch - absf(ln) * 0.06 - mel_lunge * 0.22 + float(ccp.get("cad_y", 0.0)),
+			-mel_lunge * 0.35 + cic_z + float(ccp.get("cad_z", 0.0))) \
+			* Rbx.ang(pelvis_pitch + cic_p + float(ccp.get("pel_p", 0.0)), pelvis_yaw + mel_twist * 0.35 + cic_y + float(ccp.get("pel_y", 0.0)), pelvis_roll + leanR * 0.3 + cic_r + float(ccp.get("pel_r", 0.0)))
 		smooth_j(Mr, "Root", 16, dt)
 		pelvis_cf = fk(root_cf, Mr)
 		# con la pelvis ya colocada (con su inercia), el pie apoyado rueda lo justo para que la
@@ -2652,6 +2761,20 @@ func update_rig(dt: float) -> void:
 	waistY += hitY * 0.18
 	neckP += hitH * 0.14
 
+	# PATADA (CombateCC): la pierna que patea va donde diga la animación (respecto a su cadera); la otra, en el suelo
+	var kick_s := ""
+	var kick_w := 0.0
+	if cc_kick != null and grounded and va == null and pb < 0.01 and mt == null:
+		kick_s = cc_kick.lado
+		kick_w = cc_kick.w
+		var Lk: Limb = leg[kick_s]
+		var hip_k := (pelvis_cf * Lk.top.c0).origin
+		var obj_k := hip_k + yaw_cf.basis * Vector3(cc_pose.pie_x, cc_pose.pie_y, cc_pose.pie_z)
+		var base_k: Vector3 = leg_targets.get(kick_s, obj_k)
+		leg_targets[kick_s] = base_k.lerp(obj_k, kick_w)
+		var pole_k := hip_k + yaw_cf.basis * Vector3(cc_pose.ro_x, cc_pose.ro_y, cc_pose.ro_z)
+		var pk := "poleL" if kick_s == "L" else "poleR"
+		leg_targets[pk] = (leg_targets[pk] as Vector3).lerp(pole_k, kick_w)
 	# piernas por IK
 	for s in ["L", "R"]:
 		var Lg: Limb = leg[s]
@@ -2661,7 +2784,7 @@ func update_rig(dt: float) -> void:
 			var f: Dictionary = feet[s]
 			# la pierna que da el paso nunca va estirada en el aire (sobre todo al correr, girar o ir
 			# de lado): la rodilla se dobla y solo se estira al final para apoyar el talón
-			if grounded and va == null and pb < 0.01 and f.swing != null and f.get("u") != null:
+			if grounded and va == null and pb < 0.01 and f.swing != null and f.get("u") != null and s != kick_s:
 				var hip_w := (pelvis_cf * Lg.top.c0).origin
 				var lim := leg_len * lerpf(0.86, 0.99, Rbx.smooth((f.u - 0.6) / 0.4))
 				var off := target - hip_w
@@ -2670,7 +2793,7 @@ func update_rig(dt: float) -> void:
 			var res := solve(Lg, pelvis_cf, target, pole)
 			# la pierna en el aire no atraviesa muros ni mesas: si la rodilla, la espinilla o la
 			# punta del pie chocan con una superficie vertical, el pie se retrasa hasta quedar fuera
-			if grounded and va == null and pb < 0.01 and f.swing != null:
+			if grounded and va == null and pb < 0.01 and f.swing != null and s != kick_s:
 				for _it in 2:
 					var hip_c := (pelvis_cf * Lg.top.c0).origin
 					var knee := ((res[0] as Transform3D) * Lg.mid.c0).origin
@@ -2692,6 +2815,10 @@ func update_rig(dt: float) -> void:
 				set_end(Lg, lower, Transform3D((mt.cuerpo as Transform3D).basis, target) * Rbx.ang(0.15, 0, 0))
 			elif not grounded:
 				set_end(Lg, lower, Rbx.cfp(target) * yaw_cf * Rbx.ang(-0.3, 0, 0))
+			elif s == kick_s and kick_w > 0.001:
+				# el pie que patea: la planta por delante (pie_inc), mezclado con el pie apoyado
+				var pie_k := Rbx.cfp(target) * yaw_cf * Rbx.ang(float(cc_pose.pie_inc) * kick_w, 0, 0) * Rbx.cfp(-ankle_in_foot[s])
+				set_end(Lg, lower, foot_cf(f, yaw).interpolate_with(pie_k, kick_w))
 			else:
 				set_end(Lg, lower, foot_cf(f, yaw))
 			# justo después de levantarse: mezclar desde la pose de tumbado (sin saltos);
@@ -2703,6 +2830,14 @@ func update_rig(dt: float) -> void:
 				else:
 					anota_j(pair[0], s + pair[1], dt)
 
+	# combate cuerpo a cuerpo (CombateCC): giro e inclinación del tronco y la cabeza (antes del pecho: las manos y el
+	# arma se colocan respecto al pecho ya girado, como en Blender)
+	waistY += float(cc_pose.get("cin_y", 0.0))
+	waistP += float(cc_pose.get("cin_p", 0.0))
+	waistR += float(cc_pose.get("cin_r", 0.0))
+	neckY += float(cc_pose.get("cue_y", 0.0))
+	neckP += float(cc_pose.get("cue_p", 0.0))
+	neckR += float(cc_pose.get("cue_r", 0.0))
 	## ------------------------------------------------ torso provisional (para calcular el pecho)
 	var Mw: RigPersonaje.Motor = M.Waist
 	Mw.transform = Rbx.ang(0, waistY, 0) * Rbx.ang(waistP + breath, 0, waistR)
@@ -3001,6 +3136,11 @@ func update_rig(dt: float) -> void:
 				speed_pose = 8.0
 			else:
 				target_rel = Armas.pose(tool, "READY")
+		# guardia, bloqueo, empujón (CombateCC): el arma donde diga la pose de Blender (salvo mientras golpea)
+		var cc_arma := cc_w > 0.001 and cc_pose.has("a_px") and mel_t < 0.0 and not reloading
+		if cc_arma:
+			target_rel = target_rel.interpolate_with(Rbx.ang(0, -rel_aim, 0) * _cc_handle(), cc_w)
+			speed_pose = maxf(speed_pose, 60.0 if cc_rapido else 16.0)
 		if pose_rel == null:
 			pose_rel = target_rel
 		pose_rel = Rbx.damp_cf(pose_rel, target_rel, speed_pose, dt)
@@ -3165,6 +3305,9 @@ func update_rig(dt: float) -> void:
 		var pole_r := (aim_base * Rbx.cf(1.7, -0.7, -0.3)).origin if pb > 0.5 else (aim_base * Rbx.cf(1.9, -1.4, 0.9)).origin
 		if pie_k > 0.001 and pb <= 0.5:
 			pole_r = pole_r.lerp(aim_base * pie_polo_r, pie_k)
+		if cc_arma and cc_pose.has("pr_x"):
+			pole_r = pole_r.lerp(chest_yaw_base * Vector3(cc_pose.pr_x, cc_pose.pr_y, cc_pose.pr_z), cc_w)
+		cc_handle_cf = handle_cf
 		if not correr_libre:
 			hand_ik.R = {"cf": hand_cf, "pole": pole_moto if pole_moto != null else pole_r, "w": 1.0}
 		waistP += kick_rot * 0.012
@@ -3206,6 +3349,30 @@ func update_rig(dt: float) -> void:
 			if not one_handed:
 				hand_ik.L = {"pos": handle_cf * support_pos, "pole": pole_l, "w": support_w}
 				left_free = false
+		# combate cuerpo a cuerpo (CombateCC): la mano izquierda. Con arma corta (cuchillo, pistola) va donde diga la pose
+		# (guardando la cara, empujando con la palma o con el antebrazo); con arma larga, al bloquear y al empujar agarra
+		# el arma más arriba (CC_AGARRE), y en guardia, si es de una mano, guarda la cara
+		if cc_arma and h_arma == "R":
+			var empuja: bool = jugador.arsenal.cc.accion != null and jugador.arsenal.cc.accion.tipo == "empujon"
+			var en_arma := cc_clase in ["larga", "fuego_larga"] and (cc_block_w > 0.5 or empuja or Armas.dos_manos(tool) or kind == "Gun")
+			if en_arma:
+				var pl := chest_yaw_base * Vector3(cc_pose.get("pl_x", -1.5), cc_pose.get("pl_y", -1.0), cc_pose.get("pl_z", 0.2))
+				var agarre: Vector3 = CC_AGARRE.get(tool, support_pos) if (cc_block_w > 0.5 or empuja) else support_pos
+				if kind == "Gun":
+					agarre = support_pos
+				hand_ik.L = {"pos": handle_cf * agarre, "pole": pl, "w": 1.0}
+				left_free = false
+			elif cc_pose.has("ml_x"):
+				var ikl := _cc_mano("ml_", "pl_", chest_yaw_base, cc_w)
+				if hand_ik.has("L") and cc_w < 0.999:
+					# mezcla desde donde estaba (agarrando el arma)
+					var prev: Dictionary = hand_ik.L
+					var desde: Vector3 = (prev.cf as Transform3D).origin if prev.has("cf") else prev.pos
+					ikl.pos = desde.lerp(ikl.pos, cc_w)
+					ikl.pole = (prev.pole as Vector3).lerp(ikl.pole, cc_w)
+					ikl.w = 1.0
+				hand_ik.L = ikl
+				left_free = false
 		# de pie con un arma de fuego: el pecho, la cintura y la cabeza según la postura de Blender (PosturasPie);
 		# en el resto de casos (tumbado, en la moto, armas blancas), como antes
 		var k_pie := pie_k if kind == "Gun" else 0.0
@@ -3229,6 +3396,12 @@ func update_rig(dt: float) -> void:
 		waistY -= blade
 		neckY += blade * 0.9
 	waistP += melee_lean
+	# SIN ARMA en guardia / bloqueando / empujando / pateando: los dos brazos con las poses de Blender (CombateCC)
+	if tool == "" and cc_w > 0.001 and cc_pose.has("mr_x") and va == null and pb < 0.5 and mt == null:
+		hand_ik.R = _cc_mano("mr_", "pr_", chest_yaw_base, cc_w)
+		hand_ik.L = _cc_mano("ml_", "pl_", chest_yaw_base, cc_w)
+		right_free = false
+		left_free = false
 	J.arsenal.mostrar(tool_shown)
 
 	## ------------------------------------------------ en la moto: manos en los puños del manillar
@@ -3512,7 +3685,7 @@ func update_rig(dt: float) -> void:
 		var dn: Quaternion = (moto_pose[1] as Quaternion) * (PosesMoto.BASE[1] as Quaternion).inverse()
 		Mw.transform.basis = Basis(Quaternion.IDENTITY.slerp(dw.normalized(), moto_apunta_k)) * Mw.transform.basis
 		Mn.transform.basis = Basis(Quaternion.IDENTITY.slerp(dn.normalized(), moto_apunta_k)) * Mn.transform.basis
-	smooth_j(Mw, "Waist", 6.0 if pb > 0.01 else (30.0 if mel_t >= 0.0 else 10.0), dt)
+	smooth_j(Mw, "Waist", 6.0 if pb > 0.01 else (30.0 if (mel_t >= 0.0 or cc_rapido) else 10.0), dt)
 	smooth_j(Mn, "Neck", 7, dt)
 	chest_cf = fk(pelvis_cf, Mw)
 	for s in ["L", "R"]:
@@ -3526,7 +3699,7 @@ func update_rig(dt: float) -> void:
 			Lm.fin.transform = Rbx.ang(wp, 0, 0)
 		if hand_ik.has(s):
 			var ik: Dictionary = hand_ik[s]
-			w_side[s] = Rbx.damp(w_side[s], ik.w, 16 if (va != null or hg != null or rec != null) else 7, dt)
+			w_side[s] = Rbx.damp(w_side[s], ik.w, 16 if (va != null or hg != null or rec != null or cc_rapido or cc_w > 0.05) else 7, dt)
 			var wgt: float = w_side[s]
 			if ik.has("cf"):
 				# mano y muñeca exactas (sujeta el arma)
@@ -3563,11 +3736,13 @@ func update_rig(dt: float) -> void:
 			arm_rate = 14.0 if s == "R" else 12.0
 			# golpeando: los brazos siguen al arma sin retraso (si no, el arma se queda atrás y
 			# atraviesa el cuerpo)
-			if mel_t >= 0.0:
+			if mel_t >= 0.0 or cc_rapido:
 				arm_rate = 60.0
 			elif draw_st != null or L.holster != null:
 				# (la derecha lleva el arma: con retraso, el arma larga atajaba por dentro del pecho)
 				arm_rate = 60.0 if s == "R" else 30.0
+		if tool == "" and hand_ik.has(s) and cc_w > 0.05:
+			arm_rate = 60.0 if cc_rapido else 18.0
 		smooth_j(Lm.top, s + "Sh", arm_rate, dt)
 		smooth_j(Lm.mid, s + "El", arm_rate, dt)
 		smooth_j(Lm.fin, s + "Wr", arm_rate if tool != "" else 9.0, dt)

@@ -1,0 +1,15 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/nivel/nivel_pruebas.gd" id="1_niv"]
+[ext_resource type="PackedScene" path="res://escenas/jugador.tscn" id="2_jug"]
+[ext_resource type="Script" path="res://tests/fisica_cc.gd" id="3_t"]
+
+[node name="PruebasMovimiento" type="Node3D"]
+script = ExtResource("1_niv")
+metadata/sin_zombis = true
+
+[node name="Jugador" parent="." instance=ExtResource("2_jug")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3.2, 0)
+
+[node name="Prueba" type="Node" parent="."]
+script = ExtResource("3_t")

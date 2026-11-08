@@ -2,6 +2,12 @@ extends Node
 ## Prueba de combate: equipar, disparar a un muñeco, recargar, golpear con armas blancas.
 ## --modo=<pistola|rifle|cuchillo|bate|machete|cambiar|apoyar> ; con --video la cámara sigue al jugador.
 ## --arma=<Nombre> (cualquier arma de Armas.WEAPONS, p. ej. Escopeta): se la da y la prueba igual.
+## --cc=<todo|guardia|bloqueo|empujon|patada> (2026-11-08): combate cuerpo a cuerpo junto al muñeco, sin arma o con
+## --arma=<Nombre>: guardia, patada, empujón (doble Espacio), parada y bloqueo (golpes de mentira al jugador).
+## Imprime "CC ..." y al final "OK cc_<arma>" o "MAL cc_<arma>: ...".
+var cc_acc := ""
+var cc_vida0 := 0.0
+var cc_res := {}
 var j: Jugador
 var t := 0.0
 var modo := "pistola"
@@ -19,6 +25,13 @@ func _ready() -> void:
 			arma_x = a.split("=")[1]
 			var w: Dictionary = Armas.WEAPONS[arma_x]
 			modo = ("rifle" if w.Auto else "pistola") if w.Kind == "Gun" else "cuchillo"
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--cc="):
+			cc_acc = a.split("=")[1]
+			modo = "cc"
+			seed(7) # variantes siempre en el mismo orden (para comparar vídeos)
+		if a.begins_with("--cc_semilla="):
+			seed(int(a.split("=")[1]))
 	j = get_parent().get_node("Jugador")
 	if OS.get_cmdline_user_args().has("--video") and not OS.get_cmdline_user_args().has("--camjuego"):
 		cam = Camera3D.new()
@@ -28,7 +41,7 @@ func _ready() -> void:
 
 func _inicio() -> void:
 	man = get_parent().get_node("Maniquies/Maniqui_0")
-	var cerca := modo in ["cuchillo", "bate", "machete"]
+	var cerca := modo in ["cuchillo", "bate", "machete", "cc"]
 	# frente a la barrera de tiro mirando a los muñecos (+X), o pegado al muñeco para golpear
 	var x := 25.0 * M - 1.5 if not cerca else 32.0 * M - 4.0
 	if modo == "apoyar":
@@ -50,7 +63,7 @@ func _log(txt: String) -> void:
 func _process(dt: float) -> void:
 	t += dt
 	var a := j.arsenal
-	var slot: int = {"pistola": 0, "rifle": 1, "cuchillo": 2, "bate": 3, "machete": 3, "cambiar": 0, "apoyar": 1}[modo]
+	var slot: int = {"pistola": 0, "rifle": 1, "cuchillo": 2, "bate": 3, "machete": 3, "cambiar": 0, "apoyar": 1, "cc": -1}[modo]
 	if arma_x != "":
 		if _una("dar", t > 0.2):
 			a.dar_arma(arma_x, false)
@@ -64,9 +77,11 @@ func _process(dt: float) -> void:
 		a._recoger()
 		_inicio()
 		_log("recogido")
-	if _una("equipar", t > 0.5):
+	if _una("equipar", t > 0.5) and slot >= 0:
 		a.select_slot(slot)
 		_log("equipar")
+	if modo == "cc":
+		_paso_cc(a, dt)
 	if modo in ["pistola", "rifle", "apoyar"]:
 		# (la barrera mide 1 m: agachado, que es la altura buena para apoyar el arma)
 		if modo == "apoyar" and _una("agachar", t > 1.0) and not OS.get_cmdline_user_args().has("--de_pie"):
@@ -197,7 +212,7 @@ func _process(dt: float) -> void:
 		var r := Basis(Vector3.UP, j.yaw) * Vector3(1, 0, -0.6).normalized()
 		var foco := p + Vector3(0, 1, 0)
 		var dist := 11.0
-		if modo in ["cuchillo", "bate", "machete"]:
+		if modo in ["cuchillo", "bate", "machete", "cc"]:
 			# de lado, viendo al jugador y al muñeco
 			foco = (p + man.global_position + Vector3(0, 2.3, 0)) * 0.5
 			r = Basis(Vector3.UP, j.yaw) * (Vector3(1, 0, -1.3).normalized() if OS.get_cmdline_user_args().has("--cam34") else Vector3(1, 0, 0))
@@ -217,6 +232,110 @@ func _process(dt: float) -> void:
 				alt = float(arg.split("=")[1])
 		cam.global_position = foco + r * dist + Vector3(0, alt, 0)
 		cam.look_at(foco, Vector3.UP)
-	if t > 7.5:
+	if t > (9.5 if modo == "cc" else 7.5):
 		_log("fin")
+		if modo == "cc":
+			_fin_cc()
 		get_tree().quit()
+
+
+## combate cuerpo a cuerpo: guardia (1-1,5 s), patada (1,6), empujón (3,0), parada (4,4), bloqueo (5,2), sin bloquear
+## (6,4) y otra patada y otro empujón (otras variantes)
+func _paso_cc(a: Arsenal, dt: float) -> void:
+	var an: Animador = j.get_node("Animador")
+	j.estamina_infinita = true
+	var quiere := cc_acc
+	if t > 1.0 and t < 9.0 and quiere != "golpes":
+		j.aiming = true
+	if _una("guardia", t > 1.45) and quiere != "golpes":
+		cc_res.guardia = a.cc.guardia or a.cc_clase().begins_with("fuego")
+		print("CC t=%.2f guardia=%s clase=%s cc_w=%.2f" % [t, str(a.cc.guardia), a.cc_clase(), an.cc_w])
+	if quiere in ["todo", "patada"] and _una("patada", t > 1.6):
+		cc_vida0 = man.health
+		a.patada()
+		print("CC t=%.2f patada var=%s" % [t, str(a.cc.accion["var"]) if a.cc.accion else "-"])
+	if quiere in ["todo", "patada"] and _una("tras_patada", t > 2.6):
+		cc_res.patada = man.health < cc_vida0 or man._estado != "pie"
+		print("CC t=%.2f tras la patada vida_muneco=%.0f (antes %.0f) estado=%s" % [t, man.health, cc_vida0, man._estado])
+	if quiere in ["todo", "empujon"] and _una("emp1", t > 3.0):
+		a.cc_espacio(true)
+		a.cc_espacio(false)
+	if quiere in ["todo", "empujon"] and _una("emp2", t > 3.1):
+		a.cc_espacio(true)
+		a.cc_espacio(false)
+		cc_res.empujon = a.cc.accion != null and a.cc.accion.tipo == "empujon"
+		print("CC t=%.2f empujon=%s var=%s" % [t, str(cc_res.empujon), str(a.cc.accion["var"]) if a.cc.accion else "-"])
+	var desde := man.global_position
+	if quiere in ["todo", "bloqueo"]:
+		if _una("bloq_on", t > 4.3):
+			a.cc_espacio(true)
+		if _una("parada", t > 4.45):
+			var v0 := j.health
+			j.recibir_danio(20.0, desde)
+			cc_res.parada = j.health == v0
+			print("CC t=%.2f parada: vida %.0f -> %.0f bloqueo=%s" % [t, v0, j.health, str(a.cc.bloqueo)])
+		if _una("bloqueo", t > 5.2):
+			var v1 := j.health
+			j.recibir_danio(20.0, desde)
+			cc_res.bloqueo = j.health < v1 and j.health > v1 - 10.0
+			print("CC t=%.2f bloqueo: vida %.0f -> %.0f" % [t, v1, j.health])
+		if _una("bloq_off", t > 5.8):
+			a.cc_espacio(false)
+		if _una("sin_bloquear", t > 6.4):
+			var v2 := j.health
+			j.invencible = false
+			j.recibir_danio(4.0, desde)
+			cc_res.sin_bloquear = absf((v2 - j.health) - 4.0) < 0.01
+			print("CC t=%.2f sin bloquear: vida %.0f -> %.0f" % [t, v2, j.health])
+	if quiere == "todo":
+		if _una("patada2", t > 7.0):
+			a.patada()
+			print("CC t=%.2f patada 2 var=%s" % [t, str(a.cc.accion["var"]) if a.cc.accion else "-"])
+		if _una("emp3", t > 8.2):
+			a.cc_espacio(true)
+			a.cc_espacio(false)
+			a.cc_espacio(true)
+			a.cc_espacio(false)
+			print("CC t=%.2f empujon 2 var=%s" % [t, str(a.cc.accion["var"]) if a.cc.accion else "-"])
+	if quiere == "golpes":
+		# clic izquierdo cada 0,9 s (sin arma: puñetazos; con arma blanca: sus golpes, el de siempre y los nuevos)
+		if t < 9.3:
+			cc_res["vida_min"] = minf(float(cc_res.get("vida_min", 100.0)), man.health)
+		var cada := 0.55 if a.equipado == "" else 1.15
+		if t > 1.6 and t < 9.0 and fmod(t, cada) < dt:
+			if a.equipado == "":
+				a.punetazo()
+			else:
+				a.melee()
+			var ac = a.cc.accion
+			var tipo: String = (str(ac.tipo) + str(ac["var"])) if ac != null else ("clasico" if an.melee_st != null else "-")
+			cc_res["vistos"] = cc_res.get("vistos", {})
+			print("CC t=%.2f golpe %s vida_muneco=%.0f" % [t, tipo, man.health])
+			if tipo != "-":
+				(cc_res.vistos as Dictionary)[tipo] = true
+		if _una("fin_golpes", t > 9.3):
+			var n_vistos: int = (cc_res.get("vistos", {}) as Dictionary).size()
+			var vmin: float = cc_res.get("vida_min", 100.0)
+			cc_res.erase("vistos")
+			cc_res.erase("vida_min")
+			cc_res.variedad = n_vistos >= 3
+			cc_res.danio = vmin < 100.0
+			print("CC golpes distintos=%d vida_muneco=%.0f" % [n_vistos, man.health])
+	# impactos con física (Arsenal._cc_impacto): uno por línea
+	var imp: Dictionary = a.cc_ultimo_impacto
+	if not imp.is_empty() and float(imp.get("t", -1.0)) != float(cc_res.get("_imp_t", -2.0)):
+		cc_res["_imp_t"] = float(imp.get("t", -1.0))
+		print("CC impacto %s dv=%.1f v_golpe=%.1f pieza=%s cae=%s p=%.2f pos_muneco=%s" % [imp.tipo, float(imp.dv), float(imp.get("v_golpe", 0.0)),
+			imp.pieza, str(imp.cae), float(imp.get("p", 0.0)), str(man.global_position)])
+	if OS.get_cmdline_user_args().has("--logcc") and fmod(t, 0.1) < dt:
+		print("CCLOG t=%.2f w=%.2f guard=%.2f block=%.2f kick=%s acc=%s pos=%s pelvis_rel=%.2f pecho_rel=%s pieR=%s" % [t, an.cc_w, an.cc_guard_w, an.cc_block_w, str(an.cc_kick), str(a.cc.accion.tipo) if a.cc.accion else "-", j.global_position, (j.rig.P.LowerTorso as Node3D).global_position.y - j.global_position.y, str(j.root_cf().affine_inverse() * (j.rig.P.UpperTorso as Node3D).global_position), str(j.root_cf().affine_inverse() * (j.rig.P.RightFoot as Node3D).global_position)])
+
+
+func _fin_cc() -> void:
+	var fallos := []
+	cc_res.erase("_imp_t")
+	for k in cc_res:
+		if not cc_res[k]:
+			fallos.append(k)
+	var nombre := arma_x if arma_x != "" else "manos"
+	print(("OK cc_" + nombre) if fallos.is_empty() else ("MAL cc_%s: falla %s" % [nombre, ", ".join(fallos)]))

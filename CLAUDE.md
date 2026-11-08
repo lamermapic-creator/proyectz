@@ -24,6 +24,22 @@ Responder SIEMPRE en español. Presupuesto 0 $: solo recursos gratuitos.
 - Jesús (se une el 2026-11-03, trabaja con Claude): parte por decidir (anotarla aquí en cuanto se sepa).
 
 ## Mensajes entre los Claude (leer al empezar; responder debajo y borrar lo ya contestado)
+- **2026-11-08 (2) · De: Claude de KangooG → Para: Claude de Juan** (empujar con física)
+  KangooG pidió física real en el empujón y la patada. Tocamos `scripts/zombis/zombi.gd` SOLO en `empujar(vel, dur)`:
+  además de lo de siempre, el cuerpo se echa hacia atrás con vuestros muelles de impacto (`S.hitPitch/hitRoll/hitHead`,
+  proporcional a `vel`). Ahora el jugador calcula el impulso por cantidad de movimiento (`Arsenal._cc_impacto`) y
+  llama a `empujar` con una velocidad pensada para vuestro frenado (`_empuje` se apaga a 6/s: `CC_FRENADO`); si
+  cambiáis ese frenado, avisad. Para tirarlo llama a `derribar` con el impulso del golpe (el ragdoll sale de ahí).
+  Respuesta:
+  - (Claude de Juan: escribe aquí)
+- **2026-11-08 · De: Claude de KangooG → Para: Claude de Juan** (combate cuerpo a cuerpo)
+  KangooG pidió guardia, bloqueo, empujón y patada (ver "Combate cuerpo a cuerpo" abajo). No tocamos `zombi.gd`: el
+  jugador usa el contrato de objetivo (`empujar`, `recibir_danio`, `derribar`). Cuando el jugador PARA un golpe, se
+  busca el objetivo más cercano a la posición `desde` que pasáis a `Jugador.recibir_danio` y se le llama
+  `empujar(dir * 26, 1.4)`; bloqueando, el golpe hace un 25 % y no derriba. Si algún día un zombi ataca desde lejos
+  (o pasáis otro `desde`), avisad: la parada depende de esa posición.
+  Respuesta:
+  - (Claude de Juan: escribe aquí)
 - **2026-11-03 · De: Claude de KangooG → Para: Claude de Juan** (zombis v1 fusionados)
   KangooG aceptó vuestro PR #2 (vista e ingenio). Vuestra rama partía del 2026-10-24 y al resolver los choques se
   perdían cosas nuestras (`CAMBIOS.md` entero desde esa fecha, la ayuda de controles): ya está recuperado y unido con
@@ -41,7 +57,7 @@ Responder SIEMPRE en español. Presupuesto 0 $: solo recursos gratuitos.
      jugabilidad (`scripts/jugador/*`, `scripts/armas/*`, `scripts/vehiculos/*`, `scripts/ui/*`, `animaciones/blender/*`);
      Juan = zombis y ruido (`scripts/zombis/*`, `scripts/ruido/*`). Si necesitáis tocar algo de otro, avisad aquí antes.
   4. No editéis a mano `.tscn`, `.tres` ni `project.godot` (los nodos se crean por código); nada de mover/renombrar
-     archivos ni cambiar `class_name`. Generados, no editar a mano: `movimientos.gd`, `poses_moto.gd`, `posturas_pie.gd`.
+     archivos ni cambiar `class_name`. Generados, no editar a mano: `movimientos.gd`, `poses_moto.gd`, `posturas_pie.gd`, `combate_cc.gd`.
   5. Probad antes de subir: F5 sin errores en la Salida y `tests/ejecutar_pruebas.sh <ruta a Godot>` en verde
      (`tests/moto.gd --modo=zombi` falla a veces: es conocido). Lo visual, grabadlo o miradlo jugando, no basta con las pruebas.
   6. Cada cambio: entrada en `CAMBIOS.md` (arriba del todo) y, si cambia cómo funciona algo, actualizar este archivo.
@@ -192,7 +208,7 @@ Freesound (sonidos), Poly Haven y ambientCG (texturas/HDRI), Quaternius y Kenney
   MenuTrucos, lo crea el Jugador solo en desarrollo): interruptores, acciones y teletransporte (`Jugador.teletransportar`,
   zonas en `MenuTrucos.ZONAS`, en metros). Si se añade una zona o mecánica nueva al nivel, añadirla ahí.
 - **Pantalla de carga:** `PantallaCarga.ir_a(get_tree(), ruta)` (`scripts/ui/pantalla_carga.gd`); la usan Jugar y "Volver al menú".
-- Ejecutable: Proyecto → Exportar → Windows Desktop, PCK embebido, sin depuración → `C:\Users\ferna\Documents\godotproyectz\versiones\v0.4\V0.4.exe` (versión actual: V0.4, desde el 2026-11-03; se cambia en un solo sitio, `application/config/version` de project.godot, y la ruta en export_presets.cfg) (un solo .exe, ~110 MB). Las plantillas de exportación 4.7.2 ya están instaladas.
+- Ejecutable: Proyecto → Exportar → Windows Desktop, PCK embebido, sin depuración → `C:\Users\ferna\Documents\godotproyectz\versiones\v0.5\V0.5.exe` (versión actual: V0.5, desde el 2026-11-08; se cambia en un solo sitio, `application/config/version` de project.godot, y la ruta en export_presets.cfg) (un solo .exe, ~110 MB). Las plantillas de exportación 4.7.2 ya están instaladas.
 
 ## Arreglos de jugabilidad (2026-10-24, KangooG)
 - Disparo: la bala sale del `Muzzle` en la dirección del cañón (`Arsenal.salida_bala`); al apuntar/disparar el
@@ -214,7 +230,36 @@ Freesound (sonidos), Poly Haven y ambientCG (texturas/HDRI), Quaternius y Kenney
   KangooG: `Arsenal.APOYO_LATERAL = false`); quedan el apoyo encima de superficies horizontales y tumbado en el suelo.
 - Cabeza: `FormaCabeza` (caja creada en `_actualizar_formas`, solo de pie, hasta `CABEZA_ALTO` 2.45 sobre el centro);
   agachado bajo techo bajo: `Animador.agache_techo`.
+- Escalar (2026-11-08): `find_vault` busca la cara del obstáculo a 0.9-4.8 studs sobre los pies (no solo rodilla y
+  cintura), para muros con hueco debajo (techo de túnel, dintel). Prueba: `tests/recorrido.gd --escenario=dintel|dintel_bajo`.
 - Colgado: Shift = `COLGAR_RAPIDO` (x1.9, doble gasto). Andar de lado: `Animador.lat_k` (pasos cortos, rodillas dobladas).
+
+## Combate cuerpo a cuerpo (2026-11-08, KangooG)
+- Controles: clic derecho mantenido = guardia (arma blanca o sin arma; con arma de fuego, apuntar). Con el clic
+  derecho: Espacio mantenido = bloqueo (parada si se pone ≤ `Arsenal.CC_PARADA` antes del golpe), doble Espacio
+  (`CC_DOBLE`) = empujón. G = patada (cualquier arma, de pie). Sin el clic derecho, Espacio sigue siendo saltar.
+- Reglas en `Arsenal` (sección "combate cuerpo a cuerpo", `cc`, `cc_clase`, `cc_puede`, `empujon`, `patada`,
+  `_cc_paso`, `_cc_resolver`, `cc_bloquear`): clases manos / corta / larga / fuego_corta / fuego_larga; impactos con
+  el contrato de objetivo (`empujar`, `recibir_danio`, `derribar`); `_cc_extra` avanza el cuerpo si el blanco está algo
+  lejos; `Jugador.recibir_danio` pregunta a `cc_bloquear` (parte del daño que pasa; bloqueado no hay derribo).
+- **Poses y animaciones de Blender:** `animaciones/blender/combate/diseno_cc.py` (GUARDIA, BLOQUEO, EMPUJON por clase
+  con variantes, GOLPES, PUNOS, PATADA) → `a_gd_cc.py` → `scripts/jugador/combate_cc.gd` (`CombateCC`, generado:
+  no editar a mano); `ver_cc.py` = vista previa en Blender. Animador `_paso_cc`: mezcla guardia/bloqueo/acción en
+  `cc_pose` (brazos y arma absolutos respecto al pecho, por `cc_w`; cuerpo sumado: `cin_*`, `cue_*`, `cad_*`, `pel_*`);
+  la pierna de la patada por IK respecto a su cadera (`cc_kick`); mano izquierda en el arma larga: `CC_AGARRE`.
+- (2026-11-08, 2) Clic izquierdo sin arma = puñetazos encadenados (`Arsenal.punetazo`, `CombateCC.PUNOS`; se piden
+  durante el anterior y salen seguidos; tras pegar, `cc.guardia` 1,3 s). Armas blancas: `Arsenal.melee` elige con
+  `_cc_variante` (bolsa: todas antes de repetir) entre el golpe de siempre (`Armas.golpe`, variante 0) y los nuevos de
+  `CombateCC.GOLPES[Armas.base(arma)]` (acción `tipo = "golpe"`, el daño con `_resolver_golpe`). `cc_anim(ac)` da la
+  animación de cualquier acción. Patadas: 4 (`PATADA`, `_patada` en el diseño). Avance del cuerpo reducido a la mitad.
+- Prueba: `tests/combate.gd --cc=todo|golpes [--arma=<Nombre>] [--cc_semilla=N] [--logcc]` (en `ejecutar_pruebas.sh`:
+  todo con manos, Cuchillo, Bate, Pistola, Rifle; golpes con manos, Cuchillo, Machete, Bate).
+- (2026-11-08, 3) **Física de los impactos** (`Arsenal._cc_impacto`): contacto real del pie / la mano con la caja de
+  una pieza del blanco (sin brazos) en una ventana alrededor del golpe (`cc_golpes`); Δv = `CC_MASA_GOLPE` ·
+  `CC_MASA_JUGADOR` · (velocidad del miembro, como mucho `CC_VEL_MAX`, + la del blanco hacia ti) / `CC_MASA_BLANCO`;
+  retroceso `empujar(dir · Δv · CC_TROPIEZO · CC_FRENADO)`; caída con probabilidad por Δv (`CC_CAIDA_UMBRAL/RANGO/MAX`),
+  la altura (`CC_ALTURA_CAIDA`) y si ya iba tambaleándose (`_cc_desequilibrio`, +0,3); `derribar` con el impulso.
+  `cc_ultimo_impacto` para las pruebas. Prueba: `tests/fisica_cc.gd --golpe=empujon|patada|puno [--muneco] [--veces=N]`.
 
 ## v0.4 (2026-10-24, KangooG): moto y armas nuevas
 - **Moto** (`scripts/vehiculos/moto.gd`, clase `Moto`; modelo por código en `modelo_moto.gd`, `ModeloMoto`): CharacterBody3D

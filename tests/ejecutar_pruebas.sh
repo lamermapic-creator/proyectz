@@ -99,12 +99,34 @@ if [ ${#SOLO[@]} -eq 0 ]; then
 		else [ -n "$errores" ] && echo "$errores" | head -10; fallos=$((fallos + 1)); resumen+=("FALLO moto_atasco_${bq}_${v}_$a"); fi
 	done
 	# levantarse tras un derribo sin tirones (2026-10-30, tests/recorrido.gd --escenario=derribo_llano)
-	for e in derribo_llano; do
+	# y subirse a un muro con hueco debajo, el techo de los túneles (2026-11-08, --escenario=dintel / dintel_bajo)
+	for e in derribo_llano dintel dintel_bajo; do
 		salida="$("$GODOT" --headless --path "$RAIZ" --fixed-fps 60 res://tests/escena_recorrido.tscn -- --escenario=$e 2>&1)"
 		errores="$(hay_errores "$salida")"
 		grep -E "^(OK|MAL) recorrido_" <<<"$salida"
 		if grep -q "^OK recorrido_$e" <<<"$salida" && [ -z "$errores" ]; then resumen+=("OK    $e")
 		else [ -n "$errores" ] && echo "$errores" | head -10; fallos=$((fallos + 1)); resumen+=("FALLO $e"); fi
+	done
+	# combate cuerpo a cuerpo (2026-11-08, tests/combate.gd --cc=todo): guardia, patada, empujón, parada y bloqueo
+	# y golpes variados (--cc=golpes: puñetazos sin arma, golpes de siempre y nuevos con armas blancas)
+	for prueba in todo:manos todo:Cuchillo todo:Bate todo:Pistola todo:Rifle golpes:manos golpes:Cuchillo golpes:Machete golpes:Bate; do
+		acc="${prueba%%:*}"; w="${prueba##*:}"
+		arg=""
+		[ "$w" != "manos" ] && arg="--arma=$w"
+		salida="$("$GODOT" --headless --path "$RAIZ" --fixed-fps 60 res://tests/escena_combate.tscn -- --cc=$acc $arg 2>&1)"
+		errores="$(hay_errores "$salida")"
+		grep -E "^(OK|MAL) cc_" <<<"$salida"
+		if grep -q "^OK cc_$w" <<<"$salida" && [ -z "$errores" ]; then resumen+=("OK    cc_${acc}_$w")
+		else [ -n "$errores" ] && echo "$errores" | head -10; fallos=$((fallos + 1)); resumen+=("FALLO cc_${acc}_$w"); fi
+	done
+	# física de los golpes (2026-11-08, tests/fisica_cc.gd): empujones y patadas a un zombi quieto (retrocede, se echa
+	# atrás y a veces cae)
+	for g in empujon patada; do
+		salida="$("$GODOT" --headless --path "$RAIZ" --fixed-fps 60 res://tests/escena_fisica_cc.tscn -- --golpe=$g 2>&1)"
+		errores="$(hay_errores "$salida")"
+		grep -E "^FISICA golpe|^(OK|MAL) fisica_" <<<"$salida"
+		if grep -q "^OK fisica_$g" <<<"$salida" && [ -z "$errores" ]; then resumen+=("OK    fisica_$g")
+		else [ -n "$errores" ] && echo "$errores" | head -10; fallos=$((fallos + 1)); resumen+=("FALLO fisica_$g"); fi
 	done
 	# ragdoll (tests/ragdoll.gd): muñeco suelto y jugador (derribo, caída larga, aterrizaje fuerte, muerte)
 	for m in empuje alto morir limites j_derribo j_caida j_aterriza j_morir j_moto; do

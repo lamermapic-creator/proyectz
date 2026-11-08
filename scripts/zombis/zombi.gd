@@ -207,6 +207,15 @@ func empujar(vel: Vector3, dur: float) -> void:
 		return
 	_empuje += Rbx.flat(vel)
 	_tambaleo_hasta = reloj + dur
+	# (2026-11-08, Claude de KangooG: combate cuerpo a cuerpo) el cuerpo se echa hacia atrás según lo fuerte que le
+	# empujan, con los mismos muelles que al recibir un golpe
+	var f := Rbx.flat(vel)
+	if f.length() > 0.5:
+		var d_loc := Rbx.vec_to_obj(global_transform, f.normalized())
+		var k := clampf(f.length() / 10.0, 0.2, 2.2)
+		S.hitPitch.impulse(d_loc.z * 3.0 * k)
+		S.hitRoll.impulse(d_loc.x * 1.5 * k)
+		S.hitHead.impulse(d_loc.z * 3.5 * k)
 
 
 func derribar(impulso: Vector3, dur: float) -> void:
