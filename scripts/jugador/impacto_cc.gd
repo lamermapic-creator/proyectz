@@ -147,6 +147,17 @@ func _canal(eje: String) -> float:
 	return float(_pg.get(k, 0.0))
 
 
+## dónde toca el golpe (marco del pecho, en el momento del golpe): la mano, o con un arma el trozo de hoja / de bate que
+## da (no la empuñadura: con un arma larga no hace falta agacharse hasta pegar la mano al cuerpo)
+func _punto_golpe() -> Vector3:
+	var p := Vector3(_canal("x"), _canal("y"), _canal("z"))
+	if _miembro == "a_p":
+		var f := Vector3(float(_pg.get("a_fx", 0.0)), float(_pg.get("a_fy", 0.0)), float(_pg.get("a_fz", -1.0)))
+		if f.length() > 0.01:
+			p += f.normalized() * (1.8 if str(_ac.get("clase", "")) == "larga" else 0.5)
+	return p
+
+
 func _restante() -> float:
 	# lo que aún avanzará el cuerpo hasta el golpe (el blanco parece más cerca de lo que estará)
 	if _ac == null:
@@ -187,7 +198,7 @@ func paso(now: float) -> void:
 	if _miembro == "pie" and str(ac.tipo) == "patada":
 		return # (la patada de pie solo desvía el pie)
 	var rel: Vector3 = yb.inverse() * (_punto - root.origin)
-	var nat := _pecho_rel + Vector3(_canal("x"), _canal("y"), _canal("z") - _restante())
+	var nat := _pecho_rel + _punto_golpe() + Vector3(0, 0, -_restante())
 	# (lo que la propia animación ya baja e inclina el cuerpo: p. ej. las de suelo van agachadas)
 	var pa := absf(float(_pg.get("cin_p", 0.0)))
 	nat += Vector3(0, float(_pg.get("cad_y", 0.0)) - 0.7 * (1.0 - cos(pa)), float(_pg.get("cad_z", 0.0)) - 0.7 * sin(pa) * signf(-float(_pg.get("cin_p", 0.0))))
@@ -222,7 +233,7 @@ func marco(m: Transform3D) -> void:
 	if _w > 0.001 and _blanco != null and _miembro != "pie":
 		var loc := m.affine_inverse() * _punto
 		loc.z += _restante()
-		var d := loc - Vector3(_canal("x"), _canal("y"), _canal("z"))
+		var d := loc - _punto_golpe()
 		if _caido:
 			d.z = clampf(d.z, -0.9, 0.6)
 		else:

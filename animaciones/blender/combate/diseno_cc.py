@@ -368,6 +368,10 @@ def hoja(p, f, mov, polo=None):
 	f = _n(f)
 	m = _n(mov)
 	u = tuple(-m[i] + f[i] * sum(m[k] * f[k] for k in range(3)) for i in range(3))
+	if math.sqrt(sum(x * x for x in u)) < 1e-3:
+		# (estocada: se mueve en la misma dirección en que apunta; el filo / el lomo, arriba)
+		ref = (0.0, 1.0, 0.0) if abs(f[1]) < 0.9 else (0.0, 0.0, 1.0)
+		u = tuple(ref[i] - f[i] * sum(ref[k] * f[k] for k in range(3)) for i in range(3))
 	return arma(p, f, u, polo)
 
 
@@ -488,6 +492,9 @@ GOLPES = {
 				cuerpo(cin=(0.04, -0.4, 0), cue=(-0.03, 0.34, 0), cad=(0, -0.34, -0.3)), {"avance": 0.25})),
 			(0.6, une(hoja((0.15, -0.45, -1.15), (0.0, -0.8, -0.6), (0, -1, 0.4), (1.4, -1.0, 0.3)),
 				cuerpo(cin=(0.03, -0.36, 0), cue=(-0.02, 0.3, 0), cad=(0, -0.36, -0.24)), {"avance": 0.3})),
+			# (2026-11-09) recoge levantándolo por delante (antes volvía a la guardia pasando por entre las piernas)
+			(0.8, une(hoja((0.4, 0.2, -1.0), (0.1, 0.5, -0.86), (0, 1, 0.4), (1.4, -1.0, 0.4)),
+				cuerpo(cin=(0.02, -0.12, 0), cad=(0, -0.24, -0.1)), {"avance": 0.3})),
 			(1.0, une(_LISTA_BATE, cuerpo(), {"avance": 0.3})),
 		]),
 		# de revés: carga detrás del hombro izquierdo y barre de izquierda a derecha
@@ -685,12 +692,166 @@ def _rellenar(claves, k):
 	return [primero if v is None else v for v in vals]
 
 
+_ORIENTACION = ("a_fx", "a_fy", "a_fz", "a_ux", "a_uy", "a_uz")
+
+
 def muestra(accion, k, u):
 	"""canal k de la acción en u (0..1): curva de Hermite que pasa por las claves (tangentes de Catmull-Rom; en los
-	extremos, parada: empieza y acaba sin tirones)"""
+	extremos, parada: empieza y acaba sin tirones). La orientación del arma (a_f*, a_u*) va aparte: ver _orientacion"""
+	if k in _ORIENTACION:
+		return _orientacion(accion, u)[_ORIENTACION.index(k)]
+	cl = accion["claves"]
+	return _hermite([t for t, _ in cl], _rellenar(cl, k), u)
+
+
+# (2026-11-09: "con el arma blanca larga, al golpear hacia el piso da un giro extraño") la orientación del arma NO se
+# interpola canal a canal: entre dos claves casi opuestas (el arma apuntando arriba-atrás y luego abajo-delante) la
+# dirección pasaba por casi cero y su "arriba" quedaba paralelo a ella, y el arma daba vueltas sola. Ahora cada clave es
+# un giro (cuaternión) y entre claves se gira por el camino más corto (slerp), con el mismo ritmo que las posiciones.
+def _q_de_fu(f, up):
+	z = _n(tuple(-x for x in f))
+	upn = _n(up)
+	x = _n((upn[1] * z[2] - upn[2] * z[1], upn[2] * z[0] - upn[0] * z[2], upn[0] * z[1] - upn[1] * z[0]))
+	y = (z[1] * x[2] - z[2] * x[1], z[2] * x[0] - z[0] * x[2], z[0] * x[1] - z[1] * x[0])
+	m = ((x[0], y[0], z[0]), (x[1], y[1], z[1]), (x[2], y[2], z[2]))   # columnas x, y, z
+	tr = m[0][0] + m[1][1] + m[2][2]
+	if tr > 0:
+		S = math.sqrt(tr + 1.0) * 2
+		return (0.25 * S, (m[2][1] - m[1][2]) / S, (m[0][2] - m[2][0]) / S, (m[1][0] - m[0][1]) / S)
+	if m[0][0] > m[1][1] and m[0][0] > m[2][2]:
+		S = math.sqrt(1.0 + m[0][0] - m[1][1] - m[2][2]) * 2
+		return ((m[2][1] - m[1][2]) / S, 0.25 * S, (m[0][1] + m[1][0]) / S, (m[0][2] + m[2][0]) / S)
+	if m[1][1] > m[2][2]:
+		S = math.sqrt(1.0 + m[1][1] - m[0][0] - m[2][2]) * 2
+		return ((m[0][2] - m[2][0]) / S, (m[0][1] + m[1][0]) / S, 0.25 * S, (m[1][2] + m[2][1]) / S)
+	S = math.sqrt(1.0 + m[2][2] - m[0][0] - m[1][1]) * 2
+	return ((m[1][0] - m[0][1]) / S, (m[0][2] + m[2][0]) / S, (m[1][2] + m[2][1]) / S, 0.25 * S)
+
+
+def _fu_de_q(q):
+	w, x, y, z = q
+	# columnas y (arriba) y z (= -dirección) de la matriz del cuaternión
+	col_y = (2 * (x * y - w * z), 1 - 2 * (x * x + z * z), 2 * (y * z + w * x))
+	col_z = (2 * (x * z + w * y), 2 * (y * z - w * x), 1 - 2 * (x * x + y * y))
+	return (-col_z[0], -col_z[1], -col_z[2], col_y[0], col_y[1], col_y[2])
+
+
+def _slerp(a, b, t):
+	d = sum(a[i] * b[i] for i in range(4))
+	if d < 0:
+		b = tuple(-x for x in b)
+		d = -d
+	if d > 0.9995:
+		r = tuple(a[i] + (b[i] - a[i]) * t for i in range(4))
+	else:
+		th = math.acos(d)
+		sa, sb = math.sin((1 - t) * th) / math.sin(th), math.sin(t * th) / math.sin(th)
+		r = tuple(sa * a[i] + sb * b[i] for i in range(4))
+	l = math.sqrt(sum(x * x for x in r))
+	return tuple(x / l for x in r)
+
+
+def _q_mul(a, b):
+	w1, x1, y1, z1 = a
+	w2, x2, y2, z2 = b
+	return (w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2, w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
+		w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2, w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2)
+
+
+def _angulo(a, b):
+	return 2 * math.acos(min(1.0, abs(sum(a[i] * b[i] for i in range(4)))))
+
+
+_CACHE_Q = {}
+
+
+def _transporta(up, f0, f1):
+	"""el "arriba" del arma cuando su dirección pasa de f0 a f1 por el giro más corto (sin girar sobre su eje)"""
+	ax = (f0[1] * f1[2] - f0[2] * f1[1], f0[2] * f1[0] - f0[0] * f1[2], f0[0] * f1[1] - f0[1] * f1[0])
+	sn = math.sqrt(sum(x * x for x in ax))
+	cs = max(-1.0, min(1.0, sum(f0[i] * f1[i] for i in range(3))))
+	if sn < 1e-6:
+		r = up
+	else:
+		k = tuple(x / sn for x in ax)
+		ang = math.atan2(sn, cs)
+		kv = (k[1] * up[2] - k[2] * up[1], k[2] * up[0] - k[0] * up[2], k[0] * up[1] - k[1] * up[0])
+		kd = sum(k[i] * up[i] for i in range(3))
+		r = tuple(up[i] * math.cos(ang) + kv[i] * math.sin(ang) + k[i] * kd * (1 - math.cos(ang)) for i in range(3))
+	d = sum(r[i] * f1[i] for i in range(3))
+	return _n(tuple(r[i] - f1[i] * d for i in range(3)))
+
+
+def _orientaciones_claves(accion):
+	"""el giro del arma en cada clave. La dirección (a_f) es la de la clave; el "arriba" (a_u, hacia dónde mira el filo)
+	solo manda en la clave del golpe y en la primera y la última (la pose de partida): en las demás se arrastra desde la
+	del golpe sin girar el arma sobre su propio eje. Así el arma barre el aire como un golpe de verdad, sin dar vueltas
+	sobre sí misma cuando el "arriba" de hoja() cambia de sentido (al cargar, al recoger)"""
+	clave = id(accion)
+	if clave in _CACHE_Q:
+		return _CACHE_Q[clave]
 	cl = accion["claves"]
 	ts = [t for t, _ in cl]
-	vs = _rellenar(cl, k)
+	n = len(ts)
+	vals = [_rellenar(cl, k) for k in _ORIENTACION]
+	fs = [_n((vals[0][j], vals[1][j], vals[2][j])) for j in range(n)]
+	ups = [_n((vals[3][j], vals[4][j], vals[5][j])) for j in range(n)]
+	g = min(range(n), key=lambda j: abs(ts[j] - accion["golpe"]))
+	for j in range(g + 1, n - 1):
+		ups[j] = _transporta(ups[j - 1], fs[j - 1], fs[j])
+	for j in range(g - 1, 0, -1):
+		ups[j] = _transporta(ups[j + 1], fs[j + 1], fs[j])
+	qs = [_q_de_fu(fs[j], ups[j]) for j in range(n)]
+	# entre dos claves casi opuestas (más de ~165°) el camino corto es ambiguo: se elige el sentido en que, a mitad de
+	# camino, el arma apunta hacia donde va la mano y hacia delante (la punta va por delante del movimiento)
+	ps = [(_rellenar(cl, "a_px")[j], _rellenar(cl, "a_py")[j], _rellenar(cl, "a_pz")[j]) for j in range(n)]
+	largo = []
+	for j in range(n - 1):
+		a, b = qs[j], qs[j + 1]
+		if _angulo(a, b) < math.radians(165):
+			largo.append(False)
+			continue
+		mov = _n(tuple(ps[j + 1][i] - ps[j][i] for i in range(3)))
+
+		def nota(q):
+			f = _fu_de_q(q)[:3]
+			return f[0] * mov[0] + f[1] * mov[1] + f[2] * mov[2] - 0.5 * f[2]
+		d = sum(a[i] * b[i] for i in range(4))
+		b_largo = b if d < 0 else tuple(-x for x in b)
+		largo.append(nota(_slerp_sin_atajo(a, b_largo, 0.5)) > nota(_slerp(a, b, 0.5)) + 0.05)
+	_CACHE_Q[clave] = (qs, largo)
+	return _CACHE_Q[clave]
+
+
+def _slerp_sin_atajo(a, b, t):
+	"""slerp sin cambiar el signo de b (para ir por el camino largo)"""
+	d = max(-1.0, min(1.0, sum(a[i] * b[i] for i in range(4))))
+	th = math.acos(d)
+	if math.sin(th) < 1e-6:
+		return a
+	sa, sb = math.sin((1 - t) * th) / math.sin(th), math.sin(t * th) / math.sin(th)
+	r = tuple(sa * a[i] + sb * b[i] for i in range(4))
+	l = math.sqrt(sum(x * x for x in r))
+	return tuple(x / l for x in r)
+
+
+def _orientacion(accion, u):
+	cl = accion["claves"]
+	ts = [t for t, _ in cl]
+	vals = [_rellenar(cl, k) for k in _ORIENTACION]
+	qs, largo = _orientaciones_claves(accion)
+	# progreso por las claves (0, 1, 2...) con el mismo ritmo de Hermite que las posiciones
+	p = _hermite(ts, list(range(len(ts))), u)
+	i = max(0, min(len(ts) - 2, int(p)))
+	t = max(0.0, min(1.0, p - i))
+	if largo[i]:
+		a, b = qs[i], qs[i + 1]
+		b = b if sum(a[k] * b[k] for k in range(4)) < 0 else tuple(-x for x in b)
+		return _fu_de_q(_slerp_sin_atajo(a, b, t))
+	return _fu_de_q(_slerp(qs[i], qs[i + 1], t))
+
+
+def _hermite(ts, vs, u):
 	n = len(ts)
 	u = max(0.0, min(1.0, u))
 	i = 0

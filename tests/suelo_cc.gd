@@ -58,8 +58,8 @@ func _cabeza() -> float:
 func _process(dt: float) -> void:
 	t += dt
 	var a := j.arsenal
-	if golpe == "cuchillo" and is_equal_approx(t, t) and t > 0.4 and a.equipado == "" and hechos == 0:
-		a.select_slot(2)
+	if golpe in ["cuchillo", "bate"] and t > 0.4 and a.equipado == "" and hechos == 0:
+		a.select_slot(2 if golpe == "cuchillo" else 3)
 	if t > 0.3 and obj == null:
 		obj = get_parent().get_node("Zombis").crear_zombi(j.global_position + Vector3(0, -3.1, -3.4), 0.0, false)
 	if obj == null:
@@ -117,7 +117,7 @@ func _process(dt: float) -> void:
 		match golpe:
 			"pisoton":
 				a.patada()
-			"cuchillo":
+			"cuchillo", "bate":
 				a.melee()
 			_:
 				a.punetazo()
@@ -137,7 +137,7 @@ func _process(dt: float) -> void:
 		ult_paron_t = float(ul.t)
 		parones += 1
 		print("SUELO paron=%.3f detencion=%.3f escala=%.2f" % [float(ul.paron), float(ul.detencion), Engine.time_scale])
-		if golpe == "cuchillo":
+		if golpe == "cuchillo" or golpe == "bate":
 			impactos += 1
 			if ul.get("suelo", false):
 				al_suelo += 1

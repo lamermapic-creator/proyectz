@@ -13,6 +13,21 @@ en el mismo commit que el cambio. Formato:
 
 ---
 
+## 2026-11-09 · KangooG · Claude — el arma larga ya no da un giro raro al golpear al suelo
+**Qué:** KangooG: "cuando uso el arma blanca larga y golpea hacia el piso da un giro extraño". La orientación del arma
+(`a_f*` dirección, `a_u*` "arriba") se interpolaba canal a canal: entre dos claves casi opuestas (el arma arriba-atrás y
+luego abajo-delante) la dirección pasaba por casi cero y su "arriba" quedaba paralelo a ella, y el arma daba vueltas
+sola. Pasaba en el golpe al suelo y, menos, en otros de arriba abajo. Ahora (`diseno_cc.py`, `_orientacion`) cada clave
+es un giro (cuaternión) y entre claves gira por el camino más corto (slerp) con el ritmo de las posiciones; el "arriba"
+solo manda en la clave del golpe y en la primera y la última (en las demás se arrastra sin girar el arma sobre su
+eje); entre claves casi opuestas se elige el sentido en que la punta va por delante del movimiento (por encima de la
+cabeza, no por detrás). Además: `hoja()` daba un "arriba" nulo en las estocadas (la dirección igual al movimiento), el
+golpe de arriba abajo del bate recoge por delante (nueva clave) y `ImpactoCC` apunta con el trozo de arma que da (no
+con la empuñadura: con el arma larga ya no se agacha de más).
+**Archivos:** `animaciones/blender/combate/diseno_cc.py`, `scripts/jugador/combate_cc.gd` (generado),
+`scripts/jugador/impacto_cc.gd`, `tests/suelo_cc.gd` (`--golpe=bate`), `tests/ejecutar_pruebas.sh`.
+**Cómo probarlo:** F5, con el bate o el machete, pegar a un zombi tirado y a uno de pie.
+
 ## 2026-11-08 (11) · KangooG · Claude — una sola animación para pegar al que está en el suelo
 **Qué:** KangooG: "que solo haga una animación para pegarle a alguien del piso". Antes, a uno tumbado se le daba con
 cualquiera de los golpes de pie, deformado hacia abajo. Ahora hay una animación propia por clase, hecha en Blender

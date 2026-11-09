@@ -131,7 +131,7 @@ if [ ${#SOLO[@]} -eq 0 ]; then
 	# golpes a un zombi en el suelo (2026-11-08, 6, tests/suelo_cc.gd): se agacha / inclina y le da (pisotón con G)
 	# (también a cadáveres, --muerto, y con las piernas delante y el pecho lejos, --distancia=4.2; --grupo: con zombis de
 	# pie delante se pega a ellos y no al del suelo, salvo mirando hacia abajo, --mira_abajo)
-	for caso in pisoton puno cuchillo "pisoton --muerto" "cuchillo --muerto --distancia=4.0" "puno --distancia=4.2" \
+	for caso in pisoton puno cuchillo bate "pisoton --muerto" "cuchillo --muerto --distancia=4.0" "puno --distancia=4.2" \
 		"puno --grupo" "pisoton --grupo" "cuchillo --grupo" "puno --grupo --mira_abajo" "pisoton --grupo --mira_abajo"; do
 		g="${caso%% *}"; extra=""; [ "$caso" != "$g" ] && extra="${caso#* }"
 		nombre="suelo_$g${extra:+ $extra}"
