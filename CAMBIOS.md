@@ -13,6 +13,88 @@ en el mismo commit que el cambio. Formato:
 
 ---
 
+## 2026-11-08 (11) · KangooG · Claude — una sola animación para pegar al que está en el suelo
+**Qué:** KangooG: "que solo haga una animación para pegarle a alguien del piso". Antes, a uno tumbado se le daba con
+cualquiera de los golpes de pie, deformado hacia abajo. Ahora hay una animación propia por clase, hecha en Blender
+(`diseno_cc.py`, `SUELO` → `CombateCC.SUELO`), y es SIEMPRE esa: sin arma, agachado y puñetazo hacia abajo con la
+derecha (la izquierda apoyada delante); cuchillo, agachado y puñalada hacia abajo; arma larga (machete, hacha, bate,
+palanca), golpe de arriba abajo al suelo. El pisotón (G) queda en uno solo (pie derecho). `Arsenal.punetazo` y `melee`
+la eligen con `cc_blanco` (los de pie siguen teniendo prioridad); la acción lleva `suelo = clase` y `cc_anim` la
+devuelve. `ImpactoCC` tiene en cuenta lo que la animación ya baja el cuerpo (antes se agachaba de más).
+**Archivos:** `animaciones/blender/combate/{diseno_cc.py, a_gd_cc.py, ver_cc.py}`, `scripts/jugador/combate_cc.gd`
+(generado), `scripts/jugador/arsenal.gd`, `scripts/jugador/impacto_cc.gd`.
+**Cómo probarlo:** F5, tirar a un zombi y darle en el suelo con clic izquierdo (sin arma, cuchillo, machete o bate).
+
+## 2026-11-08 (10) · KangooG · Claude — puñetazos estirados y sueltos, y más golpes con armas blancas (Blender)
+**Qué:** KangooG: "más animaciones de pegada para más variedad, que los puños se estiren más al pegar, veo al
+personaje muy tieso". En `animaciones/blender/combate/diseno_cc.py`:
+- **Puñetazos rehechos y 6 en vez de 4** (directo, cruzado, gancho, gancho de abajo y NUEVOS gancho a la barriga y
+  derechazo largo por encima). Los directos llegan con el **brazo estirado** (la mano algo más allá del alcance: la IK
+  lo deja recto, ~2,2 studs desde el hombro) y se quedan un instante; todos con carga corta, cadera y hombros girando a
+  la vez (`cin` + `pel`), el peso a la pierna de delante, la cabeza fuera de la línea y la otra mano a la barbilla.
+  Se encadenan alternando manos (`Arsenal.punetazo`: tras una pausa, el directo; luego al azar entre los de la otra
+  mano sin repetir los dos últimos; cada puñetazo lleva `lado`).
+- **Armas blancas: 4 golpes de Blender por arma** (+ el de siempre): Cuchillo + estocada y tajo de derecha; Machete
+  (y las que lo usan de base) + diagonal y revés alto; Bate (y palanca) + batazo horizontal y golpe con la punta.
+**Archivos:** `animaciones/blender/combate/diseno_cc.py`, `scripts/jugador/combate_cc.gd` (generado),
+`scripts/jugador/arsenal.gd` (`punetazo`, `_puno_ult`).
+**Cómo probarlo:** F5, sin arma clic izquierdo seguido; con cuchillo, machete o bate, varios golpes.
+Vista previa: `blender -b cuerpo.blend -P combate/ver_cc.py -- "puno:0:0.3;puno:5:0.42" "0,0.15,8" salida`.
+
+## 2026-11-08 (9) · KangooG · Claude — en grupo, pega a los de pie (no al suelo)
+**Qué:** KangooG: "si vienen en grupo el personaje se confunde y pega al suelo". Con un cuerpo en el suelo más cerca que
+los zombis de pie, el ajuste al blanco elegía el del suelo (se agachaba) y el pisotón salía en vez de la patada. Ahora
+hay un solo criterio, `Arsenal.cc_blanco(alcance)`: **primero los que están de pie**; uno del suelo solo si no hay nadie
+de pie a tiro **o si la cámara mira claramente hacia abajo** (`CC_MIRA_SUELO`: para rematar a uno caído con otros
+cerca). Lo usan el ajuste (`ImpactoCC.preparar`), el pisotón (`patada`), el golpe de Blender forzado (`melee`) y el
+avance (`_cc_extra`). En el contacto (`_cc_impacto`) los cuerpos del suelo solo cuentan si la acción va al suelo
+(`ImpactoCC.va_al_suelo`) o es un pisotón, y `_resolver_golpe` (armas blancas) solo les da si no hay nadie de pie (o
+mirando abajo).
+**Archivos:** `scripts/jugador/arsenal.gd`, `scripts/jugador/impacto_cc.gd`, `tests/suelo_cc.gd` (`--grupo`,
+`--mira_abajo`), `tests/ejecutar_pruebas.sh`.
+**Cómo probarlo:** F5 con varios zombis, uno de ellos tirado: pega a los de pie; para rematar al del suelo, mira hacia
+abajo con la cámara.
+
+## 2026-11-08 (8) · KangooG · Claude — pegar a los cuerpos en el suelo (también cadáveres)
+**Qué:** KangooG: "no le puedo pegar a los cuerpos en el piso". (1) Los cadáveres no contaban como blanco (solo los
+vivos): ahora puñetazos, pisotón y armas blancas también les dan (sin daño que hacer: el ragdoll se sacude, sangre,
+parón). (2) Con un cuerpo tumbado la distancia se medía a su pecho: con las piernas delante quedaba "fuera de alcance";
+ahora cuenta su pieza más cercana (`Arsenal._cc_blancos`) y, si el pecho / la cabeza quedan lejos, el golpe va a la
+pieza que se alcanza (`ImpactoCC._elegir_pieza`). (3) `_resolver_golpe` (armas blancas) también da a los del suelo
+(detrás de los que estén de pie) con el golpe hacia abajo.
+**Archivos:** `scripts/jugador/arsenal.gd`, `scripts/jugador/impacto_cc.gd`, `tests/suelo_cc.gd` (`--muerto`,
+`--distancia=N`), `tests/ejecutar_pruebas.sh`.
+**Cómo probarlo:** F5, matar o tirar a un zombi y pegarle tumbado (G, clic izquierdo sin arma o con arma blanca),
+también desde sus pies.
+
+## 2026-11-08 (7) · KangooG · Claude — golpes que se sienten y cuerpo que se ajusta al blanco (pisotón)
+**Qué:** KangooG: "las colisiones no se sienten reales, es como si le pegara a una imagen" y "que el personaje se
+ajuste a la pegada: si el zombi está en el suelo, que se incline a pegarle". Archivo nuevo `scripts/jugador/impacto_cc.gd`
+(`ImpactoCC`, `Arsenal.impacto`):
+- **Al tocar** (patada, empujón, puñetazo, pisotón y golpes con arma blanca): parón de 50-90 ms (`Engine.time_scale`
+  0,12 un instante; más largo cuanto más fuerte), el miembro se queda un momento en el punto de contacto (la acción se
+  detiene 40-90 ms: no atraviesa el cuerpo) y rebota hacia atrás, la pieza golpeada se hunde (cabeza: latigazo; pecho:
+  se echa atrás y la cabeza se queda; barriga: se dobla un poco; piernas: se tuerce), sacudida y golpe de zoom de la
+  cámara y sonido de carne bajo el golpe.
+- **Ajuste al blanco:** al empezar la acción elige el blanco (también caído) y la pieza; hasta el golpe la cadera baja,
+  el tronco se inclina y mira hacia allí, y la mano / el arma / el pie se desvían hasta la pieza (con topes). Con un
+  zombi en el suelo se agacha a pegarle (puños y armas blancas: siempre uno de los golpes de Blender). De pie y a la
+  altura normal apenas cambia nada.
+- **Pisotón:** G con un zombi en el suelo delante (`Arsenal.pisoton`, `CombateCC.PISOTON`, derecho e izquierdo, hecho
+  en Blender en `diseno_cc.py`): rodilla arriba y pie abajo con todo el peso, 30 de daño (x1,8 en la cabeza); el pie va
+  al cuerpo de verdad. Con el zombi más lejos, patada normal.
+- Contrato de objetivo: método nuevo **opcional** `reaccion_golpe(pieza, dir, fuerza)` (zombi y maniquí). `_cc_blancos`
+  apunta el rayo de visión algo por encima del centro (con el zombi tumbado chocaba con el suelo).
+**Archivos:** `scripts/jugador/impacto_cc.gd` (nuevo), `arsenal.gd`, `animador.gd` (5 líneas: `sumar_cuerpo`, `marco`,
+`mano_local`, `pie_offset`, pisotón como patada), `combate_cc.gd` (generado), `animaciones/blender/combate/{diseno_cc.py,
+a_gd_cc.py, ver_cc.py}`, `scripts/zombis/zombi.gd` y `scripts/nivel/maniqui.gd` (solo `reaccion_golpe`, nuevo),
+`tests/suelo_cc.gd` + `tests/escena_suelo_cc.tscn` (nuevos), `tests/ejecutar_pruebas.sh`.
+**Cómo probarlo:** F5, tirar a un zombi (patada o bate) y con él en el suelo: G (pisotón), clic izquierdo sin arma
+(puñetazo agachado) o con cuchillo / machete / bate. De pie: cada golpe hace un parón corto y el zombi reacciona
+según dónde le des. Prueba: `tests/suelo_cc.gd --golpe=pisoton|puno|cuchillo [--lado] [--traza]`.
+**Avisos:** el parón cambia `Engine.time_scale` un instante y lo devuelve a lo que hubiera (la cámara lenta de F1
+sigue funcionando). Para Juan: `reaccion_golpe` en `zombi.gd` solo mueve vuestros muelles `S.hit*`.
+
 ## 2026-11-08 (6) · KangooG · Claude — Versión 0.5
 **Qué:** el juego pasa a la versión **V0.5** (KangooG: "pon en todos lados que avanzamos a la V0.5"):
 `application/config/version = "0.5"` en project.godot (fuente única; se ve en el menú principal, la pausa y el título

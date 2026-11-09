@@ -253,7 +253,7 @@ func _crear_hud() -> void:
 	capa.add_child(aviso)
 	_hud["aviso"] = aviso
 	var ayuda := Label.new()
-	ayuda.text = "1-4: armas · Clic der: apuntar (arma de fuego) / guardia (arma blanca o sin arma) · Clic izq: disparar/golpear (sin arma: puñetazos) · Clic der + Espacio: bloquear (a tiempo: parada) · Clic der + doble Espacio: empujón · G: patada · R: recargar · X: apoyar arma · F: recoger / subir a la moto · Shift: correr · C: agacharse · Z: cuerpo a tierra · Espacio: saltar/sortear · Q/E: asomarse · V: hombro · H: esta ayuda · Rueda: acercar/alejar cámara · Colgado: A/D moverse (Shift: rápido), Espacio subir, S soltarse · Esc: pausa" + (" · F1: trucos · F4: estamina infinita · F5: balas infinitas · F6: ver ruido · F7: zombis sordos · F8: zombis ciegos" if OS.is_debug_build() else "")
+	ayuda.text = "1-4: armas · Clic der: apuntar (arma de fuego) / guardia (arma blanca o sin arma) · Clic izq: disparar/golpear (sin arma: puñetazos) · Clic der + Espacio: bloquear (a tiempo: parada) · Clic der + doble Espacio: empujón · G: patada (en el suelo: pisotón) · R: recargar · X: apoyar arma · F: recoger / subir a la moto · Shift: correr · C: agacharse · Z: cuerpo a tierra · Espacio: saltar/sortear · Q/E: asomarse · V: hombro · H: esta ayuda · Rueda: acercar/alejar cámara · Colgado: A/D moverse (Shift: rápido), Espacio subir, S soltarse · Esc: pausa" + (" · F1: trucos · F4: estamina infinita · F5: balas infinitas · F6: ver ruido · F7: zombis sordos · F8: zombis ciegos" if OS.is_debug_build() else "")
 	# ayuda de controles: oculta (H la muestra/oculta), en un recuadro que no se sale de la pantalla
 	ayuda.add_theme_font_size_override("font_size", 15)
 	ayuda.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

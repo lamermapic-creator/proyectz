@@ -128,6 +128,19 @@ if [ ${#SOLO[@]} -eq 0 ]; then
 		if grep -q "^OK fisica_$g" <<<"$salida" && [ -z "$errores" ]; then resumen+=("OK    fisica_$g")
 		else [ -n "$errores" ] && echo "$errores" | head -10; fallos=$((fallos + 1)); resumen+=("FALLO fisica_$g"); fi
 	done
+	# golpes a un zombi en el suelo (2026-11-08, 6, tests/suelo_cc.gd): se agacha / inclina y le da (pisotón con G)
+	# (también a cadáveres, --muerto, y con las piernas delante y el pecho lejos, --distancia=4.2; --grupo: con zombis de
+	# pie delante se pega a ellos y no al del suelo, salvo mirando hacia abajo, --mira_abajo)
+	for caso in pisoton puno cuchillo "pisoton --muerto" "cuchillo --muerto --distancia=4.0" "puno --distancia=4.2" \
+		"puno --grupo" "pisoton --grupo" "cuchillo --grupo" "puno --grupo --mira_abajo" "pisoton --grupo --mira_abajo"; do
+		g="${caso%% *}"; extra=""; [ "$caso" != "$g" ] && extra="${caso#* }"
+		nombre="suelo_$g${extra:+ $extra}"
+		salida="$("$GODOT" --headless --path "$RAIZ" --fixed-fps 60 res://tests/escena_suelo_cc.tscn -- --golpe=$g $extra 2>&1)"
+		errores="$(hay_errores "$salida")"
+		grep -E "^SUELO golpe|^(OK|MAL) suelo_" <<<"$salida"
+		if grep -q "^OK suelo_$g" <<<"$salida" && [ -z "$errores" ]; then resumen+=("OK    $nombre")
+		else [ -n "$errores" ] && echo "$errores" | head -10; fallos=$((fallos + 1)); resumen+=("FALLO $nombre"); fi
+	done
 	# ragdoll (tests/ragdoll.gd): muñeco suelto y jugador (derribo, caída larga, aterrizaje fuerte, muerte)
 	for m in empuje alto morir limites j_derribo j_caida j_aterriza j_morir j_moto; do
 		salida="$("$GODOT" --headless --path "$RAIZ" --fixed-fps 60 res://tests/escena_ragdoll.tscn -- --modo=$m 2>&1)"

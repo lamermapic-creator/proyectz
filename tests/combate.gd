@@ -301,14 +301,22 @@ func _paso_cc(a: Arsenal, dt: float) -> void:
 		# clic izquierdo cada 0,9 s (sin arma: puñetazos; con arma blanca: sus golpes, el de siempre y los nuevos)
 		if t < 9.3:
 			cc_res["vida_min"] = minf(float(cc_res.get("vida_min", 100.0)), man.health)
+		if _una("muneco_duro", t > 1.5) and a.equipado != "":
+			man.health = 100.0 # (que el machete no lo mate a los dos golpes: se repone abajo)
+		if man.vivo() and man.health < 60.0 and a.equipado != "":
+			man.health = 100.0
 		var cada := 0.55 if a.equipado == "" else 1.15
-		if t > 1.6 and t < 9.0 and fmod(t, cada) < dt:
+		# (2026-11-08, 11: con el muñeco en el suelo el golpe es siempre el de suelo; para ver la variedad se espera a
+		# que esté de pie)
+		if t > 1.6 and t < 9.0 and fmod(t, cada) < dt and (man.en_pie() or a.equipado == ""):
 			if a.equipado == "":
 				a.punetazo()
 			else:
 				a.melee()
 			var ac = a.cc.accion
 			var tipo: String = (str(ac.tipo) + str(ac["var"])) if ac != null else ("clasico" if an.melee_st != null else "-")
+			if ac != null and ac.has("suelo"):
+				tipo = "suelo_" + str(ac.suelo)
 			cc_res["vistos"] = cc_res.get("vistos", {})
 			print("CC t=%.2f golpe %s vida_muneco=%.0f" % [t, tipo, man.health])
 			if tipo != "-":

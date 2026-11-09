@@ -165,6 +165,34 @@ func empujar(vel: Vector3, dur: float) -> void:
 		S.hitHead.impulse(d_loc.z * 3.5 * k)
 
 
+## (2026-11-08, Claude de KangooG: combate cuerpo a cuerpo, opcional en el contrato de objetivo) un golpe del jugador
+## con la mano, el pie o el arma: la pieza golpeada se hunde (la cabeza da un latigazo, al pecho se echa atrás, a la
+## barriga se dobla, a las piernas se tuerce). fuerza = Δv del golpe (studs/s, ~5 flojo, ~16 fuerte)
+func reaccion_golpe(pieza: String, dir: Vector3, fuerza: float) -> void:
+	if not en_pie():
+		return # (en el suelo lo sacude el ragdoll)
+	var f := Rbx.flat(dir)
+	f = f.normalized() if f.length() > 0.01 else -global_transform.basis.z
+	var d_loc := Rbx.vec_to_obj(global_transform, f)
+	var k := clampf(fuerza / 10.0, 0.2, 2.0)
+	match pieza:
+		"Head":
+			S.hitHead.impulse(d_loc.z * 8.0 * k)
+			S.hitYaw.impulse(-d_loc.x * 3.0 * k)
+			S.hitPitch.impulse(d_loc.z * 1.0 * k)
+		"UpperTorso":
+			S.hitPitch.impulse(d_loc.z * 3.5 * k)
+			S.hitHead.impulse(-d_loc.z * 2.5 * k) # (la cabeza se queda atrás: latigazo hacia delante)
+			S.hitRoll.impulse(d_loc.x * 1.5 * k)
+		"LowerTorso":
+			S.hitPitch.impulse(-d_loc.z * 0.8 * k) # (se dobla un poco sobre la barriga: la cabeza va hacia delante)
+			S.hitHead.impulse(-d_loc.z * 3.5 * k)
+		_:
+			S.hitRoll.impulse((1.0 if "Left" in pieza else -1.0) * 2.5 * k)
+			S.hitYaw.impulse((1.0 if "Left" in pieza else -1.0) * 2.0 * k)
+			S.hitPitch.impulse(-d_loc.z * 1.2 * k)
+
+
 ## derribo (batazo): cae y se levanta pasado un rato
 func derribar(impulso: Vector3, dur: float) -> void:
 	if _estado != "pie":

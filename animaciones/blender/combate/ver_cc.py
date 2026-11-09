@@ -3,7 +3,7 @@
 # Uso:
 #   blender -b cuerpo.blend -P combate/ver_cc.py -- "<poses>" "<vistas az,alt,dist;...>" <carpeta>
 #   poses, separadas por ';':  guardia:manos   bloqueo:manos   empujon:manos:<variante>:<u>   patada:<variante>:<u>
-#   puno:<variante>:<u>
+#   puno:<variante>:<u>   pisoton:<variante>:<u>   suelo:<clase>:<u>
 #   (u de 0 a 1; "patada:0:0,0.28,0.42,0.6" = varias u de la misma acción)
 # Sale un PNG por pose y vista en <carpeta>/cc_<n>_<vista>.png (Workbench, rápido).
 import bpy, sys, os, math, json
@@ -157,11 +157,14 @@ def pose_de(txt):
 	if p[0] == "empujon":
 		a = DC.EMPUJON[p[1]][int(p[2])]
 		return [DC.pose_accion(a, float(u)) for u in p[3].split(",")]
+	if p[0] == "suelo":
+		a = DC.SUELO[p[1]]
+		return [DC.pose_accion(a, float(u)) for u in p[2].split(",")]
 	if p[0] == "puno":
 		a = DC.PUNOS[int(p[1])]
 		return [DC.pose_accion(a, float(u)) for u in p[2].split(",")]
-	if p[0] == "patada":
-		a = DC.PATADA[int(p[1])]
+	if p[0] in ("patada", "pisoton"):
+		a = (DC.PATADA if p[0] == "patada" else DC.PISOTON)[int(p[1])]
 		res = []
 		for u in p[2].split(","):
 			c = DC.pose_accion(a, float(u))

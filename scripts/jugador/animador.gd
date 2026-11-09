@@ -1763,6 +1763,7 @@ func _paso_cc(now: float, dt: float) -> void:
 	cc_rapido = false
 	var ac = cc.accion
 	if ac == null:
+		ar.impacto.sumar_cuerpo(cc_pose) # (lo que quede del ajuste al blanco, volviendo suave)
 		return
 	var u := clampf((now - float(ac.t0)) / float(ac.dur), 0.0, 1.0)
 	var a: Dictionary = ar.cc_anim(ac)
@@ -1774,7 +1775,7 @@ func _paso_cc(now: float, dt: float) -> void:
 		if k == "avance" or k.begins_with("pie_") or k.begins_with("ro_"):
 			continue
 		var es_brazo: bool = k.begins_with("m") or k.begins_with("p") and not k.begins_with("pel") or k.begins_with("a_")
-		if es_brazo and ac.tipo == "patada" and cc_clase != "manos":
+		if es_brazo and (ac.tipo == "patada" or ac.tipo == "pisoton") and cc_clase != "manos":
 			continue # con arma, la patada no mueve los brazos
 		var v: float = P[k]
 		if k in CC_CUERPO:
@@ -1784,17 +1785,21 @@ func _paso_cc(now: float, dt: float) -> void:
 			cc_pose[k] = lerpf(float(cc_pose.get(k, v)), v, e) if base_w > 0.01 else v
 	if brazos_accion:
 		cc_w = lerpf(base_w, 1.0, e)
-	if ac.tipo == "patada":
+	if ac.tipo == "patada" or ac.tipo == "pisoton":
 		for k in ["pie_x", "pie_y", "pie_z", "pie_inc", "ro_x", "ro_y", "ro_z"]:
 			cc_pose[k] = P[k]
 		cc_kick = {"lado": str(a.lado), "w": clampf(float(P.pie_w), 0.0, 1.0)}
+	# ajuste al blanco (ImpactoCC): la cadera baja y el tronco se inclina hacia él (p. ej. si está en el suelo)
+	ar.impacto.sumar_cuerpo(cc_pose)
 
 
 ## mano de CombateCC (marco del pecho) -> objetivo de la IK
 func _cc_mano(k: String, kp: String, marco: Transform3D, w: float) -> Dictionary:
 	var c := cc_pose
-	var ik := {"pos": marco * Vector3(c[k + "x"], c[k + "y"], c[k + "z"]),
-		"pole": marco * Vector3(c.get(kp + "x", 0.0), c.get(kp + "y", -1.0), c.get(kp + "z", 0.0)), "w": w}
+	# (+ el desvío hacia el blanco y el rebote al golpear: ImpactoCC)
+	var desv: Vector3 = jugador.arsenal.impacto.mano_local(k)
+	var ik := {"pos": marco * (Vector3(c[k + "x"], c[k + "y"], c[k + "z"]) + desv),
+		"pole": marco * (Vector3(c.get(kp + "x", 0.0), c.get(kp + "y", -1.0), c.get(kp + "z", 0.0)) + desv), "w": w}
 	if float(c.get(k + "rw", 0.0)) > 0.05 and c.has(k + "dx"):
 		var d := marco.basis * Vector3(c[k + "dx"], c[k + "dy"], c[k + "dz"])
 		var bo := marco.basis * Vector3(c[k + "bx"], c[k + "by"], c[k + "bz"])
@@ -1809,7 +1814,8 @@ func _cc_mano(k: String, kp: String, marco: Transform3D, w: float) -> Dictionary
 ## el Handle del arma según CombateCC (marco del pecho)
 func _cc_handle() -> Transform3D:
 	var c := cc_pose
-	return Transform3D(Basis.looking_at(Vector3(c.a_fx, c.a_fy, c.a_fz).normalized(), Vector3(c.a_ux, c.a_uy, c.a_uz)), Vector3(c.a_px, c.a_py, c.a_pz))
+	return Transform3D(Basis.looking_at(Vector3(c.a_fx, c.a_fy, c.a_fz).normalized(), Vector3(c.a_ux, c.a_uy, c.a_uz)),
+		Vector3(c.a_px, c.a_py, c.a_pz) + jugador.arsenal.impacto.mano_local("a_p"))
 
 
 ## ---------------------------------------------------------------- eventos de armas (Anim.Fire)
@@ -2770,6 +2776,8 @@ func update_rig(dt: float) -> void:
 		var Lk: Limb = leg[kick_s]
 		var hip_k := (pelvis_cf * Lk.top.c0).origin
 		var obj_k := hip_k + yaw_cf.basis * Vector3(cc_pose.pie_x, cc_pose.pie_y, cc_pose.pie_z)
+		# (el pie va al blanco de verdad, p. ej. al cuerpo caído en el pisotón, y rebota al golpear: ImpactoCC)
+		obj_k += jugador.arsenal.impacto.pie_offset(hip_k, yaw_cf.basis)
 		var base_k: Vector3 = leg_targets.get(kick_s, obj_k)
 		leg_targets[kick_s] = base_k.lerp(obj_k, kick_w)
 		var pole_k := hip_k + yaw_cf.basis * Vector3(cc_pose.ro_x, cc_pose.ro_y, cc_pose.ro_z)
@@ -2843,6 +2851,7 @@ func update_rig(dt: float) -> void:
 	Mw.transform = Rbx.ang(0, waistY, 0) * Rbx.ang(waistP + breath, 0, waistR)
 	var chest_cf := fk(pelvis_cf, Mw)
 	var chest_yaw_base := Rbx.cfp(chest_cf.origin) * yaw_cf
+	jugador.arsenal.impacto.marco(chest_yaw_base)
 	# tumbado: el torso y la cabeza cubren la diferencia hasta que el cuerpo termina de pivotar
 	var prone_aim := pb > 0.5
 	# en la moto se apunta (y se golpea) girando el torso hacia la cámara: la moto sigue recta.

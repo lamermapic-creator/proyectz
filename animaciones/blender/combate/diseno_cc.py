@@ -332,6 +332,34 @@ PATADA = [
 ]
 
 
+
+# ---------------------------------------------------------------- PISOTÓN (2026-11-08, 6: G con el zombi en el suelo)
+# Sube la rodilla muy alta (el tronco algo atrás, mirando abajo) y baja el pie de golpe con todo el peso: la cadera cae
+# y el tronco se echa encima; aprieta un instante y recoge. Aquí pisa el suelo delante (a 1,7 studs); en el juego el pie
+# va al cuerpo caído de verdad (ImpactoCC.pie_offset).
+def _pisoton(lado, dur, golpe, brazos, **extra):
+	s = 1.0 if lado == "R" else -1.0
+	R_ = (0.05 * s, 1.2, -4.0)   # rodilla adelante y bien arriba
+	br_carga, br_sale = brazos
+	return _accion(dur, golpe, [
+		(0.0, une(pie((0, -2.53, -0.1), 0.0, R_, 0.0), cuerpo(), {"avance": 0.0})),
+		(0.1, une(pie((0.02 * s, -2.3, -0.2), 0.05, R_, 0.5), cuerpo(cad=(0, -0.15, 0.05)), {"avance": 0.0})),
+		(0.32, une(pie((0.03 * s, -0.85, -0.9), 0.15, R_, 1.0), cuerpo(cin=(0.04 * s, 0.14, 0), cue=(0, -0.28, 0), cad=(0, 0.05, 0.1), pel=(0.1, 0, 0)),
+			br_carga, {"avance": 0.05})),
+		(golpe, une(pie((0.0, -2.0, -1.7), -0.05, R_, 1.0), cuerpo(cin=(0.04 * s, -0.3, 0), cue=(0, -0.36, 0), cad=(0, -0.5, -0.3), pel=(-0.12, 0, 0)),
+			br_sale, {"avance": 0.15})),
+		(golpe + 0.12, une(pie((0.0, -2.05, -1.75), -0.05, R_, 1.0), cuerpo(cin=(0.04 * s, -0.34, 0), cue=(0, -0.38, 0), cad=(0, -0.55, -0.35), pel=(-0.14, 0, 0)),
+			br_sale, {"avance": 0.18})),
+		(0.8, une(pie((0.02 * s, -1.5, -1.0), 0.1, R_, 1.0), cuerpo(cin=(0, -0.12, 0), cue=(0, -0.15, 0), cad=(0, -0.25, -0.1)), br_carga, {"avance": 0.18})),
+		(1.0, une(pie((0, -2.53, -0.1), 0.0, R_, 0.0), cuerpo(), {"avance": 0.18})),
+	], lado=lado, **extra)
+
+
+# (2026-11-08, 11: "que solo haga una animación para pegarle a alguien del piso") un solo pisotón, con la derecha
+PISOTON = [
+	_pisoton("R", 0.78, 0.5, _BR_D, nombre="pisoton", danio=30.0),
+]
+
 # ---------------------------------------------------------------- GOLPES con armas blancas (clic izquierdo)
 # (2026-11-08, 2: variedad) Golpes NUEVOS por arma base; el de siempre (Armas.golpe) sigue siendo uno más y se
 # alternan al azar sin repetir. "hoja(p, f, mov)": el arma en p apuntando hacia f, moviéndose hacia mov (el filo va
@@ -372,6 +400,33 @@ GOLPES = {
 				cuerpo(cin=(0.14, -0.3, 0), cue=(-0.12, 0.25, 0), cad=(0, -0.3, -0.22)), {"avance": 0.3})),
 			(1.0, une(_LISTA_CUCHILLO, _IZQ_GUARDA, cuerpo(), {"avance": 0.3})),
 		]),
+		# (2026-11-08, 10) estocada: carga atrás junto a la cadera y entra recto al cuerpo con el brazo estirado, como un
+		# directo, la izquierda se recoge al pecho
+		_accion(0.46, 0.36, [
+			(0.0, une(_LISTA_CUCHILLO, _IZQ_GUARDA, cuerpo(), {"avance": 0.0})),
+			(0.2, une(hoja((0.78, 0.12, -0.35), (0.0, 0.1, -1.0), (0, 0, -1), (1.6, -1.2, 0.8)), _IZQ_GUARDA,
+				cuerpo(cin=(-0.3, 0.08, 0), cue=(0.25, 0.0, 0), cad=(0, -0.34, 0.12), pel=(0, -0.12, 0)), {"avance": 0.0})),
+			(0.36, une(hoja((0.12, 0.22, -2.42), (0.0, 0.0, -1.0), (0, 0, -1), (1.3, -1.0, 0.0)),
+				mano("L", (-0.5, 0.5, -0.55), (-1.4, -1.3, 0.4)),
+				cuerpo(cin=(0.45, -0.2, 0), cue=(-0.4, 0.14, 0.06), cad=(0.04, -0.36, -0.48), pel=(0, 0.2, 0)), {"avance": 0.36})),
+			(0.5, une(hoja((0.14, 0.2, -2.3), (0.0, 0.0, -1.0), (0, 0, -1), (1.3, -1.0, 0.0)), {"avance": 0.4})),
+			(0.76, une(hoja((0.55, -0.1, -1.1), (0.05, 0.2, -1.0), (0, 0, 1), (1.6, -1.2, 0.4)), _IZQ_GUARDA,
+				cuerpo(cin=(0.06, -0.05, 0), cue=(-0.05, 0.03, 0), cad=(0, -0.26, -0.1), pel=(0, 0.03, 0)), {"avance": 0.4})),
+			(1.0, une(_LISTA_CUCHILLO, _IZQ_GUARDA, cuerpo(), {"avance": 0.4})),
+		]),
+		# (2026-11-08, 10) tajo de derecha: de arriba a la derecha hacia abajo a la izquierda, cruzando el cuerpo
+		_accion(0.52, 0.4, [
+			(0.0, une(_LISTA_CUCHILLO, _IZQ_GUARDA, cuerpo(), {"avance": 0.0})),
+			(0.22, une(hoja((1.05, 0.9, -0.35), (0.6, 0.5, -0.6), (-1, -0.5, -0.3), (1.8, -0.4, 0.6)), _IZQ_GUARDA,
+				cuerpo(cin=(-0.55, 0.05, 0), cue=(0.45, 0.0, 0), cad=(0, -0.16, 0.06), pel=(0, -0.15, 0)), {"avance": 0.0})),
+			(0.4, une(hoja((0.1, 0.35, -1.85), (-0.3, 0.0, -1.0), (-1, -0.4, 0), (1.5, -0.9, 0.0)),
+				cuerpo(cin=(0.35, -0.16, 0), cue=(-0.3, 0.1, 0), cad=(0, -0.3, -0.32), pel=(0, 0.15, 0)), {"avance": 0.28})),
+			(0.56, une(hoja((-0.75, -0.1, -1.1), (-0.85, -0.2, -0.45), (-1, -0.4, 0.4), (1.2, -1.0, -0.4)),
+				cuerpo(cin=(0.65, -0.12, 0), cue=(-0.55, 0.08, 0), cad=(0, -0.32, -0.25), pel=(0, 0.22, 0)), {"avance": 0.32})),
+			(0.8, une(hoja((0.3, -0.2, -1.0), (0.0, 0.2, -1.0), (1, 0, 0), (1.5, -1.2, 0.4)), _IZQ_GUARDA,
+				cuerpo(cin=(0.08, -0.05, 0), cad=(0, -0.24, -0.08), pel=(0, 0.04, 0)), {"avance": 0.32})),
+			(1.0, une(_LISTA_CUCHILLO, _IZQ_GUARDA, cuerpo(), {"avance": 0.32})),
+		]),
 	],
 	"Machete": [
 		# tajo horizontal de derecha a izquierda, a la altura del pecho
@@ -395,6 +450,32 @@ GOLPES = {
 			(0.58, une(hoja((0.3, -0.5, -1.1), (0.0, -0.86, -0.5), (0, -1, 0.4), (1.6, -1.0, 0.3)),
 				cuerpo(cin=(0.05, -0.34, 0), cue=(-0.04, 0.28, 0), cad=(0, -0.34, -0.24)), {"avance": 0.3})),
 			(1.0, une(_LISTA_MACHETE, _IZQ_GUARDA, cuerpo(), {"avance": 0.3})),
+		]),
+		# (2026-11-08, 10) diagonal: del hombro derecho, por encima, hacia abajo a la izquierda, con todo el cuerpo
+		_accion(0.8, 0.42, [
+			(0.0, une(_LISTA_MACHETE, _IZQ_GUARDA, cuerpo(), {"avance": 0.0})),
+			(0.26, une(hoja((0.95, 1.4, 0.05), (0.35, 0.7, 0.6), (-0.6, -1, -0.5), (1.7, 0.3, 0.6)), _IZQ_GUARDA,
+				cuerpo(cin=(-0.5, 0.14, 0), cue=(0.42, -0.1, 0), cad=(0, -0.1, 0.08), pel=(0, -0.18, 0)), {"avance": 0.0})),
+			(0.42, une(hoja((0.2, 0.45, -1.75), (-0.35, -0.25, -0.9), (-0.6, -0.8, 0), (1.5, -0.7, 0.0)),
+				cuerpo(cin=(0.3, -0.3, 0.04), cue=(-0.25, 0.25, 0), cad=(0, -0.38, -0.36), pel=(0, 0.16, 0)), {"avance": 0.3})),
+			(0.6, une(hoja((-0.7, -0.6, -1.05), (-0.75, -0.55, -0.35), (-0.5, -0.8, 0.3), (1.2, -1.1, -0.4)),
+				cuerpo(cin=(0.6, -0.32, 0.06), cue=(-0.5, 0.26, 0), cad=(0, -0.42, -0.28), pel=(0, 0.24, 0)), {"avance": 0.34})),
+			(0.82, une(hoja((0.4, 0.0, -0.95), (0.1, 0.5, -0.85), (1, 0.5, 0), (1.7, -1.0, 0.5)), _IZQ_GUARDA,
+				cuerpo(cin=(0.1, -0.08, 0), cad=(0, -0.26, -0.1), pel=(0, 0.05, 0)), {"avance": 0.34})),
+			(1.0, une(_LISTA_MACHETE, _IZQ_GUARDA, cuerpo(), {"avance": 0.34})),
+		]),
+		# (2026-11-08, 10) revés alto: carga sobre el hombro izquierdo y barre al cuello de izquierda a derecha
+		_accion(0.72, 0.4, [
+			(0.0, une(_LISTA_MACHETE, _IZQ_GUARDA, cuerpo(), {"avance": 0.0})),
+			(0.24, une(hoja((-0.45, 0.95, -0.3), (-0.6, 0.55, 0.55), (1, -0.2, -0.4), (1.0, -0.4, -0.9)),
+				cuerpo(cin=(0.65, 0.02, 0), cue=(-0.55, 0.0, 0), cad=(0, -0.16, 0.06), pel=(0, 0.18, 0)), {"avance": 0.0})),
+			(0.4, une(hoja((0.3, 0.6, -1.75), (0.35, 0.1, -0.93), (1, -0.15, 0), (1.6, -0.9, 0.0)),
+				cuerpo(cin=(-0.25, -0.14, 0), cue=(0.2, 0.1, 0), cad=(0, -0.26, -0.3), pel=(0, -0.12, 0)), {"avance": 0.28})),
+			(0.56, une(hoja((1.05, 0.45, -0.8), (0.9, 0.1, 0.4), (1, -0.1, 0.5), (1.9, -0.8, 0.6)),
+				cuerpo(cin=(-0.6, -0.1, 0), cue=(0.5, 0.08, 0), cad=(0, -0.24, -0.22), pel=(0, -0.2, 0)), {"avance": 0.32})),
+			(0.8, une(hoja((0.7, 0.1, -0.9), (0.15, 0.6, -0.8), (-1, 0, 0), (1.8, -1.0, 0.5)), _IZQ_GUARDA,
+				cuerpo(cin=(-0.1, -0.05, 0), cad=(0, -0.24, -0.08), pel=(0, -0.04, 0)), {"avance": 0.32})),
+			(1.0, une(_LISTA_MACHETE, _IZQ_GUARDA, cuerpo(), {"avance": 0.32})),
 		]),
 	],
 	"Bate": [
@@ -420,45 +501,163 @@ GOLPES = {
 				cuerpo(cin=(-0.7, -0.1, 0), cue=(0.58, 0.08, 0), cad=(0, -0.2, -0.2), pel=(0, -0.18, 0)), {"avance": 0.3})),
 			(1.0, une(_LISTA_BATE, cuerpo(), {"avance": 0.3})),
 		]),
+		# (2026-11-08, 10) batazo horizontal (como al béisbol): el bate sobre el hombro derecho, paso, cadera y hombros
+		# giran a la vez y barre de derecha a izquierda a la altura de la cabeza
+		_accion(0.95, 0.44, [
+			(0.0, une(_LISTA_BATE, cuerpo(), {"avance": 0.0})),
+			(0.28, une(hoja((0.85, 0.85, 0.15), (0.3, 0.6, 0.75), (-1, 0, -0.6), (1.6, -0.4, 0.8)),
+				cuerpo(cin=(-0.7, 0.05, 0), cue=(0.6, 0.0, 0), cad=(0, -0.24, 0.12), pel=(0, -0.25, 0)), {"avance": 0.0})),
+			(0.44, une(hoja((0.05, 0.4, -1.55), (-0.85, 0.08, -0.5), (-0.3, 0, -1), (1.4, -0.8, 0.0)),
+				cuerpo(cin=(0.25, -0.15, 0), cue=(-0.2, 0.1, 0), cad=(0, -0.32, -0.36), pel=(0, 0.2, 0)), {"avance": 0.3})),
+			(0.62, une(hoja((-0.95, 0.6, -0.6), (-0.6, 0.5, 0.6), (-0.5, 0.4, 1), (1.0, -0.6, -0.6)),
+				cuerpo(cin=(0.75, -0.08, 0), cue=(-0.65, 0.06, 0), cad=(0, -0.28, -0.26), pel=(0, 0.3, 0)), {"avance": 0.34})),
+			(0.84, une(hoja((-0.2, 0.3, -0.8), (0.1, 0.9, 0.3), (1, 0, 0), (1.3, -0.8, 0.2)),
+				cuerpo(cin=(0.2, -0.04, 0), cue=(-0.15, 0.0, 0), cad=(0, -0.24, -0.1), pel=(0, 0.08, 0)), {"avance": 0.34})),
+			(1.0, une(_LISTA_BATE, cuerpo(), {"avance": 0.34})),
+		]),
+		# (2026-11-08, 10) golpe con la punta: el bate recto delante, a dos manos, entra como una lanza (corto y seco)
+		_accion(0.6, 0.4, [
+			(0.0, une(_LISTA_BATE, cuerpo(), {"avance": 0.0})),
+			(0.25, une(hoja((0.55, 0.3, -0.35), (0.05, 0.15, -1.0), (0, 0, -1), (1.5, -1.0, 0.6)),
+				cuerpo(cin=(-0.15, 0.1, 0), cue=(0.12, -0.04, 0), cad=(0, -0.34, 0.14), pel=(0, -0.06, 0)), {"avance": 0.0})),
+			(0.4, une(hoja((0.25, 0.32, -1.65), (0.0, 0.05, -1.0), (0, 0, -1), (1.4, -1.0, -0.2)),
+				cuerpo(cin=(0.15, -0.24, 0), cue=(-0.1, 0.16, 0), cad=(0, -0.38, -0.44), pel=(0, 0.06, 0)), {"avance": 0.36})),
+			(0.55, une(hoja((0.25, 0.3, -1.55), (0.0, 0.05, -1.0), (0, 0, -1), (1.4, -1.0, -0.2)), {"avance": 0.38})),
+			(0.8, une(hoja((0.5, 0.2, -0.75), (0.1, 0.6, -0.8), (0, 0, 1), (1.5, -1.0, 0.5)),
+				cuerpo(cin=(0.02, -0.05, 0), cad=(0, -0.26, -0.1)), {"avance": 0.38})),
+			(1.0, une(_LISTA_BATE, cuerpo(), {"avance": 0.38})),
+		]),
 	],
 }
 
-# ---------------------------------------------------------------- PUÑETAZOS (sin arma, clic izquierdo)
-# Se encadenan: directo (izquierda), cruzado (derecha), gancho (izquierda) y gancho de abajo (derecha). Salen de la
-# guardia; el puño gira al final (los nudillos delante) y el hombro y la cadera acompañan.
-_PUNO_D = (0.0, 0.25, -1.0)          # nudillos delante
-PUNOS = [
-	_accion(0.38, 0.32, [
+# ---------------------------------------------------------------- AL SUELO (2026-11-08, 11)
+# KangooG: "que solo haga una animación para pegarle a alguien del piso". Con el blanco tumbado delante (vivo o
+# muerto), clic izquierdo hace SIEMPRE la misma, una por clase: sin arma, agachado y puñetazo hacia abajo con la
+# derecha (la izquierda apoyada delante); cuchillo, agachado y puñalada hacia abajo; arma larga (machete, hacha, bate,
+# palanca), golpe de arriba abajo al suelo con el tronco encima. Están hechas para un cuerpo a ~2,5 studs; el juego
+# afina hasta la pieza de verdad (ImpactoCC). (La G con alguien en el suelo es el pisotón, también uno solo.)
+_AGACHADO = dict(cad=(0, -1.4, 0.25), pel=(-0.2, 0, 0))
+SUELO = {
+	"manos": _accion(0.72, 0.46, [
 		(0.0, une(G["manos"], {"avance": 0.0})),
-		(0.32, une(mano("L", (-0.16, 0.74, -2.18), (-1.3, -0.5, -0.4), _PUNO_D, (-0.3, 1.0, 0.1), 0.7), mano("R", (0.38, 0.66, -1.35), (1.4, -1.5, 0.0)),
-			cuerpo(cin=(-0.3, -0.1, 0), cue=(0.27, 0.08, 0), cad=(0, -0.22, -0.18), pel=(0, -0.08, 0)), {"avance": 0.15})),
-		(0.48, une(mano("L", (-0.18, 0.74, -2.08), (-1.3, -0.5, -0.4), _PUNO_D, (-0.3, 1.0, 0.1), 0.7), {"avance": 0.18})),
-		(1.0, une(G["manos"], {"avance": 0.18})),
-	], nombre="directo", danio=8.0, empuje=10.0, tambaleo=0.35, pieza="Head"),
-	_accion(0.48, 0.38, [
-		(0.0, une(G["manos"], {"avance": 0.0})),
-		(0.16, une(mano("R", (0.46, 0.6, -1.15), (1.5, -1.5, 0.3)), cuerpo(cin=(-0.2, 0.0, 0), cue=(0.17, 0.0, 0), cad=(0, -0.24, 0.04), pel=(0, -0.1, 0)), {"avance": 0.0})),
-		(0.38, une(mano("R", (0.02, 0.76, -2.16), (1.2, -0.6, -0.5), _PUNO_D, (0.3, 1.0, 0.1), 0.7), mano("L", (-0.36, 0.72, -1.3), (-1.4, -1.5, 0.0)),
-			cuerpo(cin=(0.52, -0.14, 0), cue=(-0.46, 0.1, 0), cad=(0, -0.24, -0.24), pel=(0, 0.24, 0)), {"avance": 0.22})),
-		(0.54, une(mano("R", (0.05, 0.76, -2.04), (1.2, -0.6, -0.5), _PUNO_D, (0.3, 1.0, 0.1), 0.7), {"avance": 0.25})),
-		(1.0, une(G["manos"], {"avance": 0.25})),
-	], nombre="cruzado", danio=11.0, empuje=16.0, tambaleo=0.5, pieza="Head"),
-	_accion(0.52, 0.4, [
-		(0.0, une(G["manos"], {"avance": 0.0})),
-		(0.2, une(mano("L", (-0.95, 0.72, -0.95), (-1.9, 0.5, 0.2)), cuerpo(cin=(0.28, 0.0, 0), cue=(-0.24, 0.0, 0), cad=(0, -0.26, 0.04), pel=(0, 0.1, 0)), {"avance": 0.0})),
-		(0.4, une(mano("L", (0.12, 0.78, -1.55), (-1.4, 0.55, -1.3), (0.9, 0.2, -0.4), (0.0, 1.0, 0.0), 0.6), mano("R", (0.38, 0.72, -1.3), (1.4, -1.5, 0.0)),
-			cuerpo(cin=(-0.55, -0.1, 0), cue=(0.48, 0.08, 0), cad=(0, -0.26, -0.16), pel=(0, -0.24, 0)), {"avance": 0.18})),
-		(0.56, une(mano("L", (0.3, 0.76, -1.35), (-1.2, 0.5, -1.4), (0.9, 0.2, -0.4), (0.0, 1.0, 0.0), 0.6), {"avance": 0.2})),
+		(0.26, une(mano("R", (0.62, 0.45, -0.65), (1.6, -0.3, 0.6)), mano("L", (-0.45, -0.85, -1.35), (-1.5, -0.6, -0.3)),
+			cuerpo(cin=(-0.22, -0.5, 0), cue=(0.18, -0.3, 0), cad=(0, -1.2, 0.2), pel=(-0.15, -0.08, 0)), {"avance": 0.08})),
+		(0.46, une(mano("R", (0.15, -1.6, -1.75), (1.4, -0.4, -0.4), (0.0, -1.0, -0.25), (0.0, 0.25, -1.0), 0.7),
+			mano("L", (-0.5, -1.2, -1.3), (-1.5, -0.8, -0.2)),
+			cuerpo(cin=(0.35, -0.75, 0), cue=(-0.3, -0.35, 0), **_AGACHADO), {"avance": 0.2})),
+		(0.6, une(mano("R", (0.16, -1.5, -1.7), (1.4, -0.4, -0.4), (0.0, -1.0, -0.25), (0.0, 0.25, -1.0), 0.7),
+			cuerpo(cin=(0.3, -0.72, 0), cue=(-0.26, -0.33, 0), **_AGACHADO), {"avance": 0.2})),
+		(0.84, une(mano("R", (0.45, 0.2, -1.1), (1.5, -1.3, 0.2)), mano("L", (-0.35, 0.3, -1.3), (-1.4, -1.3, -0.2)),
+			cuerpo(cin=(0.05, -0.3, 0), cue=(-0.04, -0.12, 0), cad=(0, -0.6, 0.1), pel=(-0.06, 0, 0)), {"avance": 0.2})),
 		(1.0, une(G["manos"], {"avance": 0.2})),
-	], nombre="gancho", danio=12.0, empuje=18.0, tambaleo=0.6, pieza="Head"),
-	_accion(0.55, 0.42, [
-		(0.0, une(G["manos"], {"avance": 0.0})),
-		(0.22, une(mano("R", (0.45, 0.05, -0.95), (1.4, -1.4, 0.5)), cuerpo(cin=(-0.15, -0.08, 0), cue=(0.13, 0.06, 0), cad=(0, -0.48, 0.04), pel=(0, -0.08, 0)), {"avance": 0.0})),
-		(0.42, une(mano("R", (0.1, 1.02, -1.55), (0.9, -1.6, -0.3), (0.0, 1.0, -0.3), (0.0, -0.3, -1.0), 0.6), mano("L", (-0.36, 0.72, -1.3), (-1.4, -1.5, 0.0)),
-			cuerpo(cin=(0.36, -0.06, 0), cue=(-0.32, 0.0, 0), cad=(0, -0.06, -0.2), pel=(0, 0.18, 0)), {"avance": 0.2})),
-		(0.58, une(mano("R", (0.12, 1.06, -1.45), (0.9, -1.6, -0.3), (0.0, 1.0, -0.3), (0.0, -0.3, -1.0), 0.6), {"avance": 0.22})),
-		(1.0, une(G["manos"], {"avance": 0.22})),
-	], nombre="gancho_abajo", danio=13.0, empuje=22.0, tambaleo=0.7, pieza="Head"),
+	], nombre="suelo_puno", danio=12.0, empuje=0.0, tambaleo=0.0, pieza="UpperTorso"),
+	"corta": _accion(0.7, 0.46, [
+		(0.0, une(_LISTA_CUCHILLO, _IZQ_GUARDA, cuerpo(), {"avance": 0.0})),
+		(0.26, une(hoja((0.6, 0.85, -0.45), (0.0, 0.35, -0.94), (0, 1, 0), (1.6, -0.2, 0.6)), mano("L", (-0.45, -0.85, -1.35), (-1.5, -0.6, -0.3)),
+			cuerpo(cin=(-0.2, -0.5, 0), cue=(0.16, -0.3, 0), cad=(0, -1.2, 0.2), pel=(-0.15, -0.06, 0)), {"avance": 0.08})),
+		(0.46, une(hoja((0.15, -1.45, -1.7), (0.0, -0.95, -0.3), (0, -1, -0.2), (1.4, -0.5, -0.4)), mano("L", (-0.5, -1.2, -1.3), (-1.5, -0.8, -0.2)),
+			cuerpo(cin=(0.3, -0.75, 0), cue=(-0.26, -0.35, 0), **_AGACHADO), {"avance": 0.2})),
+		(0.6, une(hoja((0.16, -1.38, -1.66), (0.0, -0.95, -0.3), (0, -1, -0.2), (1.4, -0.5, -0.4)),
+			cuerpo(cin=(0.28, -0.72, 0), cue=(-0.24, -0.33, 0), **_AGACHADO), {"avance": 0.2})),
+		(0.84, une(hoja((0.5, 0.0, -1.0), (0.05, 0.3, -0.95), (0, 1, 0), (1.5, -1.2, 0.4)), _IZQ_GUARDA,
+			cuerpo(cin=(0.05, -0.3, 0), cue=(-0.04, -0.12, 0), cad=(0, -0.6, 0.1), pel=(-0.06, 0, 0)), {"avance": 0.2})),
+		(1.0, une(_LISTA_CUCHILLO, _IZQ_GUARDA, cuerpo(), {"avance": 0.2})),
+	]),
+	"larga": _accion(0.85, 0.48, [
+		(0.0, une(_LISTA_MACHETE, _IZQ_GUARDA, cuerpo(), {"avance": 0.0})),
+		(0.3, une(hoja((0.5, 1.6, 0.2), (0.0, 0.6, 0.8), (0, -0.5, -1), (1.5, 0.7, 0.6)), _IZQ_GUARDA,
+			cuerpo(cin=(-0.12, 0.18, 0), cue=(0.1, -0.2, 0), cad=(0, -0.2, 0.1)), {"avance": 0.05})),
+		(0.48, une(hoja((0.2, -0.75, -1.65), (0.0, -0.75, -0.66), (0, -1, 0), (1.5, -0.5, 0.0)),
+			cuerpo(cin=(0.08, -0.6, 0), cue=(-0.06, -0.3, 0), cad=(0, -0.9, -0.1), pel=(-0.15, 0, 0)), {"avance": 0.22})),
+		(0.62, une(hoja((0.2, -0.85, -1.55), (0.0, -0.8, -0.6), (0, -1, 0.3), (1.5, -0.6, 0.1)),
+			cuerpo(cin=(0.06, -0.62, 0), cue=(-0.05, -0.3, 0), cad=(0, -0.95, -0.08), pel=(-0.16, 0, 0)), {"avance": 0.24})),
+		(0.84, une(hoja((0.6, 0.1, -0.95), (0.1, 0.55, -0.83), (0, 0.83, 0.55), (1.7, -1.0, 0.5)), _IZQ_GUARDA,
+			cuerpo(cin=(0.02, -0.25, 0), cad=(0, -0.45, 0.0), pel=(-0.05, 0, 0)), {"avance": 0.24})),
+		(1.0, une(_LISTA_MACHETE, _IZQ_GUARDA, cuerpo(), {"avance": 0.24})),
+	]),
+}
+
+
+# ---------------------------------------------------------------- PUÑETAZOS (sin arma, clic izquierdo)
+# (2026-11-08, 10: "que los puños se estiren más, veo al personaje muy tieso") Todos con el cuerpo detrás del puño:
+# carga corta (la rodilla y la cadera se cargan), la cadera y los hombros giran a la vez (cin + pel), el peso pasa a la
+# pierna de delante (cad_z, avance), la cabeza se aparta de la línea (cue_r) y la mano que no pega vuelve a la barbilla.
+# Los directos llegan con el brazo ESTIRADO (la mano un poco más allá de donde alcanza: la IK lo deja recto) y se
+# quedan un instante; al recoger, el cuerpo se pasa un poco (rebote) antes de volver a la guardia.
+# Se encadenan alternando manos (Arsenal.punetazo: tras una pausa, siempre el directo de izquierda; luego, al azar entre
+# los de la otra mano). "lado" = mano que pega.
+_PUNO_D = (0.0, 0.25, -1.0)          # nudillos delante
+_PUNO_B_L = (-0.3, 1.0, 0.1)         # dorso arriba (izquierda)
+_PUNO_B_R = (0.3, 1.0, 0.1)
+_BARBILLA_R = mano("R", (0.3, 0.86, -1.22), (1.3, -1.5, -0.2))   # la derecha guardando la barbilla
+_BARBILLA_L = mano("L", (-0.28, 0.88, -1.25), (-1.3, -1.5, -0.2))
+
+
+def _puno(dur, golpe, claves, **extra):
+	return _accion(dur, golpe, [(0.0, une(G["manos"], {"avance": 0.0}))] + claves + [(1.0, une(G["manos"], {"avance": claves[-1][1].get("avance", 0.0)}))], **extra)
+
+
+PUNOS = [
+	# 0) directo de izquierda (jab): rápido, el brazo entero y el hombro tapando la barbilla
+	_puno(0.4, 0.3, [
+		(0.12, une(mano("L", (-0.3, 0.68, -1.6), (-1.3, -1.0, -0.2)), _BARBILLA_R,
+			cuerpo(cin=(-0.1, -0.04, 0), cue=(0.08, 0.03, 0), cad=(0, -0.32, 0.06), pel=(0, -0.04, 0)), {"avance": 0.02})),
+		(0.3, une(mano("L", (-0.22, 0.74, -2.62), (-1.4, -0.6, -0.5), _PUNO_D, _PUNO_B_L, 0.75), _BARBILLA_R,
+			cuerpo(cin=(-0.42, -0.12, 0.04), cue=(0.36, 0.08, -0.08), cad=(0, -0.3, -0.3), pel=(0, -0.16, 0)), {"avance": 0.2})),
+		(0.44, une(mano("L", (-0.24, 0.74, -2.5), (-1.4, -0.6, -0.5), _PUNO_D, _PUNO_B_L, 0.75), {"avance": 0.22})),
+		(0.72, une(mano("L", (-0.32, 0.72, -1.7), (-1.3, -1.4, -0.3)),
+			cuerpo(cin=(-0.04, -0.06, 0), cue=(0.04, 0.04, 0), cad=(0, -0.26, -0.06), pel=(0, 0.03, 0)), {"avance": 0.22})),
+	], nombre="directo", lado="L", danio=8.0, empuje=10.0, tambaleo=0.35, pieza="Head"),
+	# 1) cruzado de derecha: la cadera derecha empuja, el talón de atrás gira y todo el hombro va detrás
+	_puno(0.5, 0.36, [
+		(0.16, une(mano("R", (0.5, 0.58, -1.05), (1.6, -1.4, 0.4)), _BARBILLA_L,
+			cuerpo(cin=(-0.28, 0.02, 0), cue=(0.22, 0.0, 0), cad=(0, -0.36, 0.1), pel=(0, -0.14, 0)), {"avance": 0.0})),
+		(0.36, une(mano("R", (0.0, 0.76, -2.85), (1.3, -0.5, -0.6), _PUNO_D, _PUNO_B_R, 0.75), _BARBILLA_L,
+			cuerpo(cin=(0.58, -0.18, -0.05), cue=(-0.5, 0.12, 0.1), cad=(0.05, -0.3, -0.42), pel=(0, 0.3, 0)), {"avance": 0.3})),
+		(0.5, une(mano("R", (0.02, 0.75, -2.72), (1.3, -0.5, -0.6), _PUNO_D, _PUNO_B_R, 0.75), {"avance": 0.32})),
+		(0.76, une(mano("R", (0.46, 0.66, -1.4), (1.4, -1.5, 0.0)),
+			cuerpo(cin=(-0.1, -0.05, 0), cue=(0.08, 0.03, 0), cad=(0, -0.28, -0.08), pel=(0, -0.06, 0)), {"avance": 0.32})),
+	], nombre="cruzado", lado="R", danio=11.0, empuje=16.0, tambaleo=0.5, pieza="Head"),
+	# 2) gancho de izquierda: el codo a la altura del puño, la cadera y el pie de delante giran juntos
+	_puno(0.52, 0.4, [
+		(0.18, une(mano("L", (-0.98, 0.7, -0.95), (-1.9, 0.55, 0.2)), _BARBILLA_R,
+			cuerpo(cin=(0.3, 0.0, 0.05), cue=(-0.25, 0.0, 0), cad=(0, -0.38, 0.06), pel=(0, 0.14, 0)), {"avance": 0.0})),
+		(0.4, une(mano("L", (0.16, 0.8, -1.72), (-1.5, 0.65, -1.35), (0.9, 0.2, -0.4), (0.0, 1.0, 0.0), 0.6), _BARBILLA_R,
+			cuerpo(cin=(-0.68, -0.12, -0.06), cue=(0.6, 0.08, 0.1), cad=(0, -0.32, -0.22), pel=(0, -0.32, 0)), {"avance": 0.18})),
+		(0.54, une(mano("L", (0.36, 0.78, -1.5), (-1.3, 0.6, -1.4), (0.9, 0.2, -0.4), (0.0, 1.0, 0.0), 0.6), {"avance": 0.2})),
+		(0.78, une(mano("L", (-0.3, 0.74, -1.6), (-1.3, -1.2, -0.3)),
+			cuerpo(cin=(0.08, -0.05, 0), cue=(-0.06, 0.03, 0), cad=(0, -0.27, -0.05), pel=(0, 0.05, 0)), {"avance": 0.2})),
+	], nombre="gancho", lado="L", danio=12.0, empuje=18.0, tambaleo=0.6, pieza="Head"),
+	# 3) gancho de abajo de derecha (uppercut): baja con las rodillas y sube con todo el cuerpo
+	_puno(0.56, 0.42, [
+		(0.22, une(mano("R", (0.48, -0.05, -0.95), (1.4, -1.4, 0.5)), _BARBILLA_L,
+			cuerpo(cin=(-0.2, -0.16, 0.06), cue=(0.16, 0.08, 0), cad=(0, -0.62, 0.06), pel=(0, -0.12, 0)), {"avance": 0.0})),
+		(0.42, une(mano("R", (0.1, 1.0, -1.72), (0.9, -1.6, -0.3), (0.0, 1.0, -0.3), (0.0, -0.3, -1.0), 0.6), _BARBILLA_L,
+			cuerpo(cin=(0.42, 0.06, -0.05), cue=(-0.36, -0.06, 0.06), cad=(0, -0.08, -0.26), pel=(0, 0.24, 0)), {"avance": 0.22})),
+		(0.56, une(mano("R", (0.12, 1.05, -1.6), (0.9, -1.6, -0.3), (0.0, 1.0, -0.3), (0.0, -0.3, -1.0), 0.6), {"avance": 0.24})),
+		(0.8, une(mano("R", (0.44, 0.66, -1.45), (1.4, -1.5, 0.0)),
+			cuerpo(cin=(-0.06, -0.06, 0), cue=(0.05, 0.03, 0), cad=(0, -0.3, -0.08), pel=(0, -0.04, 0)), {"avance": 0.24})),
+	], nombre="gancho_abajo", lado="R", danio=13.0, empuje=22.0, tambaleo=0.7, pieza="Head"),
+	# 4) gancho de izquierda a la barriga: baja el nivel doblando las rodillas y se inclina hacia la izquierda
+	_puno(0.52, 0.4, [
+		(0.18, une(mano("L", (-0.95, 0.1, -0.9), (-1.8, 0.2, 0.3)), _BARBILLA_R,
+			cuerpo(cin=(0.26, -0.1, 0.12), cue=(-0.2, 0.08, -0.1), cad=(0, -0.66, 0.04), pel=(0, 0.12, 0)), {"avance": 0.0})),
+		(0.4, une(mano("L", (0.1, -0.25, -1.78), (-1.6, 0.1, -1.3), (0.9, 0.1, -0.4), (0.0, 1.0, 0.0), 0.6), _BARBILLA_R,
+			cuerpo(cin=(-0.6, -0.26, 0.14), cue=(0.5, 0.2, -0.12), cad=(0, -0.72, -0.24), pel=(0, -0.3, 0.04)), {"avance": 0.2})),
+		(0.54, une(mano("L", (0.3, -0.25, -1.55), (-1.4, 0.1, -1.4), (0.9, 0.1, -0.4), (0.0, 1.0, 0.0), 0.6), {"avance": 0.22})),
+		(0.8, une(mano("L", (-0.3, 0.72, -1.6), (-1.3, -1.2, -0.3)),
+			cuerpo(cin=(0.06, -0.05, 0), cue=(-0.05, 0.03, 0), cad=(0, -0.32, -0.06), pel=(0, 0.04, 0)), {"avance": 0.22})),
+	], nombre="al_cuerpo", lado="L", danio=10.0, empuje=20.0, tambaleo=0.7, pieza="LowerTorso"),
+	# 5) derechazo largo por encima (overhand): un paso adelante, el puño entra por arriba con todo el peso
+	_puno(0.6, 0.42, [
+		(0.2, une(mano("R", (0.7, 0.95, -0.7), (1.7, 0.2, 0.6)), _BARBILLA_L,
+			cuerpo(cin=(-0.32, 0.12, 0), cue=(0.26, -0.06, 0), cad=(0, -0.34, 0.14), pel=(0, -0.16, 0)), {"avance": 0.0})),
+		(0.42, une(mano("R", (-0.05, 0.86, -2.9), (1.3, 0.2, -0.8), (0.0, 0.0, -1.0), (0.3, 1.0, 0.0), 0.75), _BARBILLA_L,
+			cuerpo(cin=(0.68, -0.3, -0.08), cue=(-0.58, 0.2, 0.12), cad=(0.06, -0.4, -0.55), pel=(-0.06, 0.34, 0)), {"avance": 0.4})),
+		(0.56, une(mano("R", (-0.02, 0.8, -2.76), (1.3, 0.2, -0.8), (0.0, 0.0, -1.0), (0.3, 1.0, 0.0), 0.75), {"avance": 0.44})),
+		(0.82, une(mano("R", (0.46, 0.66, -1.4), (1.4, -1.5, 0.0)),
+			cuerpo(cin=(-0.08, -0.08, 0), cue=(0.06, 0.05, 0), cad=(0, -0.3, -0.1), pel=(0, -0.05, 0)), {"avance": 0.44})),
+	], nombre="derechazo", lado="R", danio=14.0, empuje=24.0, tambaleo=0.8, pieza="Head"),
 ]
 
 # ---------------------------------------------------------------- muestreo (lo mismo que hace el juego)

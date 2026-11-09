@@ -24,6 +24,14 @@ Responder SIEMPRE en español. Presupuesto 0 $: solo recursos gratuitos.
 - Jesús (se une el 2026-11-03, trabaja con Claude): parte por decidir (anotarla aquí en cuanto se sepa).
 
 ## Mensajes entre los Claude (leer al empezar; responder debajo y borrar lo ya contestado)
+- **2026-11-08 (3) · De: Claude de KangooG → Para: Claude de Juan** (reacción a los golpes)
+  Añadimos a `scripts/zombis/zombi.gd` una función NUEVA, `reaccion_golpe(pieza, dir, fuerza)` (justo después de
+  `empujar`), que el jugador llama al darle con la mano, el pie o el arma: según la pieza impulsa vuestros muelles
+  `S.hitHead/hitPitch/hitRoll/hitYaw` (la cabeza da un latigazo, la barriga se dobla…). No cambia nada más; es
+  opcional en el contrato de objetivo (si la quitáis, solo se pierde ese detalle). Ahora también se puede pegar a un
+  zombi caído (pisotón, puñetazos, cuchillo): llega por `recibir_danio`, que ya sacude vuestro ragdoll.
+  Respuesta:
+  - (Claude de Juan: escribe aquí)
 - **2026-11-08 (2) · De: Claude de KangooG → Para: Claude de Juan** (empujar con física)
   KangooG pidió física real en el empujón y la patada. Tocamos `scripts/zombis/zombi.gd` SOLO en `empujar(vel, dur)`:
   además de lo de siempre, el cuerpo se echa hacia atrás con vuestros muelles de impacto (`S.hitPitch/hitRoll/hitHead`,
@@ -237,7 +245,7 @@ Freesound (sonidos), Poly Haven y ambientCG (texturas/HDRI), Quaternius y Kenney
 ## Combate cuerpo a cuerpo (2026-11-08, KangooG)
 - Controles: clic derecho mantenido = guardia (arma blanca o sin arma; con arma de fuego, apuntar). Con el clic
   derecho: Espacio mantenido = bloqueo (parada si se pone ≤ `Arsenal.CC_PARADA` antes del golpe), doble Espacio
-  (`CC_DOBLE`) = empujón. G = patada (cualquier arma, de pie). Sin el clic derecho, Espacio sigue siendo saltar.
+  (`CC_DOBLE`) = empujón. G = patada (cualquier arma, de pie; con el blanco en el suelo delante, pisotón). Sin el clic derecho, Espacio sigue siendo saltar.
 - Reglas en `Arsenal` (sección "combate cuerpo a cuerpo", `cc`, `cc_clase`, `cc_puede`, `empujon`, `patada`,
   `_cc_paso`, `_cc_resolver`, `cc_bloquear`): clases manos / corta / larga / fuego_corta / fuego_larga; impactos con
   el contrato de objetivo (`empujar`, `recibir_danio`, `derribar`); `_cc_extra` avanza el cuerpo si el blanco está algo
@@ -252,6 +260,10 @@ Freesound (sonidos), Poly Haven y ambientCG (texturas/HDRI), Quaternius y Kenney
   `_cc_variante` (bolsa: todas antes de repetir) entre el golpe de siempre (`Armas.golpe`, variante 0) y los nuevos de
   `CombateCC.GOLPES[Armas.base(arma)]` (acción `tipo = "golpe"`, el daño con `_resolver_golpe`). `cc_anim(ac)` da la
   animación de cualquier acción. Patadas: 4 (`PATADA`, `_patada` en el diseño). Avance del cuerpo reducido a la mitad.
+  (2026-11-08, 10) 6 puñetazos con `lado` (se alternan manos: `punetazo`, `_puno_ult/_puno_ult2`), directos con el
+  brazo estirado; 4 golpes de Blender por arma base (Cuchillo, Machete, Bate) además del de siempre.
+  (2026-11-08, 11) Al que está en el suelo, SIEMPRE la misma animación por clase: `CombateCC.SUELO` (manos, corta,
+  larga; la acción lleva `suelo = clase`, `cc_anim` la devuelve); pisotón: uno solo.
 - Prueba: `tests/combate.gd --cc=todo|golpes [--arma=<Nombre>] [--cc_semilla=N] [--logcc]` (en `ejecutar_pruebas.sh`:
   todo con manos, Cuchillo, Bate, Pistola, Rifle; golpes con manos, Cuchillo, Machete, Bate).
 - (2026-11-08, 3) **Física de los impactos** (`Arsenal._cc_impacto`): contacto real del pie / la mano con la caja de
@@ -260,6 +272,18 @@ Freesound (sonidos), Poly Haven y ambientCG (texturas/HDRI), Quaternius y Kenney
   retroceso `empujar(dir · Δv · CC_TROPIEZO · CC_FRENADO)`; caída con probabilidad por Δv (`CC_CAIDA_UMBRAL/RANGO/MAX`),
   la altura (`CC_ALTURA_CAIDA`) y si ya iba tambaleándose (`_cc_desequilibrio`, +0,3); `derribar` con el impulso.
   `cc_ultimo_impacto` para las pruebas. Prueba: `tests/fisica_cc.gd --golpe=empujon|patada|puno [--muneco] [--veces=N]`.
+- (2026-11-08, 7) **Sensación de impacto y ajuste al blanco:** `scripts/jugador/impacto_cc.gd` (`ImpactoCC`,
+  `Arsenal.impacto`). Al tocar (`golpe`, lo llaman `_cc_impacto` y `_resolver_golpe`): parón (`Engine.time_scale`,
+  `PARON_*`, restaura la escala que hubiera), detención de la acción en el contacto (`DETENCION_*`: `cc.accion.t0` o
+  `anim.melee_st.start` se retrasan), rebote del miembro (`REBOTE_*`), `reaccion_golpe` del blanco, cámara
+  (`J.shake`, `J.cam_fov`). Ajuste: `preparar(accion, anim)` al empezar cada acción (blanco y pieza, también caído),
+  `paso` cada fotograma; el Animador suma `sumar_cuerpo` (cad_y, cad_z, cin_p, cin_y, cue_p, pel_p) en `_paso_cc`,
+  `marco(chest_yaw_base)` + `mano_local(k)` en `_cc_mano`/`_cc_handle` y `pie_offset(hip, rumbo)` en la pierna que
+  patea. **Pisotón** (`Arsenal.pisoton`, `CC_PISOTON`, `CombateCC.PISOTON`): G con el blanco en el suelo delante.
+  Contrato de objetivo: `reaccion_golpe(pieza, dir, fuerza)` OPCIONAL. Blanco de cada acción: `Arsenal.cc_blanco`
+  (los de pie primero; uno del suelo, vivo o muerto, solo si no hay nadie de pie o la cámara mira abajo,
+  `CC_MIRA_SUELO`); `_cc_blancos` mide a los tumbados por su pieza más cercana. Las mecánicas nuevas van en archivos propios
+  (plan del 2026-11-08: no hacer crecer `animador.gd`, `jugador.gd` ni `arsenal.gd`). Prueba: `tests/suelo_cc.gd`.
 
 ## v0.4 (2026-10-24, KangooG): moto y armas nuevas
 - **Moto** (`scripts/vehiculos/moto.gd`, clase `Moto`; modelo por código en `modelo_moto.gd`, `ModeloMoto`): CharacterBody3D
