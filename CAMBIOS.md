@@ -13,6 +13,61 @@ en el mismo commit que el cambio. Formato:
 
 ---
 
+## 2026-11-10 · Juan · Claude — zombis: ya no pegan a través de paredes, heridas de lejos y fondo del mundo
+**Qué:** Juan pidió una auditoría "bajo pruebas de acero" (Godot 4.7.2 real, sin ventana: la batería del repo más
+sondas propias) y arreglar los fallos de su parte. Tres fallos comprobados ejecutando y un cabo suelto:
+1. **El zombi pegaba y notaba al jugador a través de paredes.** `_quiere_atacar`, el golpe de `_paso_atacar` y
+   `_sentir_contacto` solo miraban la distancia. *Medido antes:* pared de 1 stud (31 cm), jugador quieto y en
+   silencio a 3 studs → el zombi lo detecta, ataca y la vida baja de 100 a 80. Ahora los tres piden camino libre
+   (`Zombi._alcanzable`: los mismos rayos de la vista, a la cabeza, el pecho y la cadera, contra la capa 1). Por
+   encima de una barrera de 1 m sigue llegando; si te metes tras una pared mientras levanta los brazos, falla.
+   De paso, la moto que CONDUCE el jugador ya no cuenta como pared para la vista ni para el ataque (`_no_tapan`).
+2. **Un zombi herido sabía la posición exacta del jugador a cualquier distancia.** *Medido antes:* a 280 studs
+   (87 m), herido sin oír nada → `PERSEGUIR` con la pista a 0,0 studs del jugador. Ahora `Zombi._notar_golpe`: el
+   golpe le dice de qué lado vino. Sabe quién fue solo si lo tiene a ≤ 12 studs (`HeridaCerca`), si le está viendo o
+   si le oyó hace menos de `PerseguirMemoria` (el estampido llega antes que la bala); si no, se enfurece e investiga
+   30 studs (`HeridaRastro`) hacia donde vino el golpe. Lo mismo al levantarse tras un derribo.
+3. **Nadie paraba una caída fuera del mapa.** *Medido antes:* a los 12 s de salirse del suelo, el jugador iba por
+   y = −1374, vivo y sin reinicio; un zombi, por −2515. Ahora `ZConfig.WORLD.FondoMundo` (−200 studs): el zombi (o su
+   cuerpo en ragdoll) que lo cruza se borra y emite `murio`; al jugador lo mata el `DirectorZombis` por su
+   `recibir_danio` de siempre (muere, "Te has caído del mapa", y el nivel se reinicia a los 4 s). Con el truco
+   "invencible" vuelve al punto de partida. **No se ha tocado `jugador.gd`.**
+4. El ruido `"motor"` de la moto no estaba en las tablas de `Ruido`: ahora `Ruido.MOTOR`, con el mismo peso que
+   tenía por omisión (0,5: el juego no cambia) y color propio en la vista F6.
+Además: respondidos en `CLAUDE.md` los 8 mensajes pendientes del Claude de KangooG (el más antiguo, del 24 de
+octubre) y un mensaje nuevo para él con lo que le afecta; anotados en "Problemas conocidos" dos fallos medidos de
+su parte que no se han tocado (cadencia según los FPS, efectos que sobreviven al volver al menú).
+**Archivos:** `scripts/zombis/zombi.gd`, `scripts/zombis/director_zombis.gd`, `scripts/ruido/ruido.gd`,
+`scripts/config/zconfig.gd` (claves nuevas `WORLD.FondoMundo`, `ZOMBI.HeridaCerca`, `ZOMBI.HeridaRastro`),
+`tests/pruebas_ruido.gd` (pruebas `ataque_pared`, `herida_lejos`, `fondo_mundo`; `unidad` comprueba las tablas de
+tipos de ruido), `tests/ejecutar_pruebas.sh`, `docs/RUIDO_Y_ZOMBIS.md`, `CLAUDE.md`, `README.md`.
+**Cómo probarlo:** `tests/ejecutar_pruebas.sh <Godot> ataque_pared herida_lejos fondo_mundo unidad`. Batería
+completa del 2026-11-10 (Godot 4.7.2, Linux, sin ventana; 102 comprobaciones, ~6,5 min): las 29 de ruido y
+zombis en verde; en la última pasada, 101 de 102. Los únicos fallos del día fueron de dos pruebas que ya eran
+inestables ANTES de estos cambios (medido repitiéndolas): `moto_zombi` (2 de 12 antes, 2 de 16 después) y
+`suelo_puno --grupo --mira_abajo` (2 de 48 antes, 1 de 24 después). Las tres pruebas nuevas, repetidas:
+`ataque_pared` 64 de 64, `herida_lejos` 24 de 24, `fondo_mundo` 24 de 24.
+**Lo que cazó la batería por el camino (para que se vea por qué se pasa entera):** la primera versión de
+`_fuera_del_mundo` preguntaba la altura al ragdoll también mientras el zombi se levanta, cuando el ragdoll ya no
+tiene cuerpos: `fisica_empujon` y `fisica_patada` se pusieron rojas con un error de script. Corregido y cubierto
+en `fondo_mundo` (un zombi derribado en mitad del suelo se levanta y sigue ahí). Y `ataque_pared` falló 1 de 32
+veces porque el golpe puede tirar al jugador al suelo: ahora espera a que esté de pie (`_esperar_de_pie`).
+**Qué debe probar Juan jugando (F5) — nadie lo ha MIRADO, solo se ha medido sin ventana:**
+- Ponte pegado a la pared alta del nivel con un zombi al otro lado (F6 para ver su estado): no debe notarte ni
+  pegarte. Al otro lado de la barrera baja de la zona de tiro sí debe alcanzarte.
+- Pulsa F7 (zombis sordos: si oye el disparo, sabe dónde estás, como siempre) y dispara con el rifle desde lejos
+  a un zombi que no te mire: debe venir hacia ti por tramos y mirando alrededor, no en línea recta hasta tu
+  sitio. Sin F7, y de cerca con cuchillo o bate, todo como antes.
+- Súbete a la moto y sal por el borde del suelo: debes morir a los ~4 s de caída y reiniciarse el nivel. Empuja o
+  atropella a un zombi junto al borde: su cuerpo desaparece al caer y reaparece en su sitio a los 20 s.
+- Juega un rato normal con los 4 zombis: ¿se siente igual de justo que antes cuando te persiguen y te pegan?
+**Pendiente / avisos:**
+- El fondo del mundo del jugador es una red de seguridad del director: un nivel sin `DirectorZombis` no la tiene,
+  y una moto sin piloto que se salga del mapa sigue cayendo (es de KangooG). Un mapa con zonas por debajo de −200
+  studs necesita bajar `FondoMundo`.
+- Herido de lejos, el zombi adivina siempre 30 studs por golpe, esté el tirador a 50 o a 500.
+- Fallos medidos en la parte de KangooG, sin tocar: ver "Problemas conocidos" en `CLAUDE.md`.
+
 ## 2026-11-09 · KangooG · Claude — el arma larga ya no da un giro raro al golpear al suelo
 **Qué:** KangooG: "cuando uso el arma blanca larga y golpea hacia el piso da un giro extraño". La orientación del arma
 (`a_f*` dirección, `a_u*` "arriba") se interpolaba canal a canal: entre dos claves casi opuestas (el arma arriba-atrás y

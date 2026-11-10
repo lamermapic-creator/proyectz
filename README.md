@@ -21,8 +21,9 @@ F7 zombis sordos, F8 zombis ciegos.
 
 ## Pruebas automáticas
 `tests/ejecutar_pruebas.sh <ruta a Godot 4.7.2>` importa el proyecto, compila todos los scripts, pasa las
-26 pruebas (ruido, vista, zombis y regresión) y arranca el menú y el nivel buscando errores (~2 minutos, sin
-ventana). En Windows se ejecuta con Git Bash. Detalle en `docs/RUIDO_Y_ZOMBIS.md`, sección "Pruebas".
+29 pruebas de ruido, vista y zombis, las de moto, combate y ragdoll (102 comprobaciones en total) y arranca
+el menú y el nivel buscando errores (~6-7 minutos, sin ventana). En Windows se ejecuta con Git Bash. Detalle
+en `docs/RUIDO_Y_ZOMBIS.md`, sección "Pruebas".
 
 ## Trabajar con Claude en Godot (opcional)
 El proyecto incluye el plugin **Godot AI** (`addons/godot_ai`), que deja a Claude Desktop controlar el editor.

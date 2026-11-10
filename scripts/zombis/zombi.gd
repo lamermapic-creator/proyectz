@@ -9,6 +9,8 @@ extends CharacterBody3D
 ##     jugador seguidos (alerta alta)▼    │ o deja de oírle "PerseguirMemoria" s
 ##                                  PERSEGUIR ──a "Alcance"──► ATACAR ──► PERSEGUIR
 ##   cualquiera ──bate──► CAIDO ──se levanta──► PERSEGUIR      cualquiera ──vida 0──► MUERTO
+##   herido de lejos sin haberte oído ni visto ──► INVESTIGAR hacia donde vino el golpe (no sabe dónde estás)
+##   Para pegarte (o notarte por contacto) necesita camino libre: las paredes lo impiden (_alcanzable).
 ##
 ## Al empezar a perseguir gruñe: el gruñido es un ruido más, y los zombis cercanos van a ver qué pasa.
 ## Cumple el "contrato de objetivo" de las armas (vivo, en_pie, centro, recibir_danio, empujar, derribar,
@@ -192,10 +194,8 @@ func recibir_danio(cantidad: float, pieza: String, impulso: Vector3) -> bool:
 	if health <= 0.0:
 		_morir(dir)
 		return true
-	# nota de dónde le han dado: se gira y va a por quien ha sido (al jugador)
-	var j := _jugador()
-	if j:
-		_percibir(j.global_position, 1.0, true)
+	# nota de qué lado le han dado (y, si lo tiene cerca o ya lo había notado, quién ha sido)
+	_notar_golpe(impulso)
 	if en_pie():
 		_empuje += dir * minf(impulso.length() * 0.1, 6.0)
 		_tambaleo_hasta = reloj + 0.25
@@ -296,13 +296,62 @@ func _toca_perseguir() -> bool:
 		and alerta >= float(C.ZOMBI.PerseguirAlerta)
 
 
-## pegado al jugador lo nota aunque no haga ruido (lo roza, lo huele)
+## Le han hecho daño. El golpe le dice DE QUÉ LADO vino (el impulso lleva la dirección de la bala o del arma), no
+## dónde está quien lo hizo. Solo sabe quién ha sido si lo tiene cerca (HeridaCerca: cuerpo a cuerpo, a quemarropa),
+## si le está viendo o si le acaba de oír (el estampido llega antes que la bala). Si no, va a mirar HeridaRastro
+## studs hacia donde vino el golpe: un disparo lejano y sin oír lo enfurece y lo acerca, pero no te delata.
+func _notar_golpe(impulso: Vector3) -> void:
+	var j := _jugador()
+	if j == null or estado == Estado.MUERTO:
+		return
+	if _visto or (_dist_h(j.global_position) <= float(C.ZOMBI.HeridaCerca) and absf(j.global_position.y - global_position.y) < 8.0):
+		_percibir(j.global_position, 1.0, true)
+		return
+	if pista != null and pista.del_jugador and reloj - pista.t < float(C.ZOMBI.PerseguirMemoria):
+		# ya sabía dónde estaba (lo acaba de oír o de ver): el golpe solo lo enfurece
+		_percibir(pista.pos, 1.0, true)
+		return
+	var de := -Rbx.flat(impulso)
+	if de.length() < 0.01:
+		_percibir(_pies(), 1.0, false) # ni idea de dónde vino: mira a su alrededor
+		return
+	_percibir(_punto_navegable(_pies() + de.normalized() * float(C.ZOMBI.HeridaRastro)), 1.0, false)
+
+
+## pegado al jugador lo nota aunque no haga ruido (lo roza, lo huele), salvo que haya una pared en medio
 func _sentir_contacto() -> void:
 	var j := _jugador()
 	if j == null or float(j.get("health")) <= 0.0:
 		return
-	if _dist_h(j.global_position) < float(C.ZOMBI.Contacto) and absf(j.global_position.y - global_position.y) < 4.0:
+	if _dist_h(j.global_position) < float(C.ZOMBI.Contacto) and absf(j.global_position.y - global_position.y) < 4.0 \
+			and _alcanzable(j):
 		_percibir(j.global_position, 1.0, true)
+
+
+## ¿hay camino libre para las manos (y la nariz) hasta el jugador? Los mismos rayos que la vista (cabeza, pecho y
+## cadera, contra el escenario, capa 1): con una pared en medio ni lo nota por contacto ni le puede pegar; por
+## encima de una barrera baja sí (basta con que una de las tres partes quede a tiro).
+## (2026-11-10: antes se miraba solo la distancia y pegaba a través de paredes de menos de ~2 studs)
+func _alcanzable(j: Node3D) -> bool:
+	var ojos := global_position + Vector3(0, 2.0, 0)
+	if j.get("rig") == null:
+		# blanco sin muñeco: un solo rayo a su centro
+		var q := PhysicsRayQueryParameters3D.create(ojos, j.global_position, 1)
+		q.exclude = _no_tapan(j)
+		return get_world_3d().direct_space_state.intersect_ray(q).is_empty()
+	return _fraccion_visible(j, ojos) > 0.0
+
+
+## cuerpos que no cuentan como pared entre el zombi y el jugador: los de los dos y la moto que conduce (la moto
+## está en la capa 1 y taparía a su propio piloto; una moto aparcada sí tapa)
+func _no_tapan(j: Node3D) -> Array[RID]:
+	var excluir: Array[RID] = [get_rid()]
+	if j is CollisionObject3D:
+		excluir.append((j as CollisionObject3D).get_rid())
+	var m = j.get("moto")
+	if m is CollisionObject3D and is_instance_valid(m):
+		excluir.append((m as CollisionObject3D).get_rid())
+	return excluir
 
 
 ## ---------------------------------------------------------------- vista (v1)
@@ -365,15 +414,14 @@ func _cuanto_ve() -> float:
 
 
 ## parte del jugador a la vista (0..1): rayos a su cabeza, pecho y cadera (las piezas reales del muñeco, así
-## agachado o tumbado están más bajas). Tapa el escenario (capa 1); los cuerpos de los dos no cuentan.
+## agachado o tumbado están más bajas). Tapa el escenario (capa 1); los cuerpos de los dos (y la moto que
+## conduce el jugador) no cuentan.
 func _fraccion_visible(j: Node3D, ojos: Vector3) -> float:
 	var r = j.get("rig")
 	if r == null:
 		return 0.0
 	var piezas: Dictionary = r.P
-	var excluir: Array[RID] = [get_rid()]
-	if j is CollisionObject3D:
-		excluir.append((j as CollisionObject3D).get_rid())
+	var excluir := _no_tapan(j)
 	var espacio := get_world_3d().direct_space_state
 	var vistas := 0
 	for n in ["Head", "UpperTorso", "LowerTorso"]:
@@ -419,6 +467,8 @@ func _perder_vista() -> void:
 ## ---------------------------------------------------------------- cerebro (paso de física)
 func _physics_process(dt: float) -> void:
 	reloj += dt
+	if _fuera_del_mundo():
+		return
 	if estado == Estado.MUERTO:
 		_paso_caida(dt)
 		if reloj - _muerte_t > float(C.ZOMBI.Cadaver):
@@ -445,6 +495,25 @@ func _physics_process(dt: float) -> void:
 		Estado.ATACAR:
 			_paso_atacar()
 	_mover(dt)
+
+
+## FONDO DEL MUNDO (2026-11-10): si se cae del mapa (él o su cuerpo en ragdoll) por debajo de ZConfig.WORLD.FondoMundo
+## desaparece, en vez de caer para siempre. Cuenta como muerto para quien escucha "murio" (el director lo repone).
+func _fuera_del_mundo() -> bool:
+	var y := global_position.y
+	# en el suelo manda el cuerpo del ragdoll (el nodo se queda donde cayó); mientras se levanta (mezcla) el
+	# ragdoll ya no tiene cuerpos y vuelve a mandar el nodo
+	if _ragdoll != null and is_instance_valid(_ragdoll) and _sale_ragdoll_t < 0.0 and _ragdoll.cuerpos.has("LowerTorso"):
+		y = _ragdoll.pelvis().y
+	if y >= float(C.WORLD.FondoMundo):
+		return false
+	if estado != Estado.MUERTO:
+		estado = Estado.MUERTO
+		remove_from_group(Ruido.GRUPO)
+		murio.emit(self)
+	set_physics_process(false)
+	queue_free()
+	return true
 
 
 func _cambiar(nuevo: Estado) -> void:
@@ -600,7 +669,8 @@ func _paso_atacar() -> void:
 		_mirar_hacia(j.global_position, 10.0)
 	if not _golpe_hecho and t >= float(C.ZOMBI.PreparaGolpe):
 		_golpe_hecho = true
-		if j and float(j.get("health")) > 0.0 and _dist_h(j.global_position) <= float(C.ZOMBI.Alcance) + 0.8:
+		if j and float(j.get("health")) > 0.0 and _dist_h(j.global_position) <= float(C.ZOMBI.Alcance) + 0.8 \
+				and _alcanzable(j): # (si se ha metido tras una pared mientras levantaba los brazos, falla)
 			var al := Rbx.flat(j.global_position - global_position).normalized()
 			if al.dot(Rbx.look(global_transform)) > 0.2 and j.has_method("recibir_danio"):
 				j.call("recibir_danio", float(C.ZOMBI.Danio), global_position)
@@ -613,7 +683,8 @@ func _quiere_atacar() -> bool:
 	var j := _jugador()
 	if j == null or float(j.get("health")) <= 0.0 or alerta < 0.3:
 		return false
-	return _dist_h(j.global_position) <= float(C.ZOMBI.Alcance) and absf(j.global_position.y - global_position.y) < 4.0
+	return _dist_h(j.global_position) <= float(C.ZOMBI.Alcance) and absf(j.global_position.y - global_position.y) < 4.0 \
+		and _alcanzable(j)
 
 
 ## ---------------------------------------------------------------- movimiento
@@ -799,9 +870,7 @@ func _paso_caida(dt: float) -> void:
 			_caida = 0.0
 			_forma.disabled = false
 			alerta = 1.0
-			var jr := _jugador()
-			if jr:
-				_percibir(jr.global_position, 1.0, true)
+			_notar_golpe(_impulso_golpe) # se levanta buscando a quien le tiró (si lo tiene cerca, sabe quién fue)
 			_cambiar(Estado.PERSEGUIR if _toca_perseguir() else Estado.INVESTIGAR)
 		return
 	if estado == Estado.CAIDO and reloj > _levantar_t and _caida >= 0.999:
@@ -812,9 +881,7 @@ func _paso_caida(dt: float) -> void:
 			_levantando = false
 			_forma.disabled = false
 			alerta = 1.0
-			var j := _jugador()
-			if j:
-				_percibir(j.global_position, 1.0, true)
+			_notar_golpe(_impulso_golpe)
 			_cambiar(Estado.PERSEGUIR if _toca_perseguir() else Estado.INVESTIGAR)
 	else:
 		# cae como un tronco: cada vez más deprisa
