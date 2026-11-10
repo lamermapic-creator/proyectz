@@ -1,8 +1,9 @@
 # Ruido, vista y zombis — guía del sistema (v1)
 
 > **Para quién:** cualquier persona o Claude que vaya a tocar el sigilo, los zombis o añadir algo que
-> haga ruido. **Estado:** v0 (oído) el 2026-10-23; **v1 (vista e ingenio) el 2026-10-24**, probada con 26
-> pruebas automáticas en verde. Si cambias algo de esto, actualiza este documento en el mismo commit.
+> haga ruido. **Estado:** v0 (oído) el 2026-10-23; **v1 (vista e ingenio) el 2026-10-24**; **arreglos de la
+> auditoría el 2026-11-10** (paredes, heridas de lejos, fondo del mundo), probada con 29 pruebas automáticas
+> en verde. Si cambias algo de esto, actualiza este documento en el mismo commit.
 > (El archivo conserva su nombre, `RUIDO_Y_ZOMBIS.md`, porque otros documentos lo enlazan.)
 
 ## Índice
@@ -82,6 +83,15 @@ más listos **sin disparar la dificultad** (las velocidades no cambian y verte l
 | 11 | Jugador y depuración: indicador "visto" en el HUD; F8 zombis ciegos (y en el menú de trucos F1); F6 dibuja el cono de visión | ✅ |
 | 12 | Pruebas de vista + regresión (las 16 de antes y las escenas de prueba de KangooG, comparadas antes/después) | ✅ |
 | 13 | Documentación | ✅ |
+
+**Arreglos de la auditoría (2026-11-10).** Tres fallos comprobados jugando sin ventana, cada uno con su prueba:
+
+| Fase | Qué | Estado |
+|---|---|---|
+| 14 | **Paredes:** el zombi ya no pega ni nota por contacto a través de una pared (`_alcanzable`: los rayos de la vista). Por encima de una barrera baja sí llega | ✅ |
+| 15 | **Heridas:** un golpe le dice de qué lado vino, no dónde estás (`_notar_golpe`); solo sabe quién fue de cerca, viéndote o si te acaba de oír | ✅ |
+| 16 | **Fondo del mundo** (`ZConfig.WORLD.FondoMundo`): el zombi que se cae del mapa desaparece; el jugador muere y el nivel se reinicia (red de seguridad del director) | ✅ |
+| 17 | Ruido `MOTOR` (la moto) registrado en `Ruido` con su peso y su color; 3 pruebas nuevas y documentación | ✅ |
 
 Reglas respetadas: **no se han tocado escenas `.tscn` ni `project.godot`** (todo se crea por código);
 los cambios en archivos que ya existían son pequeños y están listados en la [sección 14](#14-archivos-tocados).
@@ -174,6 +184,7 @@ Los disparos usan el `Alert` que cada arma ya tenía en Roblox (`Armas.WEAPONS`)
 | Acertar con cuchillo o machete / con el bate | 16 / 28 | | `Arsenal._resolver_golpe` |
 | Recargar / clic sin balas | 10 / 5 | | `Arsenal.reload`, `shoot` |
 | Gruñido de un zombi que empieza a perseguir | 45 | 14 | `Zombi._grunir` |
+| Motor de la moto, del ralentí a tope de vueltas (cada 0,35 s; tipo `Ruido.MOTOR`) | 26 – 95 | 8 – 29 | `Moto` (KangooG) |
 
 Medido en el juego (prueba `pasos`): agachado **5,2**, andando **12,4**, corriendo **31,7** studs de media.
 
@@ -192,6 +203,7 @@ DEAMBULAR ──oye / ve algo──► INVESTIGAR ──llega──► BUSCAR (v
   jugador seguidos (alerta alta)▼    │ o deja de oírle "PerseguirMemoria" s
                                PERSEGUIR ──a "Alcance"──► ATACAR ──► PERSEGUIR
 cualquiera ──bate──► CAIDO ──se levanta──► PERSEGUIR      cualquiera ──vida 0──► MUERTO
+herido de lejos sin haberte oído ni visto ──► INVESTIGAR hacia donde vino el golpe
 ```
 
 - **Alerta** (0..1): sube con cada ruido oído (más si es fuerte, cercano o de un tipo que alarma) y baja
@@ -200,16 +212,36 @@ cualquiera ──bate──► CAIDO ──se levanta──► PERSEGUIR      cu
   jugador). Un ruido nuevo sustituye a la pista si es al menos parecido a lo que recuerda (que se va
   olvidando); un ruido nuevo del jugador siempre actualiza el rastro. Así, **perseguir no es hacer trampa**:
   el zombi no conoce la posición del jugador, sigue sus ruidos.
-- **Contacto:** a menos de `Contacto` (4 studs, 1,2 m) nota al jugador aunque no haga ruido.
+- **Contacto:** a menos de `Contacto` (4 studs, 1,2 m) nota al jugador aunque no haga ruido, **si no hay una
+  pared en medio** (`_alcanzable`, desde el 2026-11-10).
 - **Perseguir** necesita: pista del jugador reciente (`PerseguirMemoria`) y alerta ≥ `PerseguirAlerta`.
 - **Atacar:** levanta los brazos (`PreparaGolpe`), golpea si el jugador sigue al alcance y delante
-  (`Danio`), y repite cada `Cadencia` segundos.
+  (`Danio`), y repite cada `Cadencia` segundos. Para empezar el ataque y para que el golpe acierte necesita
+  **camino libre** (`_alcanzable`): los mismos tres rayos de la vista (a la cabeza, el pecho y la cadera del
+  jugador, contra el escenario, capa 1), desde 2 studs por encima de su centro. Con una pared en medio no
+  pega; por encima de una barrera de 1 m sí (basta un rayo libre); si te metes tras una pared mientras
+  levanta los brazos, falla. *Antes solo miraba la distancia: con una pared de 1 stud (31 cm) en medio y el
+  jugador quieto y en silencio, lo detectaba y le quitaba 20 de vida.* La moto que conduce el jugador no cuenta
+  como pared (`_no_tapan`); una moto aparcada sí.
 - **Gruñidos:** al empezar a perseguir (con `GrunidoCada` de espera) emite un ruido `GRUNIDO`; los demás
   zombis lo oyen como un ruido **que no es del jugador**, así que van a mirar sin "saber" dónde está él.
   Deambulando gime de vez en cuando (solo ambiente: no emite ruido). Voces sintetizadas (no hay audios aún).
 - **Daño:** cumple el [contrato de objetivo](#8-contrato-de-objetivo). Recibir un golpe le pone en alerta
-  máxima hacia el jugador. Con el bate puede caer y levantarse; con vida 0 muere, deja de oír y el cuerpo
-  desaparece a los `Cadaver` segundos.
+  máxima, pero el golpe solo le dice **de qué lado vino** (`_notar_golpe`, desde el 2026-11-10; el impulso
+  lleva la dirección de la bala o del arma):
+
+  | Situación al recibir el golpe | Qué sabe | Qué hace |
+  |---|---|---|
+  | Te tiene a ≤ `HeridaCerca` (12 studs, ~3,7 m) o te está viendo | quién ha sido y dónde está | te persigue |
+  | Te oyó o te vio hace menos de `PerseguirMemoria` (el estampido llega antes que la bala) | lo que ya sabía | sigue esa pista, furioso |
+  | Nada de lo anterior (disparo lejano que no oye, tras una pared…) | solo la dirección | investiga `HeridaRastro` (30 studs, ~9 m) hacia donde vino; cada golpe más lo acerca otro tramo |
+  | El golpe no tiene dirección | nada | mira a su alrededor |
+
+  *Antes iba derecho a tu posición exacta desde cualquier distancia (comprobado a 87 m sin oír nada).* Al
+  levantarse tras un derribo aplica la misma regla con el último golpe. Con el bate puede caer y levantarse;
+  con vida 0 muere, deja de oír y el cuerpo desaparece a los `Cadaver` segundos.
+- **Fondo del mundo:** si él (o su cuerpo en ragdoll) cae por debajo de `ZConfig.WORLD.FondoMundo` (−200
+  studs), desaparece y emite `murio` (el director lo repone si `reaparecer` está activo).
 - **Física:** el cuerpo flota a 3,1 studs del suelo como el Humanoid del jugador (sube escalones sin
   saltar). Decisiones y movimiento en `_physics_process`; animación en `_process`.
 - **Animación barata (para hordas):** sin IK; ángulos directos por fase de zancada, con la fase ligada a la
@@ -287,6 +319,12 @@ dz.crear_zombi(pies, giro_grados)       # pies = punto del suelo en studs
   malla, va en línea recta.
 - **Reaparecer** (`reaparecer`, `reaparecer_tras`): en el nivel de pruebas un zombi muerto vuelve a su sitio
   a los 20 s.
+- **Red de seguridad: fondo del mundo** (2026-11-10, `_physics_process`). El suelo del nivel tiene bordes y
+  nada paraba la caída (a los 12 s el jugador iba por y = −1374, vivo y sin reinicio). Si el jugador baja de
+  `ZConfig.WORLD.FondoMundo` (−200 studs) recibe un daño mortal por su `recibir_danio` de siempre (sin
+  `desde`, para que no se pueda bloquear): muere y el nivel se reinicia solo. Con el truco "invencible" vuelve
+  al punto de partida (`teletransportar`). No se ha tocado `jugador.gd`; **solo funciona en niveles con
+  director** (el de pruebas lo tiene siempre). Si el `Jugador` trae algún día su propio fondo, esto sobra.
 - En el **nivel de pruebas** (`nivel_pruebas.gd`, función `_crear_zombis`) hay 4 zombis: tras la pared alta
   (para comprobar que las paredes tapan el ruido), junto a la cornisa, en una esquina y más allá de la zona
   de tiro (disparar allí los atrae). Con la meta `sin_zombis` en el nivel no se crean (las pruebas la usan).
@@ -349,15 +387,16 @@ sordos", "Zombis ciegos"); ahí también está la acción "Zombi delante" (que a
 ## 11. Pruebas
 
 Por primera vez, las pruebas **están en el repositorio**:
-- `tests/pruebas_ruido.gd`: 26 pruebas (16 de oído y regresión, v0; 10 de vista e ingenio, v1). Cada una carga
+- `tests/pruebas_ruido.gd`: 29 pruebas (16 de oído y regresión, v0; 10 de vista e ingenio, v1; 3 de los
+  arreglos del 2026-11-10). Cada una carga
   el nivel real, simula teclas y comprueba el resultado. **Las de oído dejan a los zombis ciegos y las de vista,
   sordos**, para medir cada sentido por separado.
-- `tests/ejecutar_pruebas.sh`: lo ejecuta todo (importar, compilar cada script, las 26 pruebas y arrancar el
-  menú y el nivel 10 s buscando errores) y da un resumen. Sale con código 0 si todo va bien: listo para
-  GitHub Actions.
+- `tests/ejecutar_pruebas.sh`: lo ejecuta todo (importar, compilar cada script, estas 29 pruebas, las de
+  moto, combate y ragdoll de KangooG, y arrancar el menú y el nivel 10 s buscando errores) y da un resumen:
+  102 comprobaciones en total. Sale con código 0 si todo va bien: listo para GitHub Actions.
 
 ```bash
-tests/ejecutar_pruebas.sh /ruta/a/Godot_v4.7.2           # todas (~1 minuto)
+tests/ejecutar_pruebas.sh /ruta/a/Godot_v4.7.2           # todas (~6-7 minutos; solo las 29 de aquí, ~2)
 tests/ejecutar_pruebas.sh /ruta/a/Godot_v4.7.2 sigilo    # solo una
 # En Windows, con Git Bash: tests/ejecutar_pruebas.sh "C:/Users/.../Godot_v4.7.2-stable_win64.exe"
 ```
@@ -390,6 +429,9 @@ tests/ejecutar_pruebas.sh /ruta/a/Godot_v4.7.2 sigilo    # solo una
 | `busqueda` | al perderle registra la zona (recorre varios sitios) y se rinde antes de `BuscarTiempo` |
 | `reaccion` | al oír algo primero se gira sin moverse y después va hacia allí |
 | `indicador` | el indicador "visto" del HUD se llena mientras le miran, se llena del todo al verle y baja después |
+| `ataque_pared` | a distancia de golpe con una pared de 1 stud en medio: ni pega ni nota al jugador en 8 s; al quitar la pared, sí; por encima de una barrera de 1 m, también |
+| `herida_lejos` | herido a 150 studs sin oír nada: se enfurece e investiga 30 studs hacia donde vino el golpe, sin saber dónde está el jugador; si oyó el disparo o lo tiene a 8 studs, sí lo sabe y persigue |
+| `fondo_mundo` | un zombi fuera del suelo (y uno derribado por el borde) desaparece y avisa con `murio`; el jugador muere al cruzar el fondo y el nivel se reinicia; invencible, vuelve al inicio |
 
 **Cuidado al escribir pruebas nuevas:** la oclusión funciona de verdad. Si el jugador corre hacia la fila de
 bloques naranjas del nivel, los bloques amortiguan sus pisadas y el zombi no le oye. Las pruebas usan la zona
@@ -438,7 +480,10 @@ Limitaciones:
 - **La vista no distingue cuerpos:** otro zombi o un maniquí no tapan (solo el escenario, capa 1).
 - **Comunicación sencilla:** los zombis solo se avisan con gruñidos (que no dicen dónde está el jugador).
 - **Animación sencilla:** los pies pueden resbalar algo; sin IK ni reacciones elaboradas.
-- **Sin ragdoll** ni para el zombi ni para el jugador (caen "como un tronco", igual que el maniquí).
+- **El fondo del mundo del jugador vive en el director** (red de seguridad): un nivel sin `DirectorZombis`
+  no la tiene. Una moto sin piloto que se salga del mapa no está cubierta (es de KangooG).
+- **Herido de lejos, adivina la distancia:** avanza siempre `HeridaRastro` studs por golpe, esté el tirador a
+  50 o a 500.
 - **Superficie:** todas las pisadas suenan igual (falta hierba/asfalto/metal: bastaría un multiplicador en
   `radio_paso` según el material del suelo).
 - **Voces y sonidos sintetizados:** placeholders hasta tener audios reales (Freesound, CC0).
@@ -485,3 +530,13 @@ Siguientes pasos propuestos (por orden):
 | `scripts/jugador/jugador.gd` (KangooG) | "F8: zombis ciegos" en el texto de ayuda |
 | `tests/pruebas_ruido.gd`, `tests/ejecutar_pruebas.sh` | + 10 pruebas de vista; las de oído, con zombis ciegos |
 | `tests/cerca.gd` (KangooG) | + `Zombi.ciegos = true` (1 línea, para que su zombi siga quieto como antes) |
+
+**Arreglos de la auditoría (2026-11-10):**
+
+| Archivo | Cambio |
+|---|---|
+| `scripts/zombis/zombi.gd` | + `_alcanzable`, `_no_tapan` (contacto y ataque con camino libre), `_notar_golpe` (heridas), `_fuera_del_mundo` |
+| `scripts/zombis/director_zombis.gd` | + `_physics_process`: fondo del mundo para el jugador |
+| `scripts/ruido/ruido.gd` | + `MOTOR` en las constantes, `PESO` (0,5, como antes por omisión) y `COLOR` |
+| `scripts/config/zconfig.gd` | + `WORLD.FondoMundo`, `ZOMBI.HeridaCerca`, `ZOMBI.HeridaRastro` (nada existente cambia) |
+| `tests/pruebas_ruido.gd`, `tests/ejecutar_pruebas.sh` | + `ataque_pared`, `herida_lejos`, `fondo_mundo`; `unidad` comprueba las tablas de tipos de ruido |

@@ -48,6 +48,9 @@ const REST := {
 const WORLD := {
 	"Gravity": 35.0,     # casi real
 	"AirControl": 5.0,   # studs/s² de control en el aire
+	# FONDO DEL MUNDO (2026-11-10): quien cae por debajo de esta altura (studs) se ha salido del mapa. El zombi
+	# desaparece (Zombi) y el jugador muere y el nivel se reinicia (red de seguridad del DirectorZombis).
+	"FondoMundo": -200.0,
 }
 
 ## CAÍDAS (velocidades de impacto en studs/s)
@@ -118,4 +121,7 @@ const ZOMBI := {
 	"BuscarRadio": 12.0,     # studs alrededor de donde te perdió
 	"BuscarMirar": 1.6,      # s mirando alrededor en cada sitio
 	"BuscarTiempo": 20.0,    # s máximos buscándote antes de rendirse
+	# HERIDAS (2026-11-10). Un golpe o una bala le dicen DE QUÉ LADO vino, no dónde está quien lo hizo.
+	"HeridaCerca": 12.0,     # studs (~3,7 m): a esta distancia sí sabe quién le ha dado (cuerpo a cuerpo, a quemarropa)
+	"HeridaRastro": 30.0,    # studs (~9 m) que avanza hacia donde vino el golpe para ver qué ha sido
 }

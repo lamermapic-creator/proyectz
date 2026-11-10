@@ -23,11 +23,15 @@ const IMPACTO := "impacto"
 const GOLPE := "golpe"
 const ARMA := "arma"            # recargar, clic sin balas
 const GRUNIDO := "grunido"      # zombis
+const MOTOR := "motor"          # la moto (scripts/vehiculos/moto.gd), según las revoluciones
 
 ## cuánto alarma cada tipo a un zombi (0..1): un disparo alarma más que una pisada del mismo volumen
 const PESO := {
 	PASO: 0.6, REPTAR: 0.5, ATERRIZAJE: 0.7, SORTEAR: 0.7, DISPARO: 1.0, IMPACTO: 0.7,
 	GOLPE: 0.9, ARMA: 0.6, GRUNIDO: 0.5,
+	# (el motor ya pesaba 0.5 sin estar en la tabla, por omisión; se deja igual a propósito: suena cada 0,35 s y
+	# con más peso los zombis perseguirían a la moto desde mucho más lejos)
+	MOTOR: 0.5,
 }
 
 ## color de cada tipo en la vista de depuración (F6)
@@ -35,6 +39,7 @@ const COLOR := {
 	PASO: Color(0.4, 0.9, 0.4), REPTAR: Color(0.3, 0.7, 0.3), ATERRIZAJE: Color(1.0, 0.8, 0.3),
 	SORTEAR: Color(1.0, 0.8, 0.3), DISPARO: Color(1.0, 0.25, 0.2), IMPACTO: Color(1.0, 0.55, 0.2),
 	GOLPE: Color(1.0, 0.4, 0.6), ARMA: Color(0.6, 0.8, 1.0), GRUNIDO: Color(0.7, 0.4, 1.0),
+	MOTOR: Color(0.3, 0.8, 0.9),
 }
 
 

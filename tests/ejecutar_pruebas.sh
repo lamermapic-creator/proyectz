@@ -17,7 +17,8 @@ fi
 
 MODOS=(unidad pasos disparo oye_disparo sigilo oclusion jauria navegacion ataque_y_muerte regeneracion
 	danio_zombi maniqui andar cadencia completo rendimiento
-	vista_frente vista_espalda vista_pared vista_lejos vista_postura vista_sigue anticipar busqueda reaccion indicador)
+	vista_frente vista_espalda vista_pared vista_lejos vista_postura vista_sigue anticipar busqueda reaccion indicador
+	ataque_pared herida_lejos fondo_mundo)
 [ ${#SOLO[@]} -gt 0 ] && MODOS=("${SOLO[@]}")
 
 fallos=0
