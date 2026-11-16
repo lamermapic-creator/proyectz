@@ -1,3 +1,9 @@
+## 2026-11-16 — Saltos frontales y patadas sin carrera
+
+Bloqueados los saltos hacia atrás, laterales y diagonales laterales. Se mantienen el salto
+vertical y hacia delante. G no inicia patada/pisotón al correr y Shift no activa carrera
+durante esos ataques. La dirección vuelve a comprobarse al despegar.
+
 ## 2026-11-16 — Caídas distintas y contracciones en el ragdoll
 
 NPC y zombis sortean por muerte el equilibrio del torso, brazos y pérdida de apoyo de cada

@@ -695,10 +695,15 @@ func step_vault(dt: float) -> void:
 			arsenal.sacar_tras_trepar()
 
 
+## Salto vertical o frontal respecto a la cámara; también bloquea las diagonales laterales.
+func _direccion_salto_permitida(direccion: Vector3) -> bool:
+	return direccion.length() <= 0.1 or direccion.normalized().dot(Vector3(-sin(yaw), 0, -cos(yaw))) >= 0.9
+
+
 func jump_or_vault() -> void:
 	if health <= 0 or vaulting != null or L.knocked or L.gettingUp:
 		return
-	if not en_suelo or ahora() - jump_prep_t < 0.3:
+	if not en_suelo or ahora() - jump_prep_t < 0.3 or not _direccion_salto_permitida(_leer_movimiento()):
 		return
 	var v = find_vault()
 	if v != null and start_vault(v):
@@ -723,7 +728,7 @@ func jump_or_vault() -> void:
 
 
 func _impulso_salto() -> void:
-	if en_suelo and vaulting == null and jump_height > 0:
+	if en_suelo and vaulting == null and jump_height > 0 and _direccion_salto_permitida(_leer_movimiento()):
 		_salto_pedido = true
 
 
@@ -1262,6 +1267,8 @@ func update_character(dt: float) -> void:
 	# estamina y velocidad
 	var moving := move_direction.length() > 0.1
 	var want_sprint := Input.is_physical_key_pressed(KEY_SHIFT) and moving and not aiming and not firing
+	if arsenal.cc.accion != null and arsenal.cc.accion.tipo in ["patada", "pisoton"]:
+		want_sprint = false
 	# tumbado: Shift = reptar rápido (solo boca abajo y ya tumbado); agachado se corre agachado
 	if stance == 2:
 		want_sprint = want_sprint and not supine and prone_p > 0.98
@@ -1673,7 +1680,7 @@ func humanoid_step(dt: float) -> void:
 		_aire_t = 0.0
 	if _salto_pedido:
 		_salto_pedido = false
-		if en_suelo and jump_height > 0:
+		if en_suelo and jump_height > 0 and _direccion_salto_permitida(mov):
 			v.y = sqrt(2.0 * g * jump_height)
 			en_suelo = false
 			# distancia FIJA: si te mueves, el salto siempre recorre JumpDistance studs en la dirección
@@ -1684,6 +1691,10 @@ func humanoid_step(dt: float) -> void:
 				horiz = Vector3(mov.x, 0, mov.z).normalized() * hs
 				air_vel = horiz
 				air_cap = hs
+			else:
+				horiz = Vector3.ZERO
+				air_vel = Vector3.ZERO
+				air_cap = 0.0
 			stamina = maxf(0, stamina - C.PLAYER.JumpCost)
 			_set_estado("Jumping")
 	velocity = Vector3(horiz.x, v.y, horiz.z)

@@ -1151,6 +1151,9 @@ func empujon() -> void:
 
 
 func patada() -> void:
+	# Comprobar también la entrada actual: G puede llegar antes de actualizar L.sprinting.
+	if J.L.sprinting or (Input.is_physical_key_pressed(KEY_SHIFT) and J._leer_movimiento().length() > 0.1 and not J.aiming and not J.firing and not J.exhausted):
+		return
 	if not cc_puede(true):
 		return
 	# con el blanco en el suelo delante, pisotón

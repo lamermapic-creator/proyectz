@@ -1,5 +1,14 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
+## 2026-11-16 · Codex · Restricciones de salto y patada
+- Petición del usuario: impedir saltos hacia atrás/laterales (incluidas diagonales laterales)
+  y patadas al correr. Se permite salto vertical y frontal respecto a la cámara.
+- Dirección comprobada al pedir, tras preparación y al despegar. Salto vertical sin deriva.
+- G se rechaza al correr, incluso si Shift entra antes de actualizar la animación; durante
+  patada/pisotón no se activa sprint. Sin cambios en fuentes generadas.
+- Compilación de ambos scripts y arranque del nivel comprobados en Godot 4.6.3;
+  banco temporal: 17 comprobaciones de direcciones y bloqueo de patada, todas correctas.
+
 ## 2026-11-16 · Codex · Caídas variadas y contracciones nerviosas
 - Nueva petición expresa: variar las caídas y añadir movimiento nervioso. Sustituye la regla
   anterior de no añadir espasmos para NPC/zombis del grupo `objetivos`.
