@@ -1,5 +1,20 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
+## 2026-11-16 · Codex · Nuevo menú principal de cuarentena
+- Sustituida la portada de atardecer/nivel de pruebas por un escenario nocturno propio, con alambrada,
+  barreras, niebla, luz roja y tres rigs de zombis decorativos. No llevan IA ni navegación.
+- UI nueva: título, colores, botones numerados, navegación de teclado, foco y ventanas de opciones/
+  controles escalables. La entrada sigue siendo `escenas/menu_principal.tscn`; no cambian el nivel,
+  el jugador ni el menú de pausa. Se mantienen `_jugar`, `_abrir` y `_volver` para el flujo existente.
+- Fuentes Open Sans originales incluidas con Apache 2.0; conservar avisos en `assets/fuentes/`.
+- Guía y pruebas: `docs/MENU_PRINCIPAL.md`, `tests/menu_redisenado.gd`. Comparar las coordenadas de
+  UI usando el transform final del viewport, porque `canvas_items` mantiene una resolución lógica.
+- Verificado: 52 comprobaciones de flujo/layout sin ventana y 56 con renderizado (incluye cuatro
+  capturas). El test antiguo volvió al menú sin pausa ni cargas pendientes. Capturas reales de Godot
+  en `docs/capturas/menu-*.png`; renderizadas en OpenGL Compatibility con llvmpipe CPU.
+- Batería general de esta entrega: 101/102 OK; solo falló `moto_zombi` (intermitencia ya documentada),
+  y pasó al repetirlo aislado. No se cambió código de moto, zombis o combate para ocultarlo.
+
 ## 2026-11-16 · Codex · Sangre y deterioro visible (v4)
 - Petición del usuario: aspecto más sanguinario conservando el arte cuadrado. Añadidas sangre seca
   y reciente en boca/barbilla, salpicaduras faciales, cortes, manos/antebrazos y manchas en ropa.

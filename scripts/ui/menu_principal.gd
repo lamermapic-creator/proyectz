@@ -1,247 +1,286 @@
 extends Node3D
-## Menú principal: el superviviente en el nivel de pruebas al atardecer, con la cámara girando
-## despacio alrededor, y el menú a la izquierda (Jugar, Opciones, Controles, Salir).
-
+## Menú de cuarentena. UI de referencia 1280×720 escalada a la ventana.
 const JUEGO := "res://escenas/pruebas_movimiento.tscn"
-const NIVEL := preload("res://scripts/nivel/nivel_pruebas.gd")
-## (la versión sale de project.godot: application/config/version)
+const FONDO := preload("res://scripts/ui/fondo_menu.gd")
+const FUENTE_TITULO := preload("res://assets/fuentes/OpenSans-CondBold.ttf")
+const FUENTE := preload("res://assets/fuentes/OpenSans-Regular.ttf")
+const ROJO := Color("c85c45")
+const TEXTO := Color("e2ded3")
+const SUAVE := Color("969f9d")
+
 static func version_texto() -> String:
 	return "V%s · prototipo" % str(ProjectSettings.get_setting("application/config/version", "?"))
 
-var cam: Camera3D
-var rig: RigPersonaje
-var _t := 0.0
 var _botones: VBoxContainer
 var _opciones: PanelOpciones
 var _controles: PanelContainer
 var _fundido: ColorRect
 var _saliendo := false
-var _cabecera: Array = []
-
+var _referencia: Control
+var _portada: Control
+var _ventanas: Control
+var _descripcion: Label
+var _tema: Theme
 
 func _ready() -> void:
 	Opciones.cargar()
 	get_window().title = "Proyecto Z · V%s" % str(ProjectSettings.get_setting("application/config/version", "?"))
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	get_tree().paused = false
-	# escenario de fondo (el mismo nivel, sin muñecos)
-	var nivel := Node3D.new()
-	nivel.set_script(NIVEL)
-	nivel.set_meta("sin_maniquies", true)
-	add_child(nivel)
-	# el superviviente, de pie con el rifle
-	rig = RigPersonaje.new()
-	rig.modelo = "superviviente"
-	add_child(rig)
-	rig.position = Vector3(0, 3.1, 0)
-	rig.rotation.y = deg_to_rad(-25)
-	var rifle := Armas.construir_modelo("Rifle")
-	(rig.P.RightHand as Node3D).add_child(rifle)
-	rifle.transform = Armas.handle_en_mano("Rifle")
-	_pose(0.0)
-	cam = Camera3D.new()
-	cam.fov = 50
-	add_child(cam)
-	cam.current = true
+	add_child(FONDO.new())
 	_crear_ui()
 	Opciones.aplicar(get_tree())
-	call_deferred("_atardecer")
+	call_deferred("_aplicar_calidad")
+	get_viewport().size_changed.connect(_ajustar_ui)
+	_ajustar_ui()
 
-
-## luz cálida y baja para el fondo del menú
-func _atardecer() -> void:
-	for n in find_children("*", "DirectionalLight3D", true, false):
-		var l := n as DirectionalLight3D
-		l.rotation_degrees = Vector3(-14, 120, 0)
-		l.light_color = Color8(255, 196, 140)
-		l.light_energy = 1.4
-	for n in find_children("*", "WorldEnvironment", true, false):
-		var env: Environment = (n as WorldEnvironment).environment
-		if env and env.sky and env.sky.sky_material is ProceduralSkyMaterial:
-			var sm := env.sky.sky_material as ProceduralSkyMaterial
-			sm.sky_top_color = Color8(52, 66, 96)
-			sm.sky_horizon_color = Color8(222, 150, 104)
-			sm.ground_horizon_color = Color8(120, 96, 80)
-			env.fog_enabled = true
-			env.fog_light_color = Color8(200, 150, 120)
-			env.fog_density = 0.004
+func _aplicar_calidad() -> void:
 	Opciones.aplicar_calidad(get_tree())
 
+func _texto(padre: Node, texto: String, pos: Vector2, tam: int, color := TEXTO, titulo := false) -> Label:
+	var l := Label.new()
+	l.text = texto
+	l.position = pos
+	l.add_theme_font_override("font", FUENTE_TITULO if titulo else FUENTE)
+	l.add_theme_font_size_override("font_size", tam)
+	l.add_theme_color_override("font_color", color)
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	padre.add_child(l)
+	return l
 
-func _process(dt: float) -> void:
-	_t += dt
-	var a := _t * 0.08 + 0.6
-	var foco := Vector3(0, 3.6, 0)
-	cam.global_position = foco + Vector3(sin(a) * 13.0, 1.4 + sin(_t * 0.2) * 0.4, cos(a) * 13.0)
-	cam.look_at(foco + Vector3(-2.2, 0, 0).rotated(Vector3.UP, a), Vector3.UP)
-	_pose(_t)
+func _rect(padre: Node, pos: Vector2, tam: Vector2, color: Color) -> ColorRect:
+	var r := ColorRect.new()
+	r.position = pos
+	r.size = tam
+	r.color = color
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	padre.add_child(r)
+	return r
 
+func _estilo(bg: Color, borde: Color, grosor := 1) -> StyleBoxFlat:
+	var s := StyleBoxFlat.new()
+	s.bg_color = bg
+	s.border_color = borde
+	s.set_border_width_all(grosor)
+	s.content_margin_left = 54
+	s.content_margin_right = 22
+	s.content_margin_top = 0
+	s.content_margin_bottom = 0
+	return s
 
-## pose de reposo: peso en una pierna, rifle bajo, respiración y mirada que va y viene
-func _pose(t: float) -> void:
-	var M := rig.M
-	var resp := sin(t * 1.6) * 0.02
-	(M.Root as RigPersonaje.Motor).transform = Rbx.cf(0.06, -0.05, 0) * Rbx.ang(0, 0.05, 0.03)
-	(M.Waist as RigPersonaje.Motor).transform = Rbx.ang(0, -0.2, 0) * Rbx.ang(resp - 0.05, 0, -0.03)
-	(M.Neck as RigPersonaje.Motor).transform = Rbx.ang(0, sin(t * 0.3) * 0.35 + 0.15, 0) * Rbx.ang(-0.05 - resp * 0.5, 0, 0)
-	(M.LeftHip as RigPersonaje.Motor).transform = Rbx.ang(0.08, 0, -0.06)
-	(M.LeftKnee as RigPersonaje.Motor).transform = Rbx.ang(-0.2, 0, 0)
-	(M.LeftAnkle as RigPersonaje.Motor).transform = Rbx.ang(0.12, 0, 0)
-	(M.RightHip as RigPersonaje.Motor).transform = Rbx.ang(-0.04, 0, 0.04)
-	# brazos: el rifle cruzado por delante, cañón hacia abajo
-	(M.RightShoulder as RigPersonaje.Motor).transform = Rbx.ang(0.35, 0.2, 0.15)
-	(M.RightElbow as RigPersonaje.Motor).transform = Rbx.ang(1.2, 0, 0)
-	(M.RightWrist as RigPersonaje.Motor).transform = Rbx.ang(-0.9, 0.4, 0)
-	(M.LeftShoulder as RigPersonaje.Motor).transform = Rbx.ang(0.7, -0.35, -0.1)
-	(M.LeftElbow as RigPersonaje.Motor).transform = Rbx.ang(1.1, 0, 0)
-	rig.aplicar()
-
+func _boton(texto: String, indice: int, accion: Callable, principal := false) -> Button:
+	var b := Button.new()
+	b.name = ["Jugar", "Opciones", "Controles", "Salir"][indice]
+	b.text = texto
+	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	b.custom_minimum_size = Vector2(400, 66 if principal else 44)
+	b.add_theme_font_override("font", FUENTE_TITULO if principal else FUENTE)
+	b.add_theme_font_size_override("font_size", 28 if principal else 17)
+	b.add_theme_stylebox_override("normal", _estilo(Color("26211e") if principal else Color(0.05, 0.07, 0.07, 0.35), Color("735145") if principal else Color(0.5, 0.6, 0.6, 0.13)))
+	b.add_theme_stylebox_override("hover", _estilo(Color("3b2923"), ROJO))
+	b.add_theme_stylebox_override("pressed", _estilo(Color("5b3428"), ROJO))
+	b.add_theme_stylebox_override("focus", _estilo(Color(0, 0, 0, 0), ROJO, 2))
+	b.add_theme_color_override("font_color", TEXTO)
+	b.add_theme_color_override("font_hover_color", Color.WHITE)
+	b.add_theme_color_override("font_focus_color", Color.WHITE)
+	b.pressed.connect(accion)
+	b.mouse_entered.connect(func(): b.grab_focus())
+	b.focus_entered.connect(func():
+		_descripcion.text = ["La ciudad escucha cada paso.", "Ajusta la experiencia a tu equipo.", "Aprende a moverte sin hacer ruido.", "Volver al escritorio."][indice])
+	_texto(b, "%02d" % (indice + 1), Vector2(17, 23 if principal else 12), 12, SUAVE)
+	_texto(b, "→", Vector2(359, 17 if principal else 7), 22, ROJO)
+	return b
 
 func _crear_ui() -> void:
+	_tema = EstiloUI.tema().duplicate(true) as Theme
+	_tema.default_font = FUENTE
+	_tema.default_font_size = 17
 	var capa := CanvasLayer.new()
 	add_child(capa)
 	var raiz := Control.new()
-	raiz.set_anchors_preset(Control.PRESET_FULL_RECT)
-	raiz.theme = EstiloUI.tema()
 	capa.add_child(raiz)
-	# degradado oscuro a la izquierda para que se lea el menú
-	var grad := TextureRect.new()
-	var gt := GradientTexture2D.new()
-	var g := Gradient.new()
-	g.set_color(0, Color(0, 0, 0, 0.82))
-	g.set_color(1, Color(0, 0, 0, 0))
-	gt.gradient = g
-	gt.fill_from = Vector2(0, 0)
-	gt.fill_to = Vector2(1, 0)
-	grad.texture = gt
-	grad.anchor_bottom = 1.0
-	grad.anchor_right = 0.55
-	grad.stretch_mode = TextureRect.STRETCH_SCALE
-	grad.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	raiz.add_child(grad)
-	var col := VBoxContainer.new()
-	col.anchor_top = 0.0
-	col.anchor_bottom = 1.0
-	col.offset_left = 80
-	col.offset_right = 760
-	col.alignment = BoxContainer.ALIGNMENT_CENTER
-	col.add_theme_constant_override("separation", 10)
-	raiz.add_child(col)
-	var tit := EstiloUI.titulo("PROYECTO Z", 84)
-	col.add_child(tit)
-	var sub := Label.new()
-	sub.text = "Sobrevive. No hagas ruido."
-	sub.add_theme_color_override("font_color", EstiloUI.TEXTO_SUAVE)
-	sub.add_theme_font_size_override("font_size", 20)
-	col.add_child(sub)
-	var esp := Control.new()
-	esp.custom_minimum_size = Vector2(0, 30)
-	col.add_child(esp)
-	_cabecera = [tit, sub, esp]
+	raiz.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	raiz.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	raiz.theme = _tema
+	var sombra := TextureRect.new()
+	var textura := GradientTexture2D.new()
+	var grad := Gradient.new()
+	grad.offsets = PackedFloat32Array([0.0, 0.35, 0.75, 1.0])
+	grad.colors = PackedColorArray([Color(0.015, 0.025, 0.027, 0.98), Color(0.015, 0.025, 0.027, 0.88), Color(0.015, 0.025, 0.027, 0.18), Color(0, 0, 0, 0)])
+	textura.gradient = grad
+	textura.fill_from = Vector2.ZERO
+	textura.fill_to = Vector2.RIGHT
+	sombra.texture = textura
+	raiz.add_child(sombra)
+	sombra.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	sombra.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var atmosfera := _rect(raiz, Vector2.ZERO, Vector2.ZERO, Color.WHITE)
+	atmosfera.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var material := ShaderMaterial.new()
+	material.shader = preload("res://scripts/ui/atmosfera_menu.gdshader")
+	atmosfera.material = material
+	_referencia = Control.new()
+	_referencia.name = "InterfazMenu"
+	_referencia.size = Vector2(1280, 720)
+	_referencia.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	raiz.add_child(_referencia)
+	_portada = Control.new()
+	_portada.size = Vector2(1280, 720)
+	_portada.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_referencia.add_child(_portada)
+	_rect(_portada, Vector2(76, 70), Vector2(28, 3), ROJO)
+	_texto(_portada, "SUPERVIVENCIA  /  SIGILO", Vector2(116, 60), 12, SUAVE)
+	_texto(_portada, "PROYECTO", Vector2(70, 102), 84, TEXTO, true)
+	_texto(_portada, "Z", Vector2(71, 174), 132, ROJO, true)
+	_rect(_portada, Vector2(165, 230), Vector2(1, 52), Color("57615c"))
+	_texto(_portada, "SOBREVIVE.\nNO HAGAS RUIDO.", Vector2(183, 230), 17, TEXTO)
+	_texto(_portada, "ZONA DE EXCLUSIÓN", Vector2(971, 64), 12, SUAVE)
 	_botones = VBoxContainer.new()
-	_botones.add_theme_constant_override("separation", 10)
-	col.add_child(_botones)
-	_botones.add_child(EstiloUI.boton("Jugar", _jugar))
-	_botones.add_child(EstiloUI.boton("Opciones", func(): _abrir(_opciones)))
-	_botones.add_child(EstiloUI.boton("Controles", func(): _abrir(_controles)))
-	_botones.add_child(EstiloUI.boton("Salir", func(): get_tree().quit()))
-	_opciones = PanelOpciones.new()
-	_opciones.visible = false
-	_opciones.cerrado.connect(_volver)
-	col.add_child(_opciones)
-	_controles = _panel_controles()
-	_controles.visible = false
-	col.add_child(_controles)
-	var ver := Label.new()
-	ver.text = version_texto()
-	ver.add_theme_color_override("font_color", Color(1, 1, 1, 0.45))
-	ver.anchor_left = 1.0
-	ver.anchor_right = 1.0
-	ver.anchor_top = 1.0
-	ver.anchor_bottom = 1.0
-	ver.offset_left = -260
-	ver.offset_top = -40
-	ver.offset_right = -24
-	ver.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	raiz.add_child(ver)
-	_fundido = ColorRect.new()
-	_fundido.color = Color(0, 0, 0, 1)
-	_fundido.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_fundido.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	raiz.add_child(_fundido)
+	_botones.name = "Acciones"
+	_botones.position = Vector2(76, 345)
+	_botones.size = Vector2(400, 238)
+	_botones.add_theme_constant_override("separation", 8)
+	_portada.add_child(_botones)
+	_descripcion = _texto(_portada, "La ciudad escucha cada paso.", Vector2(76, 596), 13, SUAVE)
+	_botones.add_child(_boton("JUGAR", 0, _jugar, true))
+	_botones.add_child(_boton("Opciones", 1, func(): _abrir(_opciones)))
+	_botones.add_child(_boton("Controles", 2, func(): _abrir(_controles)))
+	_botones.add_child(_boton("Salir", 3, _salir))
+	for i in 4:
+		var b := _botones.get_child(i) as Button
+		b.focus_neighbor_top = b.get_path_to(_botones.get_child(posmod(i - 1, 4)))
+		b.focus_neighbor_bottom = b.get_path_to(_botones.get_child((i + 1) % 4))
+	_rect(_referencia, Vector2(76, 657), Vector2(1128, 1), Color(0.6, 0.65, 0.63, 0.20))
+	_texto(_referencia, "↑ ↓  NAVEGAR     ENTER  SELECCIONAR", Vector2(76, 674), 11, SUAVE)
+	var version := _texto(_referencia, version_texto(), Vector2(930, 670), 13, SUAVE)
+	version.size.x = 274
+	version.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_crear_ventanas()
+	_fundido = _rect(raiz, Vector2.ZERO, Vector2.ZERO, Color.BLACK)
+	_fundido.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_fundido.mouse_filter = Control.MOUSE_FILTER_STOP
 	var tw := create_tween()
-	tw.tween_property(_fundido, "color:a", 0.0, 1.2)
+	tw.tween_property(_fundido, "color:a", 0.0, 0.9)
+	tw.tween_callback(func(): _fundido.mouse_filter = Control.MOUSE_FILTER_IGNORE)
 	(_botones.get_child(0) as Button).grab_focus()
 
+func _crear_ventanas() -> void:
+	_ventanas = Control.new()
+	_ventanas.name = "PanelesMenu"
+	_ventanas.size = Vector2(1280, 720)
+	_referencia.add_child(_ventanas)
+	_rect(_ventanas, Vector2.ZERO, Vector2(1280, 720), Color(0.015, 0.022, 0.024, 0.94))
+	var marco := PanelContainer.new()
+	marco.position = Vector2(220, 48)
+	marco.size = Vector2(840, 602)
+	_ventanas.add_child(marco)
+	var estilo := _estilo(Color("111a1c"), Color("46514e"))
+	estilo.content_margin_left = 26
+	estilo.content_margin_right = 26
+	estilo.content_margin_top = 22
+	estilo.content_margin_bottom = 22
+	marco.add_theme_stylebox_override("panel", estilo)
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	marco.add_child(scroll)
+	var contenido := VBoxContainer.new()
+	contenido.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(contenido)
+	_opciones = PanelOpciones.new()
+	contenido.add_child(_opciones)
+	_opciones.theme = _tema
+	_opciones.cerrado.connect(_volver)
+	_opciones.visible = false
+	_controles = _panel_controles()
+	contenido.add_child(_controles)
+	_controles.visible = false
+	_ventanas.visible = false
 
 func _panel_controles() -> PanelContainer:
 	var p := PanelContainer.new()
-	p.custom_minimum_size = Vector2(620, 0)
-	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 6)
-	p.add_child(v)
-	v.add_child(EstiloUI.titulo("CONTROLES", 30))
-	var lista := [
-		["WASD", "Moverse"], ["Shift", "Correr (tumbado: reptar rápido)"], ["Espacio", "Saltar / sortear / trepar"],
-		["C o Ctrl", "Agacharse"], ["Z", "Cuerpo a tierra"], ["Q / E", "Asomarse"],
-		["1 - 4", "Armas"], ["Clic derecho", "Apuntar"], ["Clic izquierdo", "Disparar / golpear"],
-		["R", "Recargar"], ["X", "Apoyar el arma"], ["F", "Recoger"], ["V", "Cambiar de hombro"],
-		["Rueda del ratón", "Acercar / alejar la cámara"],
-		["Colgado", "A/D moverse (Shift: rápido) · Espacio subir · S soltarse"], ["Esc", "Pausa"],
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 6)
+	p.add_child(col)
+	col.add_child(EstiloUI.titulo("CONTROLES", 30))
+	var filas := [
+		["WASD / Shift", "Moverse / correr"], ["Espacio", "Saltar, sortear o trepar"],
+		["C o Ctrl / Z", "Agacharse / cuerpo a tierra"], ["Q / E", "Asomarse"],
+		["1 – 4 / F", "Elegir arma / recoger"], ["Clic derecho", "Apuntar o ponerse en guardia"],
+		["Clic izquierdo", "Disparar o golpear"], ["G", "Patada; pisotón al enemigo caído"],
+		["Clic derecho + Espacio", "Bloquear; doble Espacio: empujón"],
+		["R / X", "Recargar / apoyar el arma"], ["V / rueda", "Cambiar de hombro / acercar cámara"],
+		["Colgado", "A/D moverse · Espacio subir · S soltarse"], ["Esc", "Pausa"],
 	]
 	var grid := GridContainer.new()
 	grid.columns = 2
-	grid.add_theme_constant_override("h_separation", 28)
-	grid.add_theme_constant_override("v_separation", 4)
-	for f in lista:
-		var k := Label.new()
-		k.text = f[0]
-		k.add_theme_color_override("font_color", EstiloUI.ACENTO)
-		var d := Label.new()
-		d.text = f[1]
-		grid.add_child(k)
-		grid.add_child(d)
-	v.add_child(grid)
-	var volver := EstiloUI.boton("Volver", _volver)
-	volver.custom_minimum_size = Vector2(180, 44)
-	volver.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	grid.add_theme_constant_override("h_separation", 24)
+	grid.add_theme_constant_override("v_separation", 9)
+	for fila in filas:
+		var tecla := Label.new()
+		tecla.text = fila[0]
+		tecla.add_theme_color_override("font_color", ROJO)
+		grid.add_child(tecla)
+		var accion := Label.new()
+		accion.text = fila[1]
+		grid.add_child(accion)
+	col.add_child(grid)
 	var pie := HBoxContainer.new()
 	pie.alignment = BoxContainer.ALIGNMENT_END
+	var volver := EstiloUI.boton("Volver", _volver)
+	volver.custom_minimum_size = Vector2(160, 44)
 	pie.add_child(volver)
-	v.add_child(pie)
+	col.add_child(pie)
 	return p
 
+func _ajustar_ui() -> void:
+	var tam := get_viewport().get_visible_rect().size
+	var factor := minf(tam.x / 1280.0, tam.y / 720.0)
+	_referencia.scale = Vector2.ONE * factor
+	_referencia.position = (tam - Vector2(1280, 720) * factor) * 0.5
 
 func _abrir(panel: Control) -> void:
+	if _saliendo:
+		return
+	_portada.visible = false
 	_botones.visible = false
-	# los paneles ocupan su sitio (el título se oculta para que quepan en pantallas bajas)
-	for c in _cabecera:
-		(c as Control).visible = false
+	_ventanas.visible = true
+	_opciones.visible = false
+	_controles.visible = false
 	if panel == _opciones:
 		_opciones.abrir()
 	else:
 		panel.visible = true
 		(panel.find_children("*", "Button", true, false)[0] as Button).grab_focus()
 
-
 func _volver() -> void:
 	_opciones.visible = false
 	_controles.visible = false
+	_ventanas.visible = false
+	_portada.visible = true
 	_botones.visible = true
-	for c in _cabecera:
-		(c as Control).visible = true
 	(_botones.get_child(0) as Button).grab_focus()
 
-
-func _unhandled_input(e: InputEvent) -> void:
-	if e is InputEventKey and e.pressed and not e.echo and e.physical_keycode == KEY_ESCAPE and _controles.visible:
-		_volver()
-
+func _unhandled_input(event: InputEvent) -> void:
+	if not _saliendo and event.is_action_pressed("ui_cancel") and _ventanas.visible:
+		if _opciones.visible:
+			_opciones._cerrar()
+		else:
+			_volver()
+		get_viewport().set_input_as_handled()
 
 func _jugar() -> void:
+	_transicion(func(): PantallaCarga.ir_a(get_tree(), JUEGO))
+
+func _salir() -> void:
+	_transicion(func(): get_tree().quit())
+
+func _transicion(accion: Callable) -> void:
 	if _saliendo:
 		return
 	_saliendo = true
+	for b in _botones.get_children():
+		(b as Button).disabled = true
+	_fundido.mouse_filter = Control.MOUSE_FILTER_STOP
 	var tw := create_tween()
-	tw.tween_property(_fundido, "color:a", 1.0, 0.6)
-	tw.tween_callback(func(): PantallaCarga.ir_a(get_tree(), JUEGO))
+	tw.tween_property(_fundido, "color:a", 1.0, 0.55)
+	tw.tween_callback(accion)

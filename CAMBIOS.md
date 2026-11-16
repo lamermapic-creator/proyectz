@@ -13,6 +13,23 @@ en el mismo commit que el cambio. Formato:
 
 ---
 
+## 2026-11-16 · Usuario · Codex — rediseñar el menú principal
+**Qué:** portada de cuarentena nocturna con escenario propio, zombis decorativos, nueva tipografía,
+botones numerados y acento rojo. Opciones/Controles en paneles escalables, foco visible, Esc para
+volver y protección frente a cargas duplicadas. Conservadas las cuatro acciones del menú.
+**Archivos:** `scripts/ui/menu_principal.gd`, nuevos `fondo_menu.gd` y `atmosfera_menu.gdshader`,
+fuentes/licencias en `assets/fuentes/`, `tests/menu_redisenado.gd`, `docs/MENU_PRINCIPAL.md`, `CLAUDE.md`.
+**Cómo probarlo:** ejecutar el juego normalmente. Abrir Opciones/Controles con ratón o flechas/Enter,
+volver con Esc y pulsar Jugar. Cambiar tamaño de ventana; probar 16:9, 4:3 y pantalla ancha.
+**Pendiente / avisos:** el fondo no es el nivel jugable ni tiene zombis activos. No se modificaron
+la escena de entrada, `project.godot`, el jugador ni el menú de pausa. Fuentes bajo Apache 2.0 con
+avisos incluidos. Capturas reales y reproducción: `docs/MENU_PRINCIPAL.md`.
+**Validación específica:** 52 comprobaciones correctas sin ventana y 56 con renderizado (cuatro
+capturas reales incluidas en `docs/capturas/`). Recorrido antiguo: menú, nivel, pausa/opciones y vuelta
+al menú sin errores, sin pausa residual ni pantalla de carga pendiente. Cinco tamaños verificados.
+**Batería general:** 101/102 OK; solo falló `moto_zombi`, ya documentado como intermitente, y pasó
+aislado. Se conserva el resultado original en `menu-nuevo-regresion.log`; no se alteraron sus aserciones.
+
 ## 2026-11-16 · Usuario · Codex — zombis ensangrentados y cerebro visible en tres variantes (v4)
 **Qué:** sangre seca/reciente en piel, boca, ropa y extremidades; cortes y coágulos en antebrazos.
 Civil, sanitario y paciente tienen abertura real de cráneo, corteza con pliegues/vasos, borde herido
