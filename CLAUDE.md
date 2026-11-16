@@ -1,5 +1,18 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
+## 2026-11-16 · Codex · Revisión visual v5 cuadrada
+- Corrección expresa del usuario: **mantener el estilo cuadrado usando al protagonista de ejemplo**.
+  Se conserva la geometría cuadrada de v4; el ensayo de cráneos y miembros redondeados se descartó.
+  No restaurar ese ensayo. Siguen las 12 profesiones, pivotes, impacto, clips y combate R15.
+- `superficie.py` genera normales originales de poros y tejido, embebidas junto al color y sangre.
+  Cuatro PNG 512×512 por GLB y techo de 16.000 triángulos. Meshy conectado y consultado; no se
+  gastaron créditos: la corrección exacta del rig se hizo con fuentes locales de Blender.
+- Menú: calle con fachadas y ventanas, garita, marquesina, suministros, luces prácticas, sombras y
+  shader de asfalto húmedo. Sigue sin IA ni navegación; no se altera el flujo de botones.
+- Validado: 12 GLB; 624/624 comprobaciones de modelos; 56/56 menú renderizado; batería general
+  102/102, `TODO BIEN`. Entorno: Blender 4.3.2 y Godot 4.6.3; falta comprobar 4.7.2 y hordas GPU.
+  Detalle y capturas en `docs/REVISION_VISUAL_V5.md`.
+
 ## 2026-11-16 · Codex · Nuevo menú principal de cuarentena
 - Sustituida la portada de atardecer/nivel de pruebas por un escenario nocturno propio, con alambrada,
   barreras, niebla, luz roja y tres rigs de zombis decorativos. No llevan IA ni navegación.

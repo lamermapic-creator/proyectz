@@ -1,3 +1,5 @@
+> Revisión visual vigente: [v5](REVISION_VISUAL_V5.md). Conserva el estilo cuadrado de v4, contratos y flujo.
+
 # Menú principal de cuarentena — 2026-11-16
 
 Rediseño de la portada de Proyecto Z. La entrada sigue siendo `escenas/menu_principal.tscn`, que

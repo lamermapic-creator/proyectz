@@ -1,4 +1,4 @@
-"""Diseño v2: volúmenes anatómicos y vestuario. Conserva centros y pivotes del R15."""
+"""Diseño v5 cuadrado: volúmenes anatómicos y vestuario. Conserva centros y pivotes del R15."""
 import bpy, bmesh, math, random
 from mathutils import Vector
 from rostro import esculpir
@@ -194,3 +194,5 @@ def aplicar(ns, index, spec):
     if kind=='capucha':
         for n in range(3): box(T,'ParcheAbrigo',(-.33+n*.24,.6+(n%2)*.36,-.40),(.20,.27,.04),pants,rot=(0,0,n*9-9),bisel=.014)
     deteriorar(ns, index, spec, oval)
+    from superficie import aplicar as superficie
+    superficie(ns, index)

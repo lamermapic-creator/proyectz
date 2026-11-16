@@ -50,12 +50,16 @@ func probar() -> void:
 			comprobar(pieza.get_meta("size") == RigPersonaje.PIEZAS[parte][0], id + " tamaño impacto " + parte)
 			if parte == "Head":
 				var piel_embebida := false
+				var relieve_embebido := false
 				for mi in meshes:
 					for superficie in mi.mesh.get_surface_count():
 						var mat := mi.mesh.surface_get_material(superficie) as BaseMaterial3D
+						if mat and mat.normal_enabled and mat.normal_texture:
+							relieve_embebido = mat.normal_texture.get_width() == 512
 						if mat and mat.albedo_texture:
 							piel_embebida = mat.albedo_texture.get_width() == 512 and mat.albedo_texture.get_height() == 512
 				comprobar(piel_embebida, id + " piel embebida 512x512")
+				comprobar(relieve_embebido, id + " normales de piel embebidas")
 			if parte in ["Head", "UpperTorso"]:
 				var detalle := false
 				for mi in meshes:

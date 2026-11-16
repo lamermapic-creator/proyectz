@@ -1,3 +1,5 @@
+> Revisión visual vigente: [v5](REVISION_VISUAL_V5.md). Conserva el estilo cuadrado de v4, contratos y flujo.
+
 # Colección de zombis — 2026-11-16
 
 ## Revisión vigente: v4, sangre y tres cráneos abiertos
