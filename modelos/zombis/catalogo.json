@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "presupuesto_triangulos": 16000,
   "unidades": "studs",
   "rig": "R15 Motor6D",
@@ -34,74 +34,74 @@
     {
       "id": "civil",
       "nombre": "Civil / camisa",
-      "sha256": "93014e8e5b6c2847da9d19cacf542742ab95bfe643002fc258481ccfac7f320c",
-      "bytes": 437020
+      "sha256": "ef97ea3f56b88fa5841ef3b91b7d3a33d90b5770be6d660327099224615585cf",
+      "bytes": 760620
     },
     {
       "id": "sanitario",
       "nombre": "Sanitario",
-      "sha256": "b4437a1ef42d2cf7f28593512fbcb93a8f30e824a324df47cb2d57ce28e1cb58",
-      "bytes": 445472
+      "sha256": "fee3c08b43bb3be39ca86a307036d209458c15b9d6c2230d44394c7e9e35c08d",
+      "bytes": 767068
     },
     {
       "id": "obrero",
       "nombre": "Obrero",
-      "sha256": "41cf2358cf29c65d3229328d906eabaed4a926716c070300ce4d44537c223dba",
-      "bytes": 433784
+      "sha256": "84622a6ec8b4f59bb8b78d3ab5eab4045dc3ff100e31934a1fe746207c1397c9",
+      "bytes": 743340
     },
     {
       "id": "mecanico",
       "nombre": "Mecánico",
-      "sha256": "6fcdca1066b71a2f447909659235904d985fced2bc2d4d7f635d237aa1bb6e3a",
-      "bytes": 462616
+      "sha256": "50f58070588bf91dcaa42f630c163d4c3bcfb5ff3f306d45d740f093c0677f71",
+      "bytes": 788672
     },
     {
       "id": "policia",
       "nombre": "Policía",
-      "sha256": "a8f63f3f28b0f15c3bc18f54578751207f1f8efce13cb22288dae932615c5944",
-      "bytes": 442480
+      "sha256": "7b0dbdd30703595a69670bebd4bfcc65869008b20056572d82d355e45005bd03",
+      "bytes": 763088
     },
     {
       "id": "bombero",
       "nombre": "Bombero",
-      "sha256": "20e278c28cbedcf44658b08ea0be540ebbf8926e4c42adf26aaf5332a8e1c929",
-      "bytes": 445324
+      "sha256": "42137b80db8e74f35fe55df8cc5a630aa6210b362d0da7924aca2f7f659cc932",
+      "bytes": 750132
     },
     {
       "id": "excursionista",
       "nombre": "Excursionista",
-      "sha256": "1dff93bea48ce863591de569bdeceee3e095b25c2d9008bcd1aa15624d394d7e",
-      "bytes": 455860
+      "sha256": "a09ad1677b0afdbc13b4e9a063610d8bda78ba00fc7db71903373eba906ec045",
+      "bytes": 782024
     },
     {
       "id": "oficinista",
       "nombre": "Oficinista",
-      "sha256": "f9cb527b017f31df3159bd56c0afd08bc56de1cabe652b993d9bc38a31b0e18f",
-      "bytes": 444456
+      "sha256": "2fcfd002329db98c028710e47dcdc7e83e7347633781b5adc9817c77a7cc630a",
+      "bytes": 766260
     },
     {
       "id": "repartidor",
       "nombre": "Repartidor",
-      "sha256": "4a07541ea5fe63e2e242192841ab589baabc2c0787620aef6ee0deed3601abbc",
-      "bytes": 454000
+      "sha256": "5e2de0b13bab247c5d1c3547407d3d144a7897a22c7954e4925fa1a936e04863",
+      "bytes": 777916
     },
     {
       "id": "paciente",
       "nombre": "Paciente",
-      "sha256": "a9c03e74dadf9c4f2b5dbd016848fe36da1f171ef37e4bce25a4a8901da5832a",
-      "bytes": 472800
+      "sha256": "9b87c44f01dd01fe78b1862da408c928fed43d4d02ad500e11d058724cb7d05b",
+      "bytes": 782172
     },
     {
       "id": "granjero",
       "nombre": "Granjero",
-      "sha256": "1883bb2d7640acbd65401701f417eaebf5ff2e9bcd2d43a6ae2f0f28f7623a6c",
-      "bytes": 447964
+      "sha256": "9f87dce50759cad2ef2549b6a7ce13638711beb823d9b2c9deb073178b946393",
+      "bytes": 769384
     },
     {
       "id": "vagabundo",
       "nombre": "Vagabundo",
-      "sha256": "440e4b905df557ff04ed1992f1599ae298552f676f7b263ea24faad4961e23de",
-      "bytes": 451036
+      "sha256": "1796fb212ed5514596b6e60384ed1110d8842970637bc321ea595d7034cc8ee9",
+      "bytes": 758348
     }
   ]
 }

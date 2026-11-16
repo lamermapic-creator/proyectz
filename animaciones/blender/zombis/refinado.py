@@ -1,6 +1,7 @@
 """Diseño v2: volúmenes anatómicos y vestuario. Conserva centros y pivotes del R15."""
 import bpy, bmesh, math, random
 from mathutils import Vector
+from rostro import esculpir
 
 # Ancho de torso, profundidad, volumen de miembros, ancho de mandíbula y peinado.
 PERFILES = {
@@ -25,7 +26,7 @@ def aplicar(ns, index, spec):
     box, cyl = ns['caja'], ns['cil']
     pieces, centers = ns['vacios'], ns['PIEZAS']
     skin = [(125,139,111),(142,136,116),(109,128,122),(147,143,126)][index % 4]
-    shadow = tuple(int(c*.63) for c in skin)
+    shadow = tuple(int(c*.84) for c in skin)
     cloth_shadow = tuple(int(c*.68) for c in shirt)
     wound, bone, boot = (82,33,31), (190,177,139), (38,33,29)
     remove = ['Base_', 'Dedo', 'Pulgar', 'Cuenca', 'Ojo', 'Iris', 'Pomulo', 'Oreja', 'Nariz',
@@ -48,7 +49,7 @@ def aplicar(ns, index, spec):
             v.co=Vector((v.co.x*size[0]/2,v.co.y*size[1]/2,v.co.z*size[2]/2))
         return mesh(part,name,bm,pos,color,material,rot)
 
-    def volume(part,name,pos,size,profile,color,material='Fabric',segments=12,square=.75):
+    def volume(part,name,pos,size,profile,color,material='Fabric',segments=12,square=.24):
         """Anillos transversales: (altura normalizada, radio x, radio z, desplazamiento z)."""
         bm=bmesh.new(); rows=[]
         for height,rx,rz,dz in profile:
@@ -61,7 +62,7 @@ def aplicar(ns, index, spec):
         for lower,upper in zip(rows,rows[1:]):
             for i in range(segments): bm.faces.new((lower[i],lower[(i+1)%segments],upper[(i+1)%segments],upper[i]))
         bm.faces.new(tuple(reversed(rows[0]))); bm.faces.new(tuple(rows[-1]))
-        return mesh(part,name,bm,pos,color,material)
+        return mesh(part,name,bm,pos,color,material,smooth=False)
 
     # La silueta cambia por profesión, conservando los centros de articulación.
     for part,(size,pos) in centers.items():
@@ -87,7 +88,7 @@ def aplicar(ns, index, spec):
         volume(part,'Anatomia_'+part,pos,dims,profile,color,'Skin' if category=='LowerArm' else 'Leather' if category=='Foot' else 'Fabric')
         if category=='UpperArm':
             # Cubrir la unión hombro/pecho también en las variantes de torso estrecho.
-            oval(part,'Hombro',(pos[0]*.90,1.30,0),(.46,.35,.48),shirt,'Fabric')
+            box(part,'Hombro',(pos[0]*.90,1.30,0),(.43,.30,.45),shirt,'Fabric',bisel=.035,segs=2)
         if category=='LowerArm':
             # Tendones, radio visible y venas discretas.
             for dx in [-.07,.07]:
@@ -95,43 +96,48 @@ def aplicar(ns, index, spec):
         if category in ['UpperLeg','LowerLeg','UpperArm']:
             for y in [-.20,.12]:
                 oval(part,'Pliegue',(pos[0],pos[1]+y,-size[2]*.46),(.30 if 'Leg' in part else .25,.027,.035),tuple(int(c*.82) for c in color),'Fabric',rot=(0,0,rng.uniform(-13,13)),segments=8,rings=6)
-    # Cráneo con sienes estrechas y mandíbula hundida, no una caja.
-    head_profile=[(-.50,.48,.51,-.04),(-.37,.70*jaw,.70,-.02),(-.21,.89*jaw,.82,0),
-                  (.03,.99,.91,0),(.26,1,1,.015),(.42,.85,.85,.02),(.5,.46,.49,.015)]
-    volume('Head','Craneo',(0,2.02,0),(.76,.91,.77),head_profile,skin,'Skin',segments=16,square=1)
+    # Cabeza cuadrada R15, con relieves bajos y proporciones humanas.
+    # La infección se expresa mediante piel/lesiones sutiles, no gafas negras ni ojos saltones.
+    head=box('Head','Craneo',(0,2.02,0),(.70,.86,.78),skin,'Skin',bisel=.043,segs=3)
+    for v in head.data.vertices:
+        g=ns['C'].inverted() @ v.co
+        if g.y < -.20:
+            g.x *= .94 + .05*jaw
+        v.co=ns['C'] @ g
+    esculpir(head, ns, index, skin)
     for s in [-1,1]:
-        eye_y=2.10 + (index%3-1)*s*.014
-        oval('Head','Cuenca',(s*.166,eye_y,-.343),(.22,.145,.05),(49,53,43),rot=(0,0,s*9))
-        oval('Head','GloboOcular',(s*.166,eye_y-.008,-.389),(.112,.083,.048),(191,185,158),'Eye')
+        eye_y=2.085 + (index%3-1)*s*.007
+        # Cuenca casi al ras de la cara, del mismo tono de piel ligeramente apagado.
+        oval('Head','GloboOcular',(s*.153,eye_y,-.391),(.117,.039,.006),(172,170,145),'Eye')
         if not (index%4==1 and s==1):
-            oval('Head','Iris',(s*.161,eye_y-.009,-.414),(.036,.044,.009),(81,94,71),'Eye',segments=8,rings=6)
-        oval('Head','Parpado',(s*.167,eye_y+.039,-.372),(.18,.027,.035),shadow,rot=(0,0,s*8))
-        oval('Head','ArcoCeja',(s*.177,eye_y+.093,-.332),(.24,.060,.07),skin,rot=(0,0,s*12))
-        oval('Head','Pomulo',(s*.243,1.96,-.265),(.18,.13,.11),skin,rot=(0,0,s*17))
-        oval('Head','Oreja',(s*.377,2.01,.012),(.10,.22,.14),skin,rot=(0,0,s*8))
-        oval('Head','OrejaInterior',(s*.408,2.01,-.030),(.027,.124,.065),shadow)
-    oval('Head','PuenteNariz',(0,2.025,-.390),(.094,.221,.11),skin)
-    oval('Head','PuntaNariz',(.012,1.952,-.444),(.13,.095,.10),skin)
-    for s in [-1,1]: oval('Head','FosaNasal',(s*.041,1.922,-.451),(.033,.023,.015),(47,40,30),segments=8,rings=6)
-    tilt=(index%3-1)*8
-    oval('Head','BocaAbierta',(0,1.79,-.310),(.29,.152,.055),(34,25,22),rot=(0,0,tilt))
-    oval('Head','Mandibula',(.018*(index%3-1),1.657,-.14),(.40*jaw,.18,.36),skin,rot=(0,0,tilt))
-    for t in range(5):
-        if t==(index%6): continue
-        box('Head','DienteIrregular',(-.112+t*.055,1.83+rng.uniform(-.012,.008),-.343),(.037,rng.uniform(.037,.060),.025),bone,'Wood',rot=(0,0,rng.uniform(-12,12)),bisel=.009,segs=2)
-    for s in [-1,1]: oval('Head','Comisura',(s*.137,1.79,-.324),(.04,.12,.018),wound,rot=(0,0,s*20),segments=8,rings=6)
-    # Herida localizada asimétrica en la sien, borde oscuro y tejido opaco.
+            oval('Head','Iris',(s*.153,eye_y,-.397),(.025,.029,.004),(88,100,80),'Eye',segments=8,rings=6)
+            oval('Head','Pupila',(s*.153,eye_y,-.400),(.009,.015,.002),(43,47,36),'Eye',segments=8,rings=6)
+        box('Head','ParpadoSuperior',(s*.153,eye_y+.023,-.390),(.138,.012,.008),skin,'Skin',rot=(0,0,s*5),bisel=.005,segs=2)
+        box('Head','ParpadoInferior',(s*.153,eye_y-.022,-.389),(.125,.008,.005),shadow,'Skin',bisel=.003)
+        box('Head','Ceja',(s*.158,eye_y+.077,-.403),(.128,.011,.005),(90,86,69),'Hair',rot=(0,0,s*6),bisel=.003)
+        box('Head','Oreja',(s*.362,2.015,.01),(.064,.179,.112),skin,'Skin',bisel=.021,segs=2)
+        box('Head','OrejaInterior',(s*.396,2.015,-.016),(.006,.081,.045),shadow,'Skin',bisel=.009)
+    box('Head','PuenteNariz',(0,2.023,-.402),(.066,.149,.035),skin,'Skin',bisel=.016,segs=2)
+    box('Head','PuntaNariz',(.004,1.958,-.421),(.095,.052,.054),skin,'Skin',bisel=.017,segs=2)
+    for s in [-1,1]: box('Head','FosaNasal',(s*.025,1.936,-.441),(.016,.008,.005),(92,90,74),'Skin',bisel=.003)
+    tilt=(index%3-1)*3
+    lip=tuple(int(s*.82+t*.18) for s,t in zip(skin,(124,83,73)))
+    box('Head','LabioSuperior',(0,1.815,-.393),(.205,.019,.012),lip,'Skin',rot=(0,0,tilt),bisel=.007,segs=2)
+    box('Head','LineaBoca',(0,1.800,-.401),(.186,.014,.004),(91,78,65),'Skin',rot=(0,0,tilt),bisel=.005)
+    box('Head','LabioInferior',(.004,1.785,-.394),(.181,.020,.012),lip,'Skin',rot=(0,0,tilt),bisel=.008,segs=2)
+    if index%3==0:
+        box('Head','LabioRoto',(.086,1.795,-.403),(.026,.034,.006),(114,72,63),'Skin',bisel=.006)
+    # Marca de infección pequeña, sin contorno negro ni volumen de goma.
     side=-1 if index%2==0 else 1
-    oval('Head','Contusion',(side*.26,2.22,-.326),(.115,.18,.026),shadow,rot=(0,0,side*20))
     for n in range(3):
-        oval('Head','Laceracion',(side*(.22+n*.024),2.24-n*.038,-.348),(.025,.075,.018),wound,rot=(0,0,-side*22),segments=8,rings=6)
+        box('Head','Laceracion',(side*(.23+n*.017),2.23-n*.025,-.392),(.009,.038,.004),(122,94,78),'Skin',rot=(0,0,-side*22),bisel=.002)
     # Peinados con volumen y mechones, barba en las dos variantes mayores.
     hair_col=(42+index%3*7,36+index%3*5,29+index%3*3)
     if kind not in ['obra','bombero','capucha'] and hair!='calvo':
-        oval('Head','CabelloSuperior',(0,2.41,.035),(.72,.20,.73),hair_col,'Hair',segments=16)
+        box('Head','CabelloSuperior',(0,2.414,.035),(.71,.12,.77),hair_col,'Hair',bisel=.028,segs=2)
         for n in range(6):
             x=-.27+n*.105
-            oval('Head','Mechon', (x,2.425+.025*math.cos(n),-.10),(.105,.125,.49),hair_col,'Hair',rot=(0,10 if hair=='raya' else -8,n*3-8),segments=8,rings=6)
+            box('Head','Mechon', (x,2.455+.007*math.cos(n),-.10),(.102,.035,.49),hair_col,'Hair',rot=(0,5 if hair=='raya' else -4,0),bisel=.009)
         if hair=='largo':
             for s in [-1,1]: oval('Head','Melena',(s*.32,2.18,.12),(.16,.53,.51),hair_col,'Hair')
     if hair=='barba':

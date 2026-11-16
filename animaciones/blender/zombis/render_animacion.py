@@ -2,7 +2,7 @@
 import bpy, math, sys
 from mathutils import Vector
 from pathlib import Path
-source=Path(__file__).resolve().parent
+source=Path('/tmp/zombis-v3') if '--vista-previa' in sys.argv else Path(__file__).resolve().parent
 bpy.ops.wm.open_mainfile(filepath=str(source/'sanitario.blend'))
 scene=bpy.context.scene
 detalle='--detalle' in sys.argv

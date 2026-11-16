@@ -6,6 +6,10 @@ from mathutils import Matrix, Vector
 ROOT = Path(__file__).resolve().parents[3]
 OUT = ROOT / 'modelos/zombis'
 SOURCE = Path(__file__).resolve().parent
+PREVIEW = '--vista-previa' in sys.argv
+BLEND_OUT = Path('/tmp/zombis-v3') if PREVIEW else SOURCE
+if PREVIEW:
+    OUT = BLEND_OUT
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(SOURCE))
 from refinado import aplicar as refinar
@@ -204,7 +208,7 @@ def build(index, spec):
     for p in pivots.values():
         for track in p.animation_data.nla_tracks: track.mute=track.name!='reposo'
     scene.frame_set(1)
-    bpy.ops.wm.save_as_mainfile(filepath=str(SOURCE/(ident+'.blend')))
+    bpy.ops.wm.save_as_mainfile(filepath=str(BLEND_OUT/(ident+'.blend')))
     for p in pivots.values():
         for track in p.animation_data.nla_tracks: track.mute=False
     bpy.ops.export_scene.gltf(filepath=str(OUT/(ident+'.glb')),export_format='GLB',export_yup=True,
@@ -214,6 +218,7 @@ def build(index, spec):
     return {'id':ident,'nombre':label,'sha256':hashlib.sha256(data).hexdigest(),'bytes':len(data)}
 
 OUT.mkdir(parents=True,exist_ok=True)
-result=[build(i,spec) for i,spec in enumerate(VARIANTES)]
-(OUT/'catalogo.json').write_text(json.dumps({'version':2,'presupuesto_triangulos':16000,'unidades':'studs','rig':'R15 Motor6D','origen':'Modelado original local en Blender; sin assets de terceros ni proveedores de pago','animaciones':CLIPS,'modelos':result},indent=2,ensure_ascii=False)+'\n')
+result=[build(i,spec) for i,spec in enumerate(VARIANTES) if not PREVIEW or spec[0]=='sanitario']
+if not PREVIEW:
+    (OUT/'catalogo.json').write_text(json.dumps({'version':3,'presupuesto_triangulos':16000,'unidades':'studs','rig':'R15 Motor6D','origen':'Modelado original local en Blender; sin assets de terceros ni proveedores de pago','animaciones':CLIPS,'modelos':result},indent=2,ensure_ascii=False)+'\n')
 print('COLECCION_OK',len(result))

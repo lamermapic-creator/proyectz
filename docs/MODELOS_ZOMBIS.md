@@ -1,5 +1,44 @@
 # Colección de zombis — 2026-11-16
 
+## Revisión vigente: v3, conservar el arte cuadrado
+
+El usuario rechazó las cuencas negras exageradas y el aspecto redondeado de la revisión v2.
+La dirección vigente es **cuadrada**, como el superviviente R15: cabeza de caja biselada, planos claros
+y relieves faciales discretos. El realismo se busca en las proporciones, los detalles de piel y la
+expresión contenida, manteniendo el estilo del juego.
+
+Se retiraron las manchas oscuras alrededor de los ojos, ojos saltones, pómulos y cejas gruesos y boca
+negra abierta. Los ojos ahora son estrechos y cercanos a la piel, con párpados finos, iris pequeño y
+variantes de opacidad. Nariz, labios y marcas de infección tienen poco relieve. El pelo recupera
+formas cuadradas y los cuerpos usan sección cuadrada y caras planas, conservando prendas y equipo.
+
+`rostro.py` genera el relieve sobre la cara y una textura original de piel de **512×512** por modelo,
+con variación no periódica suave, poros y pequeños pliegues. Está embebida en GLB y `.blend`, con sus
+coordenadas UV. No hay imágenes de terceros, claves, servicios de pago ni archivos externos necesarios.
+`validar.py` comprueba que haya una única imagen PNG embebida de esa resolución y UV en las superficies
+que la usan, además de geometría, clips y hashes. El presupuesto máximo sigue siendo 16.000 triángulos.
+La colección v3 tiene 11.898–12.766 triángulos por modelo y unos 9,2 MB de GLB en total.
+Los `.glb.import` usan `gltf/embedded_image_handling=3` (Embed as Uncompressed, Godot 4.7.2),
+para conservar la textura en la escena importada sin extraer copias PNG al árbol de fuentes.
+
+Previsualizar el sanitario sin modificar la colección:
+
+```bash
+blender -b -t 3 -P animaciones/blender/zombis/generar.py -- --vista-previa
+blender -b -t 3 -P animaciones/blender/zombis/render_animacion.py -- --vista-previa --detalle
+```
+
+El resultado está en `/tmp/zombis-v3/detalle.png`. Para exportar la colección completa, ejecutar
+`generar.py` sin `--vista-previa`, y después los scripts de catálogo y marcha sin esa opción.
+Los apartados v2 y sus resultados siguientes se conservan como historial de colaboración.
+
+Validación v3: **588/588** comprobaciones específicas, importación y galería sin errores, PNG embebido,
+UV y hashes verificados. Batería general **101/102 OK**: solo falló `moto_zombi`, intermitencia ya
+documentada; pasó al repetirlo aislado con un atropello. Combate, suelo, ragdoll, menú y nivel pasaron.
+Registros locales: `/workspace/setup-logs/zombis-v3-test.log`, `zombis-v3-regresion.log`,
+`zombis-v3-moto-repeticion.log` y `zombis-v3-import-embebido.log`. Persiste el límite de no haber
+medido/renderizado una horda en GPU; los renders de revisión son de Blender en CPU.
+
 ## Revisión visual v2
 
 Rehechas las formas principales: torso con cintura y hombros, bíceps, antebrazos con tendones,
@@ -57,9 +96,9 @@ de uso del proyecto; esta incorporación no concede una licencia distinta sobre 
 | vagabundo | Capucha y bufanda |
 
 `modelos/zombis/catalogo.json` registra los hashes SHA-256, tamaños e identidad de los GLB.
-Cada modelo tiene 15 mallas segmentadas, materiales PBR sin texturas externas y entre 13.016 y 14.216
+Cada modelo v3 tiene 15 mallas segmentadas, materiales PBR con piel embebida y entre 11.898 y 12.766
 triángulos. Una malla puede tener varias superficies/materiales: 15 mallas **no** significa 15 llamadas
-de dibujo. La colección ocupa aproximadamente 5,3 MB en GLB; no se ha medido rendimiento de hordas
+de dibujo. La colección ocupa aproximadamente 9,2 MB en GLB; no se ha medido rendimiento de hordas
 en GPU. El equipo y la ropa no amplían las cajas de impacto.
 
 ## Abrir y probar
@@ -121,9 +160,10 @@ Usar el binario 4.7.2, no el `godot` 4.6.3 del PATH de la máquina de onboarding
 `XDG_CACHE_HOME=/workspace/.cache`, `XDG_CONFIG_HOME=/workspace/.config` y
 `XDG_DATA_HOME=/workspace/.local/share` antes de ejecutar.
 
-La prueba específica ejecuta 576 comprobaciones: doce importaciones reales, seis clips por modelo
+La prueba específica vigente ejecuta 588 comprobaciones: doce importaciones reales, seis clips por modelo
 con movimiento, 15 piezas y sus tamaños, selección de variante, daño, derribo y muerte. La galería
-también se ejecutó sin ventana. El render de catálogo revisa la geometría en Blender; no acredita
+también se ejecutó sin ventana. V3 añade doce comprobaciones de la textura embebida de cada cabeza.
+El render de catálogo revisa la geometría en Blender; no acredita
 calidad visual ni rendimiento del renderizador Forward+ de Godot en una GPU.
 
 Resultado de la primera entrega (antes de v2): **576/576** comprobaciones específicas y catálogo de bytes/hashes correcto.

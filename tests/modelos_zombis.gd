@@ -48,6 +48,14 @@ func probar() -> void:
 			var meshes := pieza.find_children("M_*", "MeshInstance3D", false, false)
 			comprobar(meshes.size() == 1, id + " malla " + parte)
 			comprobar(pieza.get_meta("size") == RigPersonaje.PIEZAS[parte][0], id + " tamaño impacto " + parte)
+			if parte == "Head":
+				var piel_embebida := false
+				for mi in meshes:
+					for superficie in mi.mesh.get_surface_count():
+						var mat := mi.mesh.surface_get_material(superficie) as BaseMaterial3D
+						if mat and mat.albedo_texture:
+							piel_embebida = mat.albedo_texture.get_width() == 512 and mat.albedo_texture.get_height() == 512
+				comprobar(piel_embebida, id + " piel embebida 512x512")
 		var vida := z.health
 		z.recibir_danio(10, "UpperTorso", Vector3.FORWARD)
 		comprobar(z.health < vida, id + " recibir daño")

@@ -13,6 +13,23 @@ en el mismo commit que el cambio. Formato:
 
 ---
 
+## 2026-11-16 · Usuario · Codex — corregir rostros y recuperar el arte cuadrado (v3)
+**Qué:** retirada la apariencia de cuencas negras, ojos saltones, cejas/pómulos de goma y boca negra
+abierta. Cabeza cuadrada R15 con relieve facial bajo, ojos estrechos, párpados finos, nariz proporcionada,
+labios discretos y señales de infección contenidas. Añadida piel original con variación suave y pliegues
+mediante una textura de 512×512 embebida. Cuerpo con caras planas y secciones cuadradas, conservando equipo.
+**Archivos:** `refinado.py`, nuevo `rostro.py`, `generar.py`, `validar.py`, `render_animacion.py`, doce
+fuentes `.blend`, doce `.glb`, catálogo y vistas de revisión; `CLAUDE.md` y `docs/MODELOS_ZOMBIS.md`.
+También los doce `.glb.import` (piel embebida) y `tests/modelos_zombis.gd` (comprobación de textura).
+**Cómo probarlo:** abrir `escenas/galeria_zombis.tscn` con F6 y revisar las caras de cerca; ver `detalle.png`
+y `catalogo.png`. Validación de importación/rig/combate: `tests/modelos_zombis.gd`.
+**Pendiente / avisos:** la revisión v2 queda como antecedente, no como dirección artística vigente.
+Se conserva el sistema de animación actual; la textura está dentro de los archivos, sin rutas externas.
+**Validación específica:** 588/588 comprobaciones, importación y galería sin errores; catálogo, PNG
+embebido de 512×512, UV y hashes verificados. Primer plano revisado antes de exportar la colección.
+**Batería general v3:** 101/102 OK; único fallo `moto_zombi`, ya documentado como intermitente;
+repetición aislada OK. Pasaron combate, golpes al suelo, ragdoll, menú y nivel. No se ocultó el fallo.
+
 ## 2026-11-16 · Usuario · Codex — segunda revisión visual de los doce zombis
 **Qué:** anatomía más natural y siluetas/ropa diferenciadas: cráneo y mandíbula, párpados y ojos nublados,
 dientes irregulares, orejas/nariz, peinados y barbas; manos con falanges/uñas, brazos y piernas afinados,

@@ -1,5 +1,22 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
+## 2026-11-16 · Codex · Rostros cuadrados y proporciones contenidas (v3, corrección solicitada)
+- El usuario rechazó el rostro redondeado y las cuencas negras de v2. Restaurada la cabeza cuadrada
+  R15, con relieves muy bajos, ojos estrechos sin manchas negras, párpados finos, nariz integrada y
+  boca pequeña. El cuerpo también recupera caras planas y sección cuadrada; se conserva el equipo.
+- Nueva fuente `animaciones/blender/zombis/rostro.py`: relieve sobre la cara y textura original de piel
+  de 512×512, embebida en cada GLB y en el `.blend`; no hay dependencias de texturas externas.
+  No restaurar las cuencas casi negras ni los pómulos/cejas voluminosos: contradicen esta corrección.
+- `generar.py --vista-previa` escribe solo el sanitario en `/tmp/zombis-v3` sin alterar los assets del
+  proyecto; `render_animacion.py -- --vista-previa --detalle` permite revisar ese rostro antes de exportar
+  la colección. La exportación normal actualiza los doce modelos y el catálogo v3.
+- Se mantienen rig, tamaños de impacto, clips, IA y ragdoll. Ver `docs/MODELOS_ZOMBIS.md`.
+- La prueba específica suma ahora 588 comprobaciones (añadida la textura 512×512 de cada cabeza);
+  todas pasan tras retirar las copias PNG que Godot extraía por defecto. Los `.glb.import` usan
+  `gltf/embedded_image_handling=3` para conservar la imagen en la escena importada.
+- Batería general v3: 101/102 OK. Único fallo: `moto_zombi` (intermitencia ya documentada);
+  repetición aislada OK con un atropello. Combate, golpes al suelo, ragdoll, menú y nivel pasaron.
+
 ## 2026-11-16 · Codex · Mejora visual de los doce zombis (v2)
 - Rehecha la geometría con cráneos/mandíbulas redondeados, párpados, rasgos asimétricos, manos con
   falanges/uñas, miembros afinados, hombros unidos al torso, pliegues y vestuario más diferenciado.
