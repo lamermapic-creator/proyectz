@@ -33,7 +33,7 @@ def pintar_piel(rgb, xx, yy, index, rng, cerebro_visible=False):
     blood=np.array([.24,.050,.035])+(wet[...,None]*np.array([.18,.025,.018]))
     rgb[:]=rgb*(1-mask[...,None])+blood*mask[...,None]
 
-def aplicar(ns, index, spec, oval):
+def aplicar(ns, index, spec, bloque):
     ident=spec[0]; box=ns['caja']; pieces=ns['vacios']; cv=ns['g2b']
     rng=random.Random(12700+index)
     def material(name,color,roughness):
@@ -109,7 +109,7 @@ def aplicar(ns, index, spec, oval):
     cut=box(arm,'HeridaAntebrazo',(side*.92,-.06,-.18),(.105,.29,.025),(66,16,12),'Skin',rot=(0,0,18),bisel=.012)
     cut.data.materials.clear(); cut.data.materials.append(dried)
     for k in range(3):
-        ob=oval(arm,'Coagulo',(side*.92+.017*k,-.13+k*.07,-.20),(.042,.072,.026),(116,24,18),segments=8,rings=6)
+        ob=bloque(arm,'Coagulo',(side*.92+.017*k,-.13+k*.07,-.20),(.042,.072,.026),(116,24,18),segments=8,rings=6)
         ob.data.materials.clear(); ob.data.materials.append(fresh)
     if ident not in CEREBRO_VISIBLE:
         return
@@ -131,38 +131,16 @@ def aplicar(ns, index, spec, oval):
     hit,loc,_,_=head.ray_cast(origin,cv((0,0,1)))
     assert hit and (ns['C'].inverted() @ loc).z > -.20, 'El cráneo no tiene una abertura real'
     bpy.data.objects.remove(cutter,do_unlink=True)
-    # Corteza pequeña dentro de la abertura, con pliegues y surcos propios.
-    ob=oval('Head','CerebroVisible',(-.18,2.365,-.245),(.265,.235,.275),(151,105,105),segments=12,rings=8)
+    # Cerebro de bloques: escalones y surcos ortogonales dentro de la abertura.
+    ob=bloque('Head','CerebroVisible',(-.18,2.365,-.245),(.265,.235,.275),(151,105,105))
     ob.data.materials.clear(); ob.data.materials.append(brain)
-    def tube(name,points,radius,mat):
-        bm=bmesh.new(); rows=[]
-        for i,p in enumerate(points):
-            direction=(points[min(i+1,len(points)-1)]-points[max(0,i-1)]).normalized()
-            a=direction.cross(Vector((0,0,1))).normalized(); b=direction.cross(a).normalized()
-            rows.append([bm.verts.new(cv(p+a*math.cos(k*math.tau/6)*radius+b*math.sin(k*math.tau/6)*radius-Vector(ns['PIEZAS']['Head'][1]))) for k in range(6)])
-        for lower,upper in zip(rows,rows[1:]):
-            for k in range(6): bm.faces.new((lower[k],lower[(k+1)%6],upper[(k+1)%6],upper[k]))
-        bm.faces.new(tuple(reversed(rows[0]))); bm.faces.new(tuple(rows[-1]))
-        bmesh.ops.recalc_face_normals(bm,faces=list(bm.faces))
-        me=bpy.data.meshes.new(name); bm.to_mesh(me); bm.free(); me.materials.append(mat)
-        ob=bpy.data.objects.new(name,me); ns['esc'].collection.objects.link(ob); ob.parent=pieces['Head']
-        for face in me.polygons: face.use_smooth=True
-    # Giros continuos sobre la corteza, evitando filas de esferas como botones.
-    for col,dx in enumerate([-.092,-.046,0,.046,.092]):
-        span=.095*math.sqrt(1-(dx/.14)**2)
-        points=[]
-        for k in range(23):
-            t=k/22; y=2.365+(t-.5)*span*2
-            x=-.18+dx+.009*math.sin(t*math.tau*2.2+col)
-            front=math.sqrt(max(.06,1-((x+.18)/.1325)**2-((y-2.365)/.1175)**2))
-            points.append(Vector((x,y,-.245-.1375*front-.002)))
-        tube('PliegueCerebral',points,.009,brain)
-    for col in [0,1]:
-        points=[]
-        for k in range(16):
-            t=k/15; x=-.24+t*.13; y=2.32+col*.065+.014*math.sin(t*math.tau)
-            front=math.sqrt(max(.06,1-((x+.18)/.1325)**2-((y-2.365)/.1175)**2))
-            points.append(Vector((x,y,-.245-.1375*front-.008)))
-        tube('VasoCerebral',points,.003,fresh)
-    # El borde óseo lo aporta el Boolean; se omiten las piezas superpuestas
-    # para limpiar el contorno del corte. La sangre permanece en la textura.
+    for col in range(5):
+        for row in range(4):
+            x=-.286+col*.052
+            y=2.278+row*.055
+            z=-.388 if (row+col)%3 else -.377
+            ob=box('Head','PliegueCerebral',(x,y,z),(.038,.042,.018),(151,105,105),'Skin',bisel=0)
+            ob.data.materials.clear(); ob.data.materials.append(brain)
+    for col in range(2):
+        ob=box('Head','VasoCerebral',(-.25+col*.11,2.36,-.400),(.008,.15,.005),(116,24,18),'Skin',bisel=0)
+        ob.data.materials.clear(); ob.data.materials.append(fresh)

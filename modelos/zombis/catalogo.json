@@ -1,5 +1,5 @@
 {
-  "version": 5,
+  "version": 6,
   "presupuesto_triangulos": 16000,
   "unidades": "studs",
   "rig": "R15 Motor6D",
@@ -35,85 +35,85 @@
       "id": "civil",
       "nombre": "Civil / camisa",
       "cerebro_visible": true,
-      "sha256": "2a0e0520a0392a56e8578ba5879f68e48585f8b74178aeb2d832f3d36fe115fc",
-      "bytes": 2677636
+      "sha256": "277861ad51a4a0360c1292707abd41926d9467d62d0ea725d5a2341fb307e23d",
+      "bytes": 2159520
     },
     {
       "id": "sanitario",
       "nombre": "Sanitario",
       "cerebro_visible": true,
-      "sha256": "8681e6226153252c4363d80b1d48a4ab5b36e230c42315783ee99bcb0a3346f8",
-      "bytes": 2693076
+      "sha256": "674b73c38b3347904bcdd2a9d4edfdf16ed77d6935a5fdffff8782c05629fffc",
+      "bytes": 2172176
     },
     {
       "id": "obrero",
       "nombre": "Obrero",
       "cerebro_visible": false,
-      "sha256": "d8c0f263fe87737453ea8a62e8e5f010c23234580175d4ab54898081d216efc9",
-      "bytes": 2614276
+      "sha256": "cabd4c384bd88065e7e7a8f0261c8abdaedf63f307642bb5d5d636f49ef9a38e",
+      "bytes": 2131820
     },
     {
       "id": "mecanico",
       "nombre": "Mecánico",
       "cerebro_visible": false,
-      "sha256": "42f6166a7d3d163fab243370c654fd5436beb08eb78758056bc78be1b58699fb",
-      "bytes": 2665608
+      "sha256": "85490f8b0c32b38f0393e5dd569a04726bae2d1abd602179fd69ed1cbdd1f763",
+      "bytes": 2142344
     },
     {
       "id": "policia",
       "nombre": "Policía",
       "cerebro_visible": false,
-      "sha256": "5d20d26364519bee14fa31d77de7db359613d845939f6eb21cd77b0e0497c5b8",
-      "bytes": 2637000
+      "sha256": "669e31fb0c561c579c2707144c5f8f20d0329713fbde59b0b5b938d7e36c9fec",
+      "bytes": 2142400
     },
     {
       "id": "bombero",
       "nombre": "Bombero",
       "cerebro_visible": false,
-      "sha256": "73778df7854aa29fc7480f9248464598a496d0a04f6f8fb479946ac08bd0d599",
-      "bytes": 2628116
+      "sha256": "47a12e95df61cf97f08ff92f1a5763bf4b2b2b7659b1a65301952d839c9fce97",
+      "bytes": 2136072
     },
     {
       "id": "excursionista",
       "nombre": "Excursionista",
       "cerebro_visible": false,
-      "sha256": "bf2d14a8d09a9c324420597a534a4116143d8f288b2ca22c10baba67406b0c5d",
-      "bytes": 2652096
+      "sha256": "a541aeafaa70a4b956e36cf6b7114847c2d4b6dcc6d67077ee70ef5e8cd3801e",
+      "bytes": 2140360
     },
     {
       "id": "oficinista",
       "nombre": "Oficinista",
       "cerebro_visible": false,
-      "sha256": "342098a7f10f2c153b27604c494c980a0349f9150dff6933cdab28644cac9b3e",
-      "bytes": 2636372
+      "sha256": "77a68c971f19926da73717ed2ecb3834f4ec6f8639b4c1f3a7e6e3e09fcb7d9e",
+      "bytes": 2135420
     },
     {
       "id": "repartidor",
       "nombre": "Repartidor",
       "cerebro_visible": false,
-      "sha256": "badcd3d9ceba73444a77bfbb15250f7c896e4091b26dc98c7f8ae55f3011ce91",
-      "bytes": 2649848
+      "sha256": "85da0821c6e4bd3210229b598f98b9e4ec9323421fe5081f59de64fab35f1721",
+      "bytes": 2141272
     },
     {
       "id": "paciente",
       "nombre": "Paciente",
       "cerebro_visible": true,
-      "sha256": "928180feedf0c3acb7ea2888f47327064c5dac35afaeb5bd12d7a3d89eb76afb",
-      "bytes": 2716236
+      "sha256": "f19b4f32c3059f0a18895410d5a7187fbe28a5c1e39dc4b14a72a05e0ac1d964",
+      "bytes": 2172984
     },
     {
       "id": "granjero",
       "nombre": "Granjero",
       "cerebro_visible": false,
-      "sha256": "ee322c9c83a16fa0d31a6d42a9025146cdd8b2a65720f72f166a76955bdd421b",
-      "bytes": 2641844
+      "sha256": "2f4fd2fe47e0ab58257ad812465d12af261ec732fd95652fd9c47ca4bbb1c646",
+      "bytes": 2142560
     },
     {
       "id": "vagabundo",
       "nombre": "Vagabundo",
       "cerebro_visible": false,
-      "sha256": "5414f3bfa63270c2ceeb14f80fdaebcb8c7f35df3b78de4d1414b1ba762d32a4",
-      "bytes": 2628260
+      "sha256": "123d073b238d8c7153834acbd8381840943579836c1702610b56250b51b378e7",
+      "bytes": 2137740
     }
   ]
 }

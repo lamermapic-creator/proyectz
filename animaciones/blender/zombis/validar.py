@@ -6,7 +6,7 @@ root=Path(__file__).resolve().parents[3]
 folder=root/'modelos/zombis'
 catalog=json.loads((folder/'catalogo.json').read_text())
 assert len(catalog['modelos']) == 12
-assert catalog['version'] == 5
+assert catalog['version'] == 6
 assert catalog['presupuesto_triangulos'] == 16000
 assert {s['id'] for s in catalog['modelos'] if s['cerebro_visible']} == {'civil','sanitario','paciente'}
 for spec in catalog['modelos']:
@@ -30,6 +30,14 @@ for spec in catalog['modelos']:
     assert len(doc['meshes'])==15
     assert any(m['name'].startswith('Cerebro') for m in doc['materials']) == spec['cerebro_visible']
     assert any(m['name'].startswith('SangreRopa') and m.get('alphaMode')=='BLEND' for m in doc['materials'])
+    # Inspección de los bytes exportados: normales planas, nunca interpoladas como una esfera.
+    def valores(accessor_id):
+        acc=doc['accessors'][accessor_id]; view=doc['bufferViews'][acc['bufferView']]
+        fmt={5121:'B',5123:'H',5125:'I',5126:'f'}[acc['componentType']]
+        count={'SCALAR':1,'VEC3':3}[acc['type']]
+        stride=view.get('byteStride',struct.calcsize('<'+fmt)*count)
+        start=20+jlen+8+view.get('byteOffset',0)+acc.get('byteOffset',0)
+        return [struct.unpack_from('<'+fmt*count,data,start+i*stride) for i in range(acc['count'])]
     triangles=0
     for mesh in doc['meshes']:
         for primitive in mesh['primitives']:
@@ -39,6 +47,11 @@ for spec in catalog['modelos']:
                 assert 'TEXCOORD_0' in primitive['attributes']
             acc=doc['accessors'][primitive['attributes']['POSITION']]
             assert all(math.isfinite(v) for v in acc['min']+acc['max'])
+            normales=valores(primitive['attributes']['NORMAL'])
+            indices=[i[0] for i in valores(primitive['indices'])]
+            for i in range(0,len(indices),3):
+                n=[normales[j] for j in indices[i:i+3]]
+                assert all(abs(n[0][axis]-v[axis])<1e-5 for v in n[1:] for axis in range(3)), spec['id']+' normal redondeada'
             triangles+=doc['accessors'][primitive['indices']]['count']//3
     assert 0<triangles<=catalog['presupuesto_triangulos']
     assert {a['name'] for a in doc['animations']}==set(catalog['animaciones'])

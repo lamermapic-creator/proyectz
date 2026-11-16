@@ -1,3 +1,5 @@
+> Dirección vigente: [v6, todas las piezas cuadradas](CORRECCION_CUADRADA_V6.md).
+
 > Revisión visual vigente: [v5](REVISION_VISUAL_V5.md). Conserva el estilo cuadrado de v4, contratos y flujo.
 
 # Menú principal de cuarentena — 2026-11-16

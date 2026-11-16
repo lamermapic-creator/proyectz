@@ -1,3 +1,9 @@
+## 2026-11-16 — Corrección de todas las piezas de zombis a bloques
+
+Sustituidos los detalles ovalados que seguían en v5 por cajas rectas: cara, manos, barba,
+pliegues, heridas, cerebro y accesorios. Sección rectangular del cuerpo, sin redondeo ni
+suavizado. Se conservan pivotes y contratos R15. Ver `docs/CORRECCION_CUADRADA_V6.md`.
+
 ## 2026-11-16 — Zombis v5 y escenario de cuarentena
 
 Estilo cuadrado conservado por petición expresa, microrelieve de piel y tejido en GLB, y un puesto

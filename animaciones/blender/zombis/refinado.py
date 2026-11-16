@@ -1,4 +1,4 @@
-"""Diseño v5 cuadrado: volúmenes anatómicos y vestuario. Conserva centros y pivotes del R15."""
+"""Diseño v6 de bloques: volúmenes anatómicos y vestuario. Conserva centros y pivotes del R15."""
 import bpy, bmesh, math, random
 from mathutils import Vector
 from rostro import esculpir
@@ -37,33 +37,12 @@ def aplicar(ns, index, spec):
             if any(ob.name.startswith(prefix) for prefix in remove):
                 bpy.data.objects.remove(ob, do_unlink=True)
 
-    def mesh(part, name, bm, pos, color, material='Skin', rot=(0,0,0), smooth=True):
-        bmesh.ops.recalc_face_normals(bm, faces=list(bm.faces))
-        ob=ns['_objeto'](part,name,bm,pos,rot,color,material,0,1)
-        for p in ob.data.polygons: p.use_smooth=smooth
-        return ob
+    def bloque(part,name,pos,size,color,material='Skin',rot=(0,0,0),**kwargs):
+        return box(part,name,pos,size,color,material,rot=rot,bisel=0)
 
-    def oval(part,name,pos,size,color,material='Skin',rot=(0,0,0),segments=12,rings=8):
-        bm=bmesh.new()
-        bmesh.ops.create_uvsphere(bm,u_segments=segments,v_segments=rings,radius=1)
-        for v in bm.verts:
-            v.co=Vector((v.co.x*size[0]/2,v.co.y*size[1]/2,v.co.z*size[2]/2))
-        return mesh(part,name,bm,pos,color,material,rot)
-
-    def volume(part,name,pos,size,profile,color,material='Fabric',segments=12,square=.24):
-        """Anillos transversales: (altura normalizada, radio x, radio z, desplazamiento z)."""
-        bm=bmesh.new(); rows=[]
-        for height,rx,rz,dz in profile:
-            row=[]
-            for i in range(segments):
-                a=i*math.tau/segments; x=math.cos(a); z=math.sin(a)
-                x=math.copysign(abs(x)**square,x); z=math.copysign(abs(z)**square,z)
-                row.append(bm.verts.new((x*size[0]*rx/2,height*size[1],z*size[2]*rz/2+dz)))
-            rows.append(row)
-        for lower,upper in zip(rows,rows[1:]):
-            for i in range(segments): bm.faces.new((lower[i],lower[(i+1)%segments],upper[(i+1)%segments],upper[i]))
-        bm.faces.new(tuple(reversed(rows[0]))); bm.faces.new(tuple(rows[-1]))
-        return mesh(part,name,bm,pos,color,material,smooth=False)
+    def volume(part,name,pos,size,profile,color,material='Fabric',**kwargs):
+        # Cuerpo de sección rectangular constante, igual al protagonista.
+        return bloque(part,name,pos,size,color,material)
 
     # La silueta cambia por profesión, conservando los centros de articulación.
     for part,(size,pos) in centers.items():
@@ -93,10 +72,10 @@ def aplicar(ns, index, spec):
         if category=='LowerArm':
             # Tendones, radio visible y venas discretas.
             for dx in [-.07,.07]:
-                oval(part,'Tendon',(pos[0]+dx,pos[1]-.10,-.15),(.035,.51,.035),shadow,rot=(0,0,dx*55),segments=8,rings=6)
+                bloque(part,'Tendon',(pos[0]+dx,pos[1]-.10,-.15),(.035,.51,.035),shadow,rot=(0,0,dx*55),segments=8,rings=6)
         if category in ['UpperLeg','LowerLeg','UpperArm']:
             for y in [-.20,.12]:
-                oval(part,'Pliegue',(pos[0],pos[1]+y,-size[2]*.46),(.30 if 'Leg' in part else .25,.027,.035),tuple(int(c*.82) for c in color),'Fabric',rot=(0,0,rng.uniform(-13,13)),segments=8,rings=6)
+                bloque(part,'Pliegue',(pos[0],pos[1]+y,-size[2]*.46),(.30 if 'Leg' in part else .25,.027,.035),tuple(int(c*.82) for c in color),'Fabric',rot=(0,0,rng.uniform(-13,13)),segments=8,rings=6)
     # Cabeza cuadrada R15, con relieves bajos y proporciones humanas.
     # La infección se expresa mediante piel/lesiones sutiles, no gafas negras ni ojos saltones.
     head=box('Head','Craneo',(0,2.02,0),(.70,.86,.78),skin,'Skin',bisel=.043,segs=3)
@@ -109,10 +88,10 @@ def aplicar(ns, index, spec):
     for s in [-1,1]:
         eye_y=2.085 + (index%3-1)*s*.007
         # Cuenca casi al ras de la cara, del mismo tono de piel ligeramente apagado.
-        oval('Head','GloboOcular',(s*.153,eye_y,-.391),(.117,.039,.006),(172,170,145),'Eye')
+        bloque('Head','GloboOcular',(s*.153,eye_y,-.391),(.117,.039,.006),(172,170,145),'Eye')
         if not (index%4==1 and s==1):
-            oval('Head','Iris',(s*.153,eye_y,-.397),(.025,.029,.004),(88,100,80),'Eye',segments=8,rings=6)
-            oval('Head','Pupila',(s*.153,eye_y,-.400),(.009,.015,.002),(43,47,36),'Eye',segments=8,rings=6)
+            bloque('Head','Iris',(s*.153,eye_y,-.397),(.025,.029,.004),(88,100,80),'Eye',segments=8,rings=6)
+            bloque('Head','Pupila',(s*.153,eye_y,-.400),(.009,.015,.002),(43,47,36),'Eye',segments=8,rings=6)
         box('Head','ParpadoSuperior',(s*.153,eye_y+.023,-.390),(.138,.012,.008),skin,'Skin',rot=(0,0,s*5),bisel=.005,segs=2)
         box('Head','ParpadoInferior',(s*.153,eye_y-.022,-.389),(.125,.008,.005),shadow,'Skin',bisel=.003)
         box('Head','Ceja',(s*.158,eye_y+.077,-.403),(.128,.011,.005),(90,86,69),'Hair',rot=(0,0,s*6),bisel=.003)
@@ -140,28 +119,28 @@ def aplicar(ns, index, spec):
             x=-.27+n*.105
             box('Head','Mechon', (x,2.455+.007*math.cos(n),-.10),(.102,.035,.49),hair_col,'Hair',rot=(0,5 if hair=='raya' else -4,0),bisel=.009)
         if hair=='largo':
-            for s in [-1,1]: oval('Head','Melena',(s*.32,2.18,.12),(.16,.53,.51),hair_col,'Hair')
+            for s in [-1,1]: bloque('Head','Melena',(s*.32,2.18,.12),(.16,.53,.51),hair_col,'Hair')
     if hair=='barba':
-        oval('Head','Barba',(0,1.67,-.165),(.48,.26,.43),(70,66,53),'Hair')
-        for n in range(5): oval('Head','MechonBarba',(-.17+n*.083,1.58,-.28),(.075,.21,.09),(78,75,61),'Hair',segments=8,rings=6)
-    # Manos ahuecadas, falanges escalonadas y uñas, manteniendo una pieza por mano.
+        bloque('Head','Barba',(0,1.67,-.165),(.48,.26,.43),(70,66,53),'Hair')
+        for n in range(5): bloque('Head','MechonBarba',(-.17+n*.083,1.58,-.28),(.075,.21,.09),(78,75,61),'Hair',segments=8,rings=6)
+    # Palmas, falanges y uñas rectangulares, manteniendo una pieza por mano.
     for s,prefix in [(-1,'Left'),(1,'Right')]:
         part=prefix+'Hand'; x=s*.92
-        oval(part,'Palma',(x,-.765,0),(.27,.34,.20),skin)
-        oval(part,'Nudillos',(x,-.895,-.035),(.26,.08,.19),shadow)
+        bloque(part,'Palma',(x,-.765,0),(.27,.34,.20),skin)
+        bloque(part,'Nudillos',(x,-.895,-.035),(.26,.08,.19),shadow)
         for f in range(4):
             fx=x-.098+f*.065; length=[.17,.205,.19,.145][f]
-            oval(part,'Falange',(fx,-.97,-.015),(.055,length,.066),skin,rot=(9,0,(f-1.5)*4),segments=8,rings=6)
-            oval(part,'PuntaDedo',(fx,-.97-length*.46,-.052),(.049,.09,.055),skin,rot=(35,0,0),segments=8,rings=6)
+            bloque(part,'Falange',(fx,-.97,-.015),(.055,length,.066),skin,rot=(9,0,(f-1.5)*4),segments=8,rings=6)
+            bloque(part,'PuntaDedo',(fx,-.97-length*.46,-.052),(.049,.09,.055),skin,rot=(35,0,0),segments=8,rings=6)
             box(part,'Una',(fx,-.98-length*.5,-.078),(.035,.044,.008),bone,'Wood',rot=(15,0,0),bisel=.005)
-        oval(part,'Pulgar',(x-s*.159,-.805,-.015),(.10,.235,.115),skin,rot=(0,0,s*30))
-    # Parches orgánicos y deshilachados en zonas de roce; no confeti rectangular.
+        bloque(part,'Pulgar',(x-s*.159,-.805,-.015),(.10,.235,.115),skin,rot=(0,0,s*30))
+    # Parches rectangulares y deshilachados en zonas de roce.
     for part in ['UpperTorso','LeftUpperLeg','RightLowerLeg','RightUpperArm']:
         size,pos=centers[part]
         z=-size[2]/2-.006
         for n in range(2):
             x=pos[0]+rng.uniform(-size[0]*.18,size[0]*.18); y=pos[1]+rng.uniform(-size[1]*.28,size[1]*.28)
-            oval(part,'Desgaste',(x,y,z),(.13,.23,.018),cloth_shadow,'Fabric',rot=(0,0,rng.uniform(-30,30)),segments=8,rings=6)
+            bloque(part,'Desgaste',(x,y,z),(.13,.23,.018),cloth_shadow,'Fabric',rot=(0,0,rng.uniform(-30,30)),segments=8,rings=6)
             for k in range(2):
                 box(part,'Hilo',(x-.032+k*.045,y-.11,z-.01),(.012,.10+k*.04,.014),pants,'Fabric',rot=(0,0,k*16-8),bisel=.002)
     # Ropa/equipo específicos: capas reales y perfiles distintos por profesión.
@@ -190,9 +169,9 @@ def aplicar(ns, index, spec):
         for s in [-1,1]: box(T,'HebillaCorrea',(s*.46,.66,-.45),(.16,.20,.055),(87,85,74),'Plastic',bisel=.02)
         cyl(T,'Botella',(.66,.86,.52),.22,.61,(92,113,102),'Plastic',segs=12,bisel=.02)
     if kind=='peto':
-        for s in [-1,1]: oval(T,'BotonTirante',(s*.4,.91,-.46),(.065,.065,.025),(147,137,95),'Metal',segments=8,rings=6)
+        for s in [-1,1]: bloque(T,'BotonTirante',(s*.4,.91,-.46),(.065,.065,.025),(147,137,95),'Metal',segments=8,rings=6)
     if kind=='capucha':
         for n in range(3): box(T,'ParcheAbrigo',(-.33+n*.24,.6+(n%2)*.36,-.40),(.20,.27,.04),pants,rot=(0,0,n*9-9),bisel=.014)
-    deteriorar(ns, index, spec, oval)
+    deteriorar(ns, index, spec, bloque)
     from superficie import aplicar as superficie
     superficie(ns, index)

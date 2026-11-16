@@ -1,5 +1,17 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
+## 2026-11-16 · Codex · Corrección v6: TODO cuadrado
+- El usuario aclara que **todas las partes** deben ser cuadradas; la revisión v5 aún tenía
+  elementos ovalados. Ahora ojos, iris, palmas, dedos, pulgares, barba, pliegues, coágulos,
+  cerebro y accesorios son bloques. Torso y miembros tienen sección rectangular constante.
+- Se eliminan esferas, cilindros, tubos, caras suavizadas y biseles redondeados del catálogo.
+  Los rasgos del rostro quedan sobre un plano; cerebro con pliegues ortogonales por bloques.
+- No basta una cabeza cuadrada: **ningún detalle geométrico circular** en futuras revisiones.
+  La caja estricta del generador afecta solo a zombis, no cambia las fuentes del protagonista.
+- Validado en Godot 4.6.3: 624/624 modelos, 56/56 menú renderizado, 102/102 batería general.
+  Normales planas verificadas en GLB; 1.986–2.438 triángulos/variante.
+  Validación y vistas vigentes: `docs/CORRECCION_CUADRADA_V6.md`.
+
 ## 2026-11-16 · Codex · Revisión visual v5 cuadrada
 - Corrección expresa del usuario: **mantener el estilo cuadrado usando al protagonista de ejemplo**.
   Se conserva la geometría cuadrada de v4; el ensayo de cráneos y miembros redondeados se descartó.

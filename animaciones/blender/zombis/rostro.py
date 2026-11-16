@@ -4,28 +4,9 @@ import numpy as np
 from deterioro import pintar_piel, CEREBRO_VISIBLE
 
 def esculpir(head, ns, index, skin, ident):
-    bm=bmesh.new(); bm.from_mesh(head.data)
-    front=next(f for f in bm.faces if (ns['C'].inverted() @ f.normal).z < -.9)
-    bmesh.ops.subdivide_edges(bm,edges=list(front.edges),cuts=19,use_grid_fill=True)
-    def gauss(x,y,cx,cy,wx,wy):
-        return math.exp(-.5*((x-cx)/wx)**2-.5*((y-cy)/wy)**2)
-    for v in bm.verts:
-        g=ns['C'].inverted() @ v.co
-        if abs(g.z+.39)<.0001:
-            fade=max(0,1-(abs(g.x)/.35)**8)*max(0,1-(abs(g.y)/.43)**8)
-            relief=0.0
-            for side in [-1,1]:
-                relief += .009*gauss(g.x,g.y,side*.153,.065,.085,.047)
-                relief -= .008*gauss(g.x,g.y,side*.21,-.05,.10,.07)
-                relief -= .004*gauss(g.x,g.y,side*.15,.12,.10,.026)
-            relief -= .009*gauss(g.x,g.y,0,0,.038,.10)
-            relief -= .004*gauss(g.x,g.y,0,-.30,.15,.05)
-            g.z += relief*fade
-            v.co=ns['C'] @ g
-    bmesh.ops.recalc_face_normals(bm,faces=list(bm.faces))
-    bm.to_mesh(head.data); bm.free()
+    # Rostro plano: los rasgos se construyen con cajas rectas en refinado.py.
     for face in head.data.polygons:
-        face.use_smooth=(ns['C'].inverted() @ face.normal).z < -.9
+        face.use_smooth=False
     # Coordenadas de proyección cúbica, embebidas y transportables al GLB.
     uv=head.data.uv_layers.new(name='UVMap')
     for face in head.data.polygons:

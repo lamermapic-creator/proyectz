@@ -40,6 +40,15 @@ def build(index, spec):
     old = sys.argv
     sys.argv = ['blender']
     exec(compile(helpers, 'personaje_helpers', 'exec'), ns)
+    # Política de arte estricta: cualquier primitiva del catálogo es un bloque.
+    original_box = ns['caja']
+    def caja_recta(parte,nombre,centro,tam,col,tipo='Fabric',rot=(0,0,0),bisel=None,segs=1):
+        return original_box(parte,nombre,centro,tam,col,tipo,rot,bisel=0,segs=1)
+    def accesorio_recto(parte,nombre,centro,diam,largo,col,tipo='Fabric',eje='y',rot=(0,0,0),**kwargs):
+        tam={'x':(largo,diam,diam),'y':(diam,largo,diam),'z':(diam,diam,largo)}[eje]
+        return caja_recta(parte,nombre,centro,tam,col,tipo,rot)
+    ns['caja']=caja_recta
+    ns['cil']=accesorio_recto
     bpy.context.preferences.filepaths.save_version = 0
     sys.argv = old
     scene, pieces, centers = ns['esc'], ns['vacios'], ns['PIEZAS']
@@ -137,6 +146,12 @@ def build(index, spec):
             for x in [-.46,-.17,.17,.46]: box(T,'PatronBata',(x,y,-.38),(.025,.04,.012),dark,bisel=.003)
         box('LeftLowerArm','Pulsera',(-.92,-.42,0),(.36,.08,.40),bone,'Plastic',bisel=.015)
     refinar(ns, index, spec)
+    # Comprobación previa a fusionar: ninguna cara suavizada ni bisel redondeado.
+    for e in pieces.values():
+        for ob in e.children:
+            if ob.type == 'MESH':
+                assert not any(f.use_smooth for f in ob.data.polygons), ob.name+' suavizado'
+                assert not any(m.type in {'BEVEL','SUBSURF'} for m in ob.modifiers), ob.name+' curva'
     # Una malla por pieza, con materiales como superficies (máximo 15 draw objects).
     for part,e in pieces.items():
         bpy.ops.object.select_all(action='DESELECT')
@@ -221,5 +236,5 @@ def build(index, spec):
 OUT.mkdir(parents=True,exist_ok=True)
 result=[build(i,spec) for i,spec in enumerate(VARIANTES) if not PREVIEW or spec[0]=='sanitario']
 if not PREVIEW:
-    (OUT/'catalogo.json').write_text(json.dumps({'version':5,'presupuesto_triangulos':16000,'unidades':'studs','rig':'R15 Motor6D','origen':'Modelado original local en Blender; sin assets de terceros ni proveedores de pago','animaciones':CLIPS,'modelos':result},indent=2,ensure_ascii=False)+'\n')
+    (OUT/'catalogo.json').write_text(json.dumps({'version':6,'presupuesto_triangulos':16000,'unidades':'studs','rig':'R15 Motor6D','origen':'Modelado original local en Blender; sin assets de terceros ni proveedores de pago','animaciones':CLIPS,'modelos':result},indent=2,ensure_ascii=False)+'\n')
 print('COLECCION_OK',len(result))
