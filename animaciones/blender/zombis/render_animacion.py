@@ -1,13 +1,14 @@
-"""Vista de marcha del sanitario. Escribe 12 PNG en /tmp/zombis-preview para montar un GIF."""
-import bpy, math
+"""Marcha: 12 PNG en /tmp/zombis-preview. Con --detalle: primer plano en detalle.png."""
+import bpy, math, sys
 from mathutils import Vector
 from pathlib import Path
 source=Path(__file__).resolve().parent
 bpy.ops.wm.open_mainfile(filepath=str(source/'sanitario.blend'))
 scene=bpy.context.scene
+detalle='--detalle' in sys.argv
 for ob in scene.objects:
     if ob.animation_data:
-        for track in ob.animation_data.nla_tracks: track.mute=track.name!='caminar'
+        for track in ob.animation_data.nla_tracks: track.mute=track.name!=('reposo' if detalle else 'caminar')
 bpy.ops.mesh.primitive_plane_add(size=200,location=(0,0,-3.11))
 mat=bpy.data.materials.new('Suelo'); mat.diffuse_color=(.06,.08,.10,1)
 bpy.context.object.data.materials.append(mat)
@@ -24,6 +25,13 @@ scene.render.engine='CYCLES'; scene.cycles.samples=12; scene.cycles.use_denoisin
 scene.render.resolution_x=360; scene.render.resolution_y=440; scene.render.resolution_percentage=100
 scene.render.image_settings.file_format='PNG'
 out=Path('/tmp/zombis-preview'); out.mkdir(exist_ok=True)
-for i,frame in enumerate(range(1,49,4)):
+if detalle:
+    cam.location=(1.2,4.5,2.6)
+    cam.rotation_euler=(Vector((0,0,2.0))-cam.location).to_track_quat('-Z','Y').to_euler()
+    cam.data.ortho_scale=1.65
+    scene.render.resolution_x=700; scene.render.resolution_y=700
+    scene.cycles.samples=48
+for i,frame in enumerate([1] if detalle else range(1,49,4)):
     scene.frame_set(frame)
-    scene.render.filepath=str(out/('%02d.png'%i)); bpy.ops.render.render(write_still=True)
+    scene.render.filepath=str(source/'detalle.png') if detalle else str(out/('%02d.png'%i))
+    bpy.ops.render.render(write_still=True)

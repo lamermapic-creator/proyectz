@@ -1,5 +1,19 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
+## 2026-11-16 · Codex · Mejora visual de los doce zombis (v2)
+- Rehecha la geometría con cráneos/mandíbulas redondeados, párpados, rasgos asimétricos, manos con
+  falanges/uñas, miembros afinados, hombros unidos al torso, pliegues y vestuario más diferenciado.
+- Fuente nueva: `animaciones/blender/zombis/refinado.py`, llamada por `generar.py`. No editar solo
+  los `.blend` si después se va a regenerar: trasladar el cambio a las fuentes Python.
+- Presupuesto de geometría: 13.016–14.216 triángulos por modelo, techo de 16.000 (antes 7.000).
+  Se conservan las 15 piezas, centros R15, clips, IA, daño y ragdoll. Sin cambios de jugabilidad.
+- Catálogo y vista de marcha actualizados; primer plano en `animaciones/blender/zombis/detalle.png`.
+  Ver `docs/MODELOS_ZOMBIS.md` para límites y regeneración. Pendiente medir hordas en GPU.
+- Validación v2: 576/576 comprobaciones específicas; batería general 101/102 OK. Falló
+  `suelo_pisoton --muerto` (2 de 5 impactos; requiere 3), y pasó aislado con 5 de 5. Es otro caso que
+  varía entre ejecuciones, distinto de los ya anotados; causa pendiente. No se tocaron las aserciones
+  ni el combate. Detalle y registros en `docs/MODELOS_ZOMBIS.md`.
+
 ## 2026-11-16 · Codex · Colección de zombis solicitada por el usuario
 - Añadidas 12 variantes originales de Blender en `modelos/zombis/`, con fuentes editables y generador
   en `animaciones/blender/zombis/`. Detalle, catálogo y límites: `docs/MODELOS_ZOMBIS.md`.

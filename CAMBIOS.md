@@ -13,6 +13,23 @@ en el mismo commit que el cambio. Formato:
 
 ---
 
+## 2026-11-16 · Usuario · Codex — segunda revisión visual de los doce zombis
+**Qué:** anatomía más natural y siluetas/ropa diferenciadas: cráneo y mandíbula, párpados y ojos nublados,
+dientes irregulares, orejas/nariz, peinados y barbas; manos con falanges/uñas, brazos y piernas afinados,
+pliegues, deshilachados y equipo adicional por profesión. Corregida la unión visual de los hombros.
+**Archivos:** fuentes `generar.py`, nuevo `refinado.py`, `validar.py`, `render_animacion.py`; doce `.blend`,
+doce `.glb`, `catalogo.json`, vistas PNG/GIF, `docs/MODELOS_ZOMBIS.md`, `CLAUDE.md` y este registro.
+**Cómo probarlo:** ejecutar `escenas/galeria_zombis.tscn` con F6 y revisar variantes desde distintos ángulos;
+flechas cambian clip. Ejecutar el nivel para verlas con la IA. `tests/modelos_zombis.gd` verifica la
+compatibilidad y `python3 animaciones/blender/zombis/validar.py` verifica los bytes del catálogo.
+**Pendiente / avisos:** mayor geometría (13.016–14.216 triángulos; techo de 16.000), con las mismas 15 piezas.
+No se ha medido una horda en GPU. Se mantienen los seis clips existentes y el controlador procedural/ragdoll
+del juego. Los materiales siguen sin texturas externas ni servicios de pago.
+**Validación:** importación y galería sin errores, 576/576 comprobaciones específicas, doce GLB con
+hash y presupuesto correctos. Batería general: 101/102 OK; falló `suelo_pisoton --muerto` (2/5 impactos)
+y pasó aislado (5/5). Causa de la variación pendiente; se conserva el fallo original en los registros.
+Catálogo, primer plano y marcha renderizados y revisados. Sin cambios de código ni pruebas de combate.
+
 ## 2026-11-16 · Usuario · Codex — 12 modelos de zombis y seis clips de animación
 **Qué:** colección original R15 con doce aspectos de infectados, ropa/equipo por profesión, caras,
 dedos, dientes, cicatrices, roturas y costuras. Fuentes `.blend`, generador reproducible, GLB con seis

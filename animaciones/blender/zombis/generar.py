@@ -6,6 +6,9 @@ from mathutils import Matrix, Vector
 ROOT = Path(__file__).resolve().parents[3]
 OUT = ROOT / 'modelos/zombis'
 SOURCE = Path(__file__).resolve().parent
+sys.dont_write_bytecode = True
+sys.path.insert(0, str(SOURCE))
+from refinado import aplicar as refinar
 # Reutilizamos las mismas dimensiones, conversión de ejes y primitivas del superviviente.
 helpers = (SOURCE.parent / 'personaje/personaje.py').read_text().split('# ================================================================= DISEÑO NUEVO')[0]
 VARIANTES = [
@@ -32,6 +35,7 @@ def build(index, spec):
     old = sys.argv
     sys.argv = ['blender']
     exec(compile(helpers, 'personaje_helpers', 'exec'), ns)
+    bpy.context.preferences.filepaths.save_version = 0
     sys.argv = old
     scene, pieces, centers = ns['esc'], ns['vacios'], ns['PIEZAS']
     box, cyl, cv = ns['caja'], ns['cil'], ns['g2b']
@@ -127,6 +131,7 @@ def build(index, spec):
         for y in [.5,.75,1,1.25]:
             for x in [-.46,-.17,.17,.46]: box(T,'PatronBata',(x,y,-.38),(.025,.04,.012),dark,bisel=.003)
         box('LeftLowerArm','Pulsera',(-.92,-.42,0),(.36,.08,.40),bone,'Plastic',bisel=.015)
+    refinar(ns, index, spec)
     # Una malla por pieza, con materiales como superficies (máximo 15 draw objects).
     for part,e in pieces.items():
         bpy.ops.object.select_all(action='DESELECT')
@@ -210,5 +215,5 @@ def build(index, spec):
 
 OUT.mkdir(parents=True,exist_ok=True)
 result=[build(i,spec) for i,spec in enumerate(VARIANTES)]
-(OUT/'catalogo.json').write_text(json.dumps({'version':1,'unidades':'studs','rig':'R15 Motor6D','origen':'Modelado original local en Blender; sin assets de terceros ni proveedores de pago','animaciones':CLIPS,'modelos':result},indent=2,ensure_ascii=False)+'\n')
+(OUT/'catalogo.json').write_text(json.dumps({'version':2,'presupuesto_triangulos':16000,'unidades':'studs','rig':'R15 Motor6D','origen':'Modelado original local en Blender; sin assets de terceros ni proveedores de pago','animaciones':CLIPS,'modelos':result},indent=2,ensure_ascii=False)+'\n')
 print('COLECCION_OK',len(result))

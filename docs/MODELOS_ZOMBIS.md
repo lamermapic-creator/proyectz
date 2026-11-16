@@ -1,5 +1,38 @@
 # Colección de zombis — 2026-11-16
 
+## Revisión visual v2
+
+Rehechas las formas principales: torso con cintura y hombros, bíceps, antebrazos con tendones,
+muslos y pantorrillas afinados, palmas y dedos con falanges/uñas. La cabeza usa un cráneo redondeado,
+mandíbula estrecha, orejas con interior, nariz con fosas, párpados, dientes irregulares y heridas
+asimétricas. Hay ojos nublados, mandíbulas y peinados diferentes, incluida melena y barba.
+
+Los perfiles de cada profesión se definen en `animaciones/blender/zombis/refinado.py`: ancho y
+profundidad de torso, volumen de miembros, mandíbula y pelo. También se añadieron solapas, pliegues,
+deshilachados, bolsillos de trabajo, rodilleras del mecánico, radio/antena del policía, faldón y botas
+del bombero, bajo de bata del paciente, hebillas y botella del excursionista/repartidor y parches del
+abrigo. Los centros de articulación, las 15 piezas de impacto y los seis clips se conservan.
+
+El generador llama al módulo de refinado antes de unir/exportar las mallas. Editar ambos archivos
+fuente para mantener la regeneración reproducible. La anatomía sigue articulándose por segmentos;
+esta revisión no introduce skinning continuo ni texturas de piel de alta resolución.
+
+Presupuesto v2: hasta **16.000 triángulos** por modelo, frente al techo de 7.000 de la primera versión.
+Los archivos finales tienen 13.016–14.216 triángulos. Es un aumento deliberado para dar volumen a las
+formas; no debe interpretarse como una mejora de rendimiento. Falta medir el coste de renderizado de
+una horda en GPU. Las 15 mallas conservan varias superficies por material.
+
+Vistas actualizadas: `catalogo.png`, `caminar.gif` y `detalle.png`. Para regenerar el primer plano:
+`blender -b -t 2 -P animaciones/blender/zombis/render_animacion.py -- --detalle`.
+
+Validación v2: importación y galería sin errores; **576/576** comprobaciones específicas y hashes correctos.
+La batería general terminó con **101/102 OK**: falló `suelo_pisoton --muerto`, con 2 impactos de 5
+cuando el test exige al menos 3. Su repetición aislada pasó con 5 impactos de 5. Es una observación de
+variabilidad de ese caso, distinta del fallo de `moto_zombi` de la primera entrega; la causa no quedó
+determinada. No se modificaron lógica de combate, cajas de impacto, ragdoll ni aserciones para ocultarlo.
+Registros: `/workspace/setup-logs/zombis-v2-test.log`, `zombis-v2-regresion.log`,
+`zombis-v2-pisoton-repeticion.log` y `zombis-v2-galeria.log`.
+
 Doce variantes originales creadas localmente con Blender 4.3.2, para el estilo segmentado R15 de Proyecto Z.
 No son esculturas fotorrealistas: siguen las proporciones del superviviente y añaden detalle geométrico,
 materiales, caras hundidas, dientes, dedos, cicatrices, roturas, costuras, bolsillos y equipo por profesión.
@@ -24,9 +57,9 @@ de uso del proyecto; esta incorporación no concede una licencia distinta sobre 
 | vagabundo | Capucha y bufanda |
 
 `modelos/zombis/catalogo.json` registra los hashes SHA-256, tamaños e identidad de los GLB.
-Cada modelo tiene 15 mallas segmentadas, materiales PBR sin texturas externas y entre 5.632 y 6.148
+Cada modelo tiene 15 mallas segmentadas, materiales PBR sin texturas externas y entre 13.016 y 14.216
 triángulos. Una malla puede tener varias superficies/materiales: 15 mallas **no** significa 15 llamadas
-de dibujo. La colección ocupa aproximadamente 4,6 MB en GLB; no se ha medido rendimiento de hordas
+de dibujo. La colección ocupa aproximadamente 5,3 MB en GLB; no se ha medido rendimiento de hordas
 en GPU. El equipo y la ropa no amplían las cajas de impacto.
 
 ## Abrir y probar
@@ -93,7 +126,7 @@ con movimiento, 15 piezas y sus tamaños, selección de variante, daño, derribo
 también se ejecutó sin ventana. El render de catálogo revisa la geometría en Blender; no acredita
 calidad visual ni rendimiento del renderizador Forward+ de Godot en una GPU.
 
-Resultado de esta entrega: **576/576** comprobaciones específicas y catálogo de bytes/hashes correcto.
+Resultado de la primera entrega (antes de v2): **576/576** comprobaciones específicas y catálogo de bytes/hashes correcto.
 La batería general terminó con **101/102 OK**; falló únicamente `moto_zombi` (no atropella al zombi),
 intermitencia ya registrada en `CLAUDE.md`. Su repetición aislada pasó (`atropellos=1`). No se oculta
 el fallo de la batería original. Las pruebas de combate, suelo, ragdoll, menú y nivel pasaron.
