@@ -1,3 +1,9 @@
+## 2026-11-16 — Zombis v5 y escenario de cuarentena
+
+Estilo cuadrado conservado por petición expresa, microrelieve de piel y tejido en GLB, y un puesto
+urbano de cuarentena con mayor profundidad, iluminación y asfalto húmedo. Se mantienen rig,
+IA, combate, clips y navegación del menú. Fuentes y validación: `docs/REVISION_VISUAL_V5.md`.
+
 # Registro de cambios — Proyecto Z
 
 Cada Claude (o persona) que cambie algo en el proyecto añade una entrada **arriba del todo**,

@@ -40,13 +40,13 @@ def esculpir(head, ns, index, skin, ident):
     # Variación de piel muy contenida; sin ojeras negras pintadas.
     size=512; rng=np.random.default_rng(9300+index)
     xx,yy=np.meshgrid(np.linspace(-.35,.35,size),np.linspace(-.43,.43,size))
-    fine=rng.normal(0,.003,(size,size))
+    fine=rng.normal(0,.005,(size,size))
     # Ruido interpolado no periódico: evitar vetas de mármol sobre la frente.
     grid=rng.normal(0,1,(18,18))
     sample=np.linspace(0,17,size)
     lo=np.minimum(sample.astype(int),16); frac=sample-lo
     horizontal=grid[:,lo]*(1-frac)+grid[:,lo+1]*frac
-    mottling=(horizontal[lo,:]*(1-frac[:,None])+horizontal[lo+1,:]*frac[:,None])*.006
+    mottling=(horizontal[lo,:]*(1-frac[:,None])+horizontal[lo+1,:]*frac[:,None])*.012
     color=np.array(skin,dtype=np.float32)/255
     rgb=np.broadcast_to(color,(size,size,3)).copy()
     rgb += (fine+mottling)[...,None]

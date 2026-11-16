@@ -13,7 +13,7 @@ func _ready() -> void:
 	env.background_color = Color("111a20")
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color("83979f")
-	env.ambient_light_energy = 0.45
+	env.ambient_light_energy = 0.32
 	env.fog_enabled = true
 	env.fog_light_color = Color("26383d")
 	env.fog_density = 0.018
@@ -21,7 +21,8 @@ func _ready() -> void:
 	var luna := DirectionalLight3D.new()
 	luna.rotation_degrees = Vector3(-36, -38, 0)
 	luna.light_color = Color("97b4be")
-	luna.light_energy = 0.75
+	luna.light_energy = 0.95
+	luna.shadow_enabled = true
 	add_child(luna)
 	_luz_roja = OmniLight3D.new()
 	_luz_roja.position = Vector3(6, 5.8, 2)
@@ -35,7 +36,11 @@ func _ready() -> void:
 	relleno.light_energy = 1.6
 	relleno.omni_range = 18
 	add_child(relleno)
-	_caja(Vector3(0, -0.2, -3), Vector3(70, 0.4, 90), Color("252d2e"))
+	var suelo := _caja(Vector3(0, -0.2, -3), Vector3(70, 0.4, 90), Color("252d2e"))
+	var asfalto := ShaderMaterial.new()
+	asfalto.shader = preload("res://scripts/ui/suelo_menu.gdshader")
+	suelo.material_override = asfalto
+	_ampliar_puesto()
 	for z in range(-40, 16, 7):
 		_caja(Vector3(1, 0.015, z), Vector3(0.10, 0.025, 3.3), Color("8b8b73"))
 	for x in [-7.0, 10.0]:
@@ -107,3 +112,63 @@ func _process(dt: float) -> void:
 		(actor.M.LeftShoulder as RigPersonaje.Motor).transform = Rbx.ang(0.14, 0, -0.08)
 		(actor.M.RightShoulder as RigPersonaje.Motor).transform = Rbx.ang(0.22, 0, 0.08)
 		actor.aplicar()
+
+func _ampliar_puesto() -> void:
+	# Fachadas y ventanales: profundidad sin IA ni cuerpos físicos.
+	for lado in [-1.0, 1.0]:
+		for i in range(4):
+			var x: float = lado * (17.0 + float(i % 2) * 2.0)
+			var z := -13.0 - i * 13.0
+			var alto := 12.0 + float(i % 3) * 4.0
+			_caja(Vector3(x, alto / 2.0, z), Vector3(9, alto, 11), Color("242e32"))
+			_caja(Vector3(x, alto, z), Vector3(9.5, 0.35, 11.5), Color("394247"))
+			for piso in range(1, int(alto / 3.0)):
+				for columna in range(3):
+					var ventana := _caja(Vector3(x - 2.8 + columna * 2.8, piso * 3.0, z + 5.53), Vector3(1.45, 1.85, 0.05), Color("111b21"))
+					if (piso + columna + i) % 5 == 0:
+						var mat := StandardMaterial3D.new()
+						mat.albedo_color = Color("766a4c")
+						mat.emission_enabled = true
+						mat.emission = Color("8e754c")
+						mat.emission_energy_multiplier = 0.7
+						ventana.material_override = mat
+		# Bordillo y acera delimitan la calle.
+		_caja(Vector3(lado * 12, 0.10, -12), Vector3(3, 0.22, 65), Color("424849"))
+	# Garita con puerta, cristales y marquesina al fondo derecho.
+	_caja(Vector3(10, 2.2, -9), Vector3(5.2, 4.4, 4), Color("4c5753"))
+	_caja(Vector3(10, 4.5, -8.8), Vector3(6, 0.25, 4.8), Color("283238"))
+	_caja(Vector3(9.2, 2.65, -6.96), Vector3(2.6, 1.5, 0.06), Color("18292e"))
+	_caja(Vector3(11.3, 1.6, -6.94), Vector3(1.1, 3.1, 0.08), Color("303a3b"))
+	for x in [7.5, 12.5]:
+		_caja(Vector3(x, 3, -4), Vector3(.12, 6, .12), Color("525c5b"))
+	_caja(Vector3(10, 6, -4), Vector3(5.4, .18, .25), Color("525c5b"))
+	var foco := SpotLight3D.new()
+	foco.position = Vector3(10, 5.8, -3.9)
+	foco.light_color = Color("e2c99a")
+	foco.light_energy = 7.0
+	foco.spot_range = 23.0
+	foco.spot_angle = 52.0
+	foco.shadow_enabled = true
+	add_child(foco)
+	foco.look_at(Vector3(4, 0, 2))
+	# Luminarias prácticas, no luces por cada ventana.
+	for z in [-15.0, -29.0]:
+		_caja(Vector3(-10, 5, z), Vector3(.15, 10, .15), Color("3c4546"))
+		_caja(Vector3(-8.5, 9.8, z), Vector3(3, .12, .15), Color("3c4546"))
+		var luz := OmniLight3D.new()
+		luz.position = Vector3(-7, 9.5, z)
+		luz.light_color = Color("acbaba")
+		luz.light_energy = 2.6
+		luz.omni_range = 16
+		add_child(luz)
+	# Cajas de suministro, palés y sacos alrededor del control.
+	for i in range(6):
+		var x := 11.5 + float(i % 3) * .9
+		var y := .45 + float(i / 3) * .85
+		_caja(Vector3(x, y, -1.8), Vector3(.8, .8, .9), Color("615e4b"))
+		_caja(Vector3(x, y, -1.34), Vector3(.08, .8, .015), Color("302f29"))
+	var azar := RandomNumberGenerator.new()
+	azar.seed = 56192
+	for i in range(32):
+		var resto := _caja(Vector3(azar.randf_range(-10, 13), .04, azar.randf_range(-9, 8)), Vector3(azar.randf_range(.12, .38), .02, azar.randf_range(.18, .46)), Color("6e756c"))
+		resto.rotation.y = azar.randf_range(-PI, PI)

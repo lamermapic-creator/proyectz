@@ -1,4 +1,4 @@
-"""Deterioro original: sangre en piel/ropa y cráneo abierto en tres variantes cuadradas."""
+"""Deterioro original: sangre en piel/ropa y cráneo abierto en tres variantes."""
 import bpy, bmesh, math, random
 import numpy as np
 from mathutils import Vector
@@ -164,11 +164,5 @@ def aplicar(ns, index, spec, oval):
             front=math.sqrt(max(.06,1-((x+.18)/.1325)**2-((y-2.365)/.1175)**2))
             points.append(Vector((x,y,-.245-.1375*front-.008)))
         tube('VasoCerebral',points,.003,fresh)
-    # Borde de sangre seca y fragmentos óseos a ras del corte.
-    for k in range(6):
-        x=-.315+k*.048
-        ob=box('Head','BordeHerida',(x,2.228+rng.uniform(-.005,.005),-.392),(.046,.013,.012),(66,16,12),'Skin',rot=(0,0,rng.uniform(-12,12)),bisel=.004)
-        ob.data.materials.clear(); ob.data.materials.append(dried)
-    for x,y in [(-.325,2.30),(-.027,2.36),(-.27,2.235)]:
-        ob=box('Head','AstillaHueso',(x,y,-.382),(.031,.069,.025),(166,148,115),'Skin',rot=(0,0,rng.uniform(-22,22)),bisel=.004)
-        ob.data.materials.clear(); ob.data.materials.append(bone)
+    # El borde óseo lo aporta el Boolean; se omiten las piezas superpuestas
+    # para limpiar el contorno del corte. La sangre permanece en la textura.

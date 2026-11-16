@@ -221,5 +221,5 @@ def build(index, spec):
 OUT.mkdir(parents=True,exist_ok=True)
 result=[build(i,spec) for i,spec in enumerate(VARIANTES) if not PREVIEW or spec[0]=='sanitario']
 if not PREVIEW:
-    (OUT/'catalogo.json').write_text(json.dumps({'version':4,'presupuesto_triangulos':16000,'unidades':'studs','rig':'R15 Motor6D','origen':'Modelado original local en Blender; sin assets de terceros ni proveedores de pago','animaciones':CLIPS,'modelos':result},indent=2,ensure_ascii=False)+'\n')
+    (OUT/'catalogo.json').write_text(json.dumps({'version':5,'presupuesto_triangulos':16000,'unidades':'studs','rig':'R15 Motor6D','origen':'Modelado original local en Blender; sin assets de terceros ni proveedores de pago','animaciones':CLIPS,'modelos':result},indent=2,ensure_ascii=False)+'\n')
 print('COLECCION_OK',len(result))
