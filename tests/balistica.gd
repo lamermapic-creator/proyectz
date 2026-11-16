@@ -83,6 +83,7 @@ func probar() -> void:
 		var uno := await tiro(zombi, "UpperTorso", Vector3(0, 0, 0.20), Vector3(0, 0, -0.37))
 		var nueve := await tiro(zombi, "UpperTorso", Vector3(0, 0, 0.20), Vector3(0, 0, -0.37), 9)
 		comprobar(nueve.p.z > uno.p.z * 7.0 and nueve.p.z < uno.p.z * 10.0, "se conservan los nueve perdigones antes del arranque")
+	await probar_impacto_antes_de_caer()
 	await probar_reaccion_viva()
 	await probar_cadaver()
 	await probar_arma()
@@ -194,3 +195,48 @@ func probar_reaccion_viva() -> void:
 		comprobar(cambia_d > cambia_i + 0.015, "reacción viva localizada en el brazo alcanzado")
 		obj.free()
 		await frames(1)
+
+## Comparar con una muerte sin impulso, con la misma postura inicial y el mismo suelo.
+## Exigir reacción dirigida mientras la pelvis aún tiene apoyo: un simple desplome no pasa.
+func probar_impacto_antes_de_caer() -> void:
+	for pieza in ["Head", "UpperTorso"]:
+		for signo in [-1.0, 1.0]:
+			var pares: Array[Zombi] = []
+			for i in 2:
+				var z := Zombi.new()
+				z.variante_visual = "civil"
+				z.deambula = false
+				z.position = Vector3(i*8, 3.1, 0)
+				mundo.add_child(z)
+				z._var = 0.0
+				z.set_process(false)
+				z.set_physics_process(false)
+				z._process(0.0)
+				pares.append(z)
+			var articulacion := "Neck" if pieza == "Head" else "Waist"
+			for i in 2:
+				var z := pares[i]
+				var p: Vector3 = z.rig.P[pieza].global_transform * Vector3(0, 0.1, -signo*0.37)
+				z.recibir_disparo(10000, pieza, Vector3(0,0,signo*0.65) if i==0 else Vector3.ZERO, p)
+			var altura := pares[0]._ragdoll.pelvis().y
+			var visible := 0.0
+			var soporte_visible := 0.0
+			for frame in 18:
+				await frames(1)
+				var bases: Array[Basis] = []
+				for z in pares:
+					var m: RigPersonaje.Motor = z.rig.M[articulacion]
+					var rd: Ragdoll = z._ragdoll
+					bases.append((rd.cuerpos[m.part0] as RigidBody3D).global_basis.inverse() * (rd.cuerpos[m.part1] as RigidBody3D).global_basis)
+				var pitch: float = (bases[1].inverse()*bases[0]).get_euler().x * signo
+				var baja := altura - pares[0]._ragdoll.pelvis().y
+				if baja < 0.35:
+					visible = maxf(visible, pitch)
+					if pitch > deg_to_rad(6.0):
+						soporte_visible = maxf(soporte_visible, (frame+1)/60.0)
+			print("BALISTICA impacto_visible pieza=%s sentido=%.0f giro=%.2f grados antes_de_caer=%.3f s" % [pieza,signo,rad_to_deg(visible),soporte_visible])
+			comprobar(visible > deg_to_rad(6.0), "golpe visible y dirigido antes de desplomarse " + pieza)
+			comprobar(soporte_visible >= 0.10, "la reacción precede a la pérdida de apoyo " + pieza)
+			for z in pares:
+				z.free()
+			await frames(1)

@@ -112,6 +112,9 @@ var _muerte_bala := false
 var _punto_bala := Vector3.ZERO # local a la pieza: sigue siendo válido al arrancar la física
 var _balas_pendientes: Array[Dictionary] = []
 var _pose_muerte := {}
+var _reaccion_balas := ImpactoBalistico.new()
+var _angulos_bala := {}
+var _base_reaccion := {}
 
 var _v_prev := Vector3.ZERO
 var _golpe_t := -9.0
@@ -151,6 +154,13 @@ static func iniciar(d: Node3D, r: RigPersonaje, vel: Vector3, opciones := {}) ->
 	rd._balistica = opciones.get("balistica", false)
 	rd._muerte_bala = rd._balistica and rd.comportamiento == "morir"
 	rd._punto_bala = opciones.get("punto_local", Vector3.ZERO)
+	if rd._balistica and opciones.has("reaccion_bala"):
+		rd._reaccion_balas = (opciones.reaccion_bala as ImpactoBalistico).copiar()
+		# La pose animada ya incluye este desplazamiento de golpes anteriores.
+		var iniciales := rd._reaccion_balas.avanzar(0.0)
+		for mn in iniciales:
+			var a: Vector3 = iniciales[mn]
+			rd._base_reaccion[mn] = Rbx.angb(a.x, a.y, a.z)
 	rd._semilla = randf() * 100.0
 	d.add_child(rd)
 	rd._construir()
@@ -490,6 +500,8 @@ func disparo(pieza: String, impulso: Vector3, punto: Vector3) -> void:
 		pieza = "UpperTorso"
 	if vivo:
 		_pieza_golpe = pieza
+	if vivo or (_muerte_bala and _t_comp < 0.45):
+		_reaccion_balas.registrar(rig, pieza, impulso, punto)
 	var b: RigidBody3D = cuerpos[pieza]
 	var t: Transform3D = _pose_real[pieza] if _fase == 0 else b.global_transform
 	var medio: Vector3 = (rig.P[pieza] as Node3D).get_meta("size") * 0.5
@@ -587,6 +599,7 @@ func _physics_process(dt: float) -> void:
 	if vivo and not _avisado and duracion >= 0.0 and _t > duracion and _dist_suelo < 2.5 and v.length() < 7.0 \
 			and comportamiento in ["caer", "impacto", "retorcerse"]:
 		cambiar("prepararse")
+	_angulos_bala = _reaccion_balas.avanzar(dt)
 	var res: Array = _comportamiento(_t_comp)
 	var pose: Dictionary = res[0]
 	var fuerzas: Dictionary = res[1]
@@ -940,11 +953,16 @@ func _b_prepararse(t: float) -> Array:
 ## muerte: se agarra la herida, las rodillas ceden, cae protegiéndose, se retuerce y se apaga
 func _b_morir(t: float) -> Array:
 	if _muerte_bala:
-		# La gravedad y el impacto deciden la caída. La pérdida de tono depende de la zona,
-		# sin agacharse siempre igual, protegerse ni retorcerse artificialmente durante seis segundos.
-		var suelta := 0.12 if _pieza_golpe == "Head" else 0.45
-		var k := pow(maxf(0.0, 1.0 - t / suelta), 2.0)
-		return [_pose_muerte, {"core": 0.14 * k, "neck": 0.08 * k, "arm": 0.06 * k, "leg": 0.04 * k}]
+		# Primero se ve el impacto. Las piernas conservan brevemente el apoyo; soltarlas
+		# inmediatamente ocultaba el golpe bajo el desplome. No hay una pose fija de muerte.
+		var cabeza := _pieza_golpe == "Head"
+		var k := 1.0 - smoothstep(0.10 if cabeza else 0.20, 0.40 if cabeza else 0.65, t)
+		var pose := _pose_muerte.duplicate()
+		for mn in _angulos_bala:
+			var a: Vector3 = _angulos_bala[mn]
+			var base: Basis = _base_reaccion.get(mn, Basis.IDENTITY)
+			pose[mn] = (pose.get(mn, Basis.IDENTITY) as Basis) * base.inverse() * Rbx.angb(a.x, a.y, a.z)
+		return [pose, {"core": 0.60 * k, "neck": 0.35 * k, "arm": 0.35 * k, "leg": 0.75 * k}]
 	if t < 0.35:
 		var pose: Dictionary = _b_retorcerse(t)[0]
 		pose.LeftKnee = _ang(-1.1)

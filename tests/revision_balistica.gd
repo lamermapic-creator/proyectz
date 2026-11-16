@@ -1,8 +1,10 @@
 extends SceneTree
 ## Revisión visual reproducible de seis impactos. --capturas=/ruta guarda fotogramas reales de Godot.
 var destino := ""
+var detalle := false
 
 func _initialize() -> void:
+	detalle = OS.get_cmdline_user_args().has("--detalle")
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--capturas="):
 			destino = arg.trim_prefix("--capturas=")
@@ -61,18 +63,24 @@ func iniciar() -> void:
 		["PIERNA · LATERAL", "LeftLowerLeg", Vector3(0.65, 0, 0), Vector3(-0.22, 0, 0)],
 		["BRAZO · LATERAL", "RightUpperArm", Vector3(-0.65, 0, 0), Vector3(0.19, 0.25, 0)],
 	]
+	if detalle:
+		casos = [["TORSO · ENTRADA FRONTAL", "UpperTorso", Vector3(0,0,0.65), Vector3(-0.25,0.1,-0.37)]]
+		cam.size = 8.5
+		cam.position = Vector3(7,5.5,-13)
+		cam.look_at(Vector3(0,2.7,0))
 	var actores: Array[Zombi] = []
 	for i in casos.size():
 		var z := Zombi.new()
 		z.variante_visual = "civil"
 		z.deambula = false
-		z.position = Vector3((i % 3 - 1) * 9, 3.1, -float(i / 3) * 12)
+		z.position = Vector3(0,3.1,0) if detalle else Vector3((i % 3 - 1) * 9, 3.1, -float(i / 3) * 12)
 		mundo.add_child(z)
 		z._rng.seed = 73
 		z._var = 0.0 # misma postura inicial: comparar el punto de impacto
 		actores.append(z)
 		var label := Label3D.new()
 		label.text = casos[i][0]
+		label.visible = not detalle
 		label.font_size = 48
 		label.pixel_size = 0.018
 		label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
@@ -87,13 +95,15 @@ func iniciar() -> void:
 	if not destino.is_empty():
 		DirAccess.make_dir_recursive_absolute(destino)
 	for frame in 300:
-		if frame == 45:
+		if frame == 45 or (detalle and frame == 105):
 			for i in actores.size():
 				var z := actores[i]
 				var pieza: String = casos[i][1]
 				var punto: Vector3 = z.rig.P[pieza].global_transform * casos[i][3]
-				z.recibir_disparo(10000, pieza, casos[i][2], punto)
+				z.recibir_disparo(10.0 if detalle and frame==45 else 10000.0, pieza, casos[i][2], punto)
 		titulo.text = "REACCIÓN FÍSICA A DISPAROS · %.2f s" % ((frame - 45) / 60.0)
+		if detalle:
+			titulo.text = "ANTES DEL DISPARO" if frame < 45 else ("TORSO · IMPACTO NO MORTAL" if frame < 105 else "TORSO · IMPACTO MORTAL") + " · %.2f s" % ((frame - (45 if frame < 105 else 105)) / 60.0)
 		await process_frame
 		if not destino.is_empty() and frame % 6 == 0:
 			await RenderingServer.frame_post_draw

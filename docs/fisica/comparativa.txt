@@ -1,0 +1,19 @@
+Prueba de regresión sobre f6d9956. Se esperan fallos en el torso:
+BALISTICA impacto_visible pieza=Head sentido=-1 giro=35.50 grados antes_de_caer=0.250 s
+BALISTICA impacto_visible pieza=Head sentido=1 giro=24.66 grados antes_de_caer=0.233 s
+BALISTICA impacto_visible pieza=UpperTorso sentido=-1 giro=0.12 grados antes_de_caer=0.000 s
+MAL balística: golpe visible y dirigido antes de desplomarse UpperTorso
+MAL balística: la reacción precede a la pérdida de apoyo UpperTorso
+BALISTICA impacto_visible pieza=UpperTorso sentido=1 giro=0.00 grados antes_de_caer=0.000 s
+MAL balística: golpe visible y dirigido antes de desplomarse UpperTorso
+MAL balística: la reacción precede a la pérdida de apoyo UpperTorso
+BALISTICA caída estiramiento=0.133 velocidad_max=9.730 quieto=true
+BALISTICA comprobaciones=97 fallos=4
+
+Misma prueba en la corrección:
+BALISTICA impacto_visible pieza=Head sentido=-1 giro=15.08 grados antes_de_caer=0.300 s
+BALISTICA impacto_visible pieza=Head sentido=1 giro=12.35 grados antes_de_caer=0.300 s
+BALISTICA impacto_visible pieza=UpperTorso sentido=-1 giro=11.10 grados antes_de_caer=0.283 s
+BALISTICA impacto_visible pieza=UpperTorso sentido=1 giro=7.85 grados antes_de_caer=0.233 s
+BALISTICA caída estiramiento=0.104 velocidad_max=9.801 quieto=true
+BALISTICA comprobaciones=97 fallos=0

@@ -1,5 +1,40 @@
 # Disparos localizados y manejo de moto
 
+## Corrección vigente: se debe ver el golpe antes de la caída
+
+La revisión anterior (`f6d9956`) seguía pareciendo un desplome: el reflejo muscular de la bala
+se registraba, pero se descartaba al crear el ragdoll, y se perdía el apoyo casi inmediatamente.
+Se corrige esa transición, se refuerza el reflejo local y se mantienen brevemente las piernas
+antes de soltar tono. No se incrementa el impulso físico ni se añade una patada al cuerpo entero.
+La cabeza y el torso reaccionan primero; después la gravedad y el entorno determinan la caída.
+
+El estado de los muelles se copia para que la física y la animación viva no avancen el mismo
+reloj dos veces. Se resta la rotación que la postura inicial ya contenía, evitando un salto
+doble cuando el disparo mortal llega durante otro reflejo. No se añade una animación de muerte
+prefijada ni se cambian modelos o manejo de moto.
+
+Prueba de regresión física: un tiro frontal/posterior de pistola se compara con una muerte
+sin impulso en la misma postura y suelo. Se exige >6° de reacción dirigida en cabeza y torso
+mientras la pelvis no haya bajado 0,35 studs. La misma prueba se ejecutó sobre ambas versiones:
+
+| Torso | f6d9956 | Corrección |
+|---|---:|---:|
+| Tiro posterior | 0,12° | 11,10° |
+| Tiro frontal | 0,00° | 7,85° |
+
+Son ángulos medidos respecto al control sin impulso, antes de la caída; no son una medida
+biomecánica de una persona real. La cabeza alcanza 12,35–15,08° en la corrección. La versión
+anterior falla cuatro aserciones nuevas del torso; la corregida pasa 97/97 de balística.
+La batería general pasa 104/104. Motor: Godot 4.6.3; pendiente comprobar 4.7.2.
+
+![Impacto visible en primer plano](fisica/impacto-detalle.png)
+
+![Disparo no mortal y mortal](fisica/impacto-detalle.gif)
+
+Primer plano reproducible: añadir `--detalle` a `tests/revision_balistica.gd`. Se muestra
+primero un disparo no mortal y después uno mortal, con captura real de Godot. Vista de seis
+zonas: ejecutar sin `--detalle`. La moto y el estilo de bloques limpios v7 se conservan.
+
 ## Problemas corregidos
 
 Las balas transmitían solo una pieza y un vector de magnitud fija (45 para una bala, 12 por
@@ -79,7 +114,7 @@ reales; el objetivo es una respuesta física coherente y controlable dentro de e
 
 ![Conducción](fisica/moto.gif)
 
-## Resultados de esta entrega
+## Resultados iniciales de f6d9956 (antes de esta corrección)
 
 - Balística: 89/89 comprobaciones, incluidos muelles de reacción viva y disparos reales de Arsenal.
 - Manejo: 11/11, con prueba en suelo y pendientes y comparación de curvas a 30/60/120 FPS.

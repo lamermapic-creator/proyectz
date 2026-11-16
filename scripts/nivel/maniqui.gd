@@ -233,7 +233,7 @@ func _caer(dir: Vector3, dur: float) -> void:
 			if imp.length() < 2.0:
 				imp = _caida_dir * 4.0 + Vector3(0, 1.0, 0)
 		_ragdoll = Ragdoll.iniciar(self, rig, _vel, {"comportamiento": "caer" if _estado != "muerto" else "morir",
-			"vivo": true, "impulso": imp, "pieza": _pieza_golpe, "balistica": not _bala.is_empty(), "punto_local": _bala.get("punto_local", Vector3.ZERO), "duracion": dur})
+			"vivo": true, "impulso": imp, "pieza": _pieza_golpe, "balistica": not _bala.is_empty(), "reaccion_bala": _reaccion_balas, "punto_local": _bala.get("punto_local", Vector3.ZERO), "duracion": dur})
 		_ragdoll.recuperado.connect(_ragdoll_levantar)
 
 

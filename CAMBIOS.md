@@ -1,3 +1,11 @@
+## 2026-11-16 — Mostrar el impacto antes del desplome
+
+Corregida la reacción mortal que quedaba registrada pero no llegaba al ragdoll. Se transfiere
+su estado sin duplicar la pose existente y se conserva brevemente el apoyo para que se vea
+el golpe localizado antes de caer. Reacciones vivas más legibles; el impulso de las balas no
+aumenta. Prueba contra la versión anterior: detecta el torso sin reacción y pasa con el cambio.
+Capturas de primer plano y resultados en `docs/FISICA_Y_MANEJO.md`.
+
 ## 2026-11-16 — Disparos localizados y conducción de moto
 
 Las balas conservan punto, dirección y pieza de impacto; aplican impulsos modestos por arma y

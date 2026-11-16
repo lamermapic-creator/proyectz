@@ -1,5 +1,21 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
+## 2026-11-16 · Codex · Corrección: impacto visible antes de caer
+- El usuario señala que con f6d9956 los zombis solo se desploman. Causa comprobada: el reflejo
+  registrado en el fotograma mortal no se transfería al ragdoll, y el tono de piernas/core se
+  soltaba demasiado pronto. Las pruebas anteriores no exigían reacción visible del torso.
+- Se copia el estado de los muelles al ragdoll con reloj propio, sin duplicar el desplazamiento
+  que la pose viva ya incluía. Reflejo local más legible. Las piernas conservan apoyo brevemente
+  antes de soltar tono (0,10–0,20 s iniciales; libre a 0,40–0,65 s según zona). Sin pose fija de muerte.
+- El impulso físico de la bala NO aumenta: no añadir lanzamientos globales para fingir reacción.
+  Se mantienen el arte v7 y la conducción de la moto de la entrega anterior.
+- Prueba nueva dentro de balistica.gd: comparar tiro frontal/posterior con muerte sin impulso,
+  exigir >6° dirigidos en cabeza/torso antes de perder 0,35 studs de altura de pelvis. Sobre
+  f6d9956 falla el torso (0–0,12°); en la corrección alcanza 7,85–11,10° antes de la caída.
+- 97/97 balística y batería general 104/104. Godot 4.6.3; falta comprobar 4.7.2.
+  Primer plano no mortal/mortal: `tests/revision_balistica.gd -- --detalle --capturas=...`.
+  Capturas y evidencia: `docs/FISICA_Y_MANEJO.md`.
+
 ## 2026-11-16 · Codex · Balística localizada y manejo de moto
 - Petición del usuario: mejorar física de reacciones/muertes por disparos y **conducción de la moto**
   (aclarado expresamente). Se conserva el arte cuadrado limpio v7.

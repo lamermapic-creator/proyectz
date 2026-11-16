@@ -1,47 +1,48 @@
-Godot 4.6.3. Base: c8867c9. Batería final: 104 grupos.
-Tramo 1: compilar todos los scripts + 29 modos de ruido/IA/movimiento + balística + manejo + moto_conducir = 33.
-Interrupción por reinicio del entorno. Tramo 2: 71 grupos restantes.
+Corrección de impacto visible. Godot 4.6.3. Base: f6d9956.
 
-== prueba: unidad
-== prueba: pasos
-== prueba: disparo
-== prueba: oye_disparo
-== prueba: sigilo
-== prueba: oclusion
-== prueba: jauria
-== prueba: navegacion
-== prueba: ataque_y_muerte
-== prueba: regeneracion
-== prueba: danio_zombi
-== prueba: maniqui
-== prueba: andar
-== prueba: cadencia
-== prueba: completo
-== prueba: rendimiento
-== prueba: vista_frente
-== prueba: vista_espalda
-== prueba: vista_pared
-== prueba: vista_lejos
-== prueba: vista_postura
-== prueba: vista_sigue
-== prueba: anticipar
-== prueba: busqueda
-== prueba: reaccion
-== prueba: indicador
-== prueba: ataque_pared
-== prueba: herida_lejos
-== prueba: fondo_mundo
-BALISTICA caída estiramiento=0.135 velocidad_max=9.729 quieto=true
-BALISTICA comprobaciones=89 fallos=0
-MANEJO curva fps=30 rumbo=2.34293 velocidad=20.00004
-MANEJO curva fps=60 rumbo=2.34167 velocidad=20.00001
-MANEJO curva fps=120 rumbo=2.34115 velocidad=20.00013
-MANEJO freno parado=20 atras=42 pausa=0.367 velocidad=-4.941
-MANEJO_MOTO comprobaciones=11 fallos=0
-OK moto_conducir
 
-Tramo 2, resumen del ejecutor original:
+BALISTICA impacto_visible pieza=Head sentido=-1 giro=15.08 grados antes_de_caer=0.300 s
+BALISTICA impacto_visible pieza=Head sentido=1 giro=12.35 grados antes_de_caer=0.300 s
+BALISTICA impacto_visible pieza=UpperTorso sentido=-1 giro=11.10 grados antes_de_caer=0.283 s
+BALISTICA impacto_visible pieza=UpperTorso sentido=1 giro=7.85 grados antes_de_caer=0.233 s
+BALISTICA caída estiramiento=0.104 velocidad_max=9.801 quieto=true
+BALISTICA comprobaciones=97 fallos=0
 
+Batería general final, 104 grupos:
+
+OK    compilar todos los scripts
+OK    unidad
+OK    pasos
+OK    disparo
+OK    oye_disparo
+OK    sigilo
+OK    oclusion
+OK    jauria
+OK    navegacion
+OK    ataque_y_muerte
+OK    regeneracion
+OK    danio_zombi
+OK    maniqui
+OK    andar
+OK    cadencia
+OK    completo
+OK    rendimiento
+OK    vista_frente
+OK    vista_espalda
+OK    vista_pared
+OK    vista_lejos
+OK    vista_postura
+OK    vista_sigue
+OK    anticipar
+OK    busqueda
+OK    reaccion
+OK    indicador
+OK    ataque_pared
+OK    herida_lejos
+OK    fondo_mundo
+OK    balistica
+OK    manejo_moto
+OK    moto_conducir
 OK    moto_salto
 OK    moto_morro
 OK    moto_cuesta
