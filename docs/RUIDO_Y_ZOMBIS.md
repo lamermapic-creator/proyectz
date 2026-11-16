@@ -552,5 +552,6 @@ No se otorga otra baja ni marcador de daño por disparar a un muerto.
 
 La animación viva recibe reacción local de articulación. La muerte por bala suelta tono y
 conserva postura y velocidad: caída por gravedad e impulso en el punto real, sin la rutina fija
-de agonía ni espasmos. No cambia la selección de objetivos de la IA ni cuándo causa daño.
+de agonía prefijada. La revisión posterior añade caídas aleatorias y contracciones articulares
+breves y decrecientes: véase `FISICA_Y_MANEJO.md`. No cambia la selección de objetivos de la IA ni cuándo causa daño.
 Implementación, pruebas, límites y capturas: [Física y manejo](FISICA_Y_MANEJO.md).

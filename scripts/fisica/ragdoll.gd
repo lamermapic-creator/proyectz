@@ -115,6 +115,13 @@ var _pose_muerte := {}
 var _reaccion_balas := ImpactoBalistico.new()
 var _angulos_bala := {}
 var _base_reaccion := {}
+var _azar_muerte := RandomNumberGenerator.new()
+var _perfil_muerte := {}
+var _nervios: Array[Dictionary] = []
+var _nervios_activos: Array[Dictionary] = []
+var _nervios_emitidos := 0
+var _fin_nervios := 0.0
+var _semilla_muerte := -1
 
 var _v_prev := Vector3.ZERO
 var _golpe_t := -9.0
@@ -162,8 +169,11 @@ static func iniciar(d: Node3D, r: RigPersonaje, vel: Vector3, opciones := {}) ->
 			var a: Vector3 = iniciales[mn]
 			rd._base_reaccion[mn] = Rbx.angb(a.x, a.y, a.z)
 	rd._semilla = randf() * 100.0
+	rd._semilla_muerte = int(opciones.get("semilla_muerte", -1))
 	d.add_child(rd)
 	rd._construir()
+	if rd.comportamiento == "morir" and d.is_in_group("objetivos"):
+		rd._preparar_muerte()
 	activos.append(rd)
 	_limitar_activos()
 	return rd
@@ -535,6 +545,8 @@ func ignorar(obj: PhysicsBody3D, seg: float) -> void:
 
 
 func morir(por_disparo := false) -> void:
+	if dueno.is_in_group("objetivos"):
+		_preparar_muerte()
 	if por_disparo:
 		_muerte_bala = true
 		if _fase > 0:
@@ -599,17 +611,18 @@ func _physics_process(dt: float) -> void:
 	if vivo and not _avisado and duracion >= 0.0 and _t > duracion and _dist_suelo < 2.5 and v.length() < 7.0 \
 			and comportamiento in ["caer", "impacto", "retorcerse"]:
 		cambiar("prepararse")
+	_actualizar_nervios()
 	_angulos_bala = _reaccion_balas.avanzar(dt)
 	var res: Array = _comportamiento(_t_comp)
 	var pose: Dictionary = res[0]
 	var fuerzas: Dictionary = res[1]
 	# vivo y consciente: los músculos nunca se sueltan del todo (salvo el instante del golpe contra el suelo)
-	var con_tono := vivo and comportamiento != "inerte" and not (_muerte_bala and comportamiento == "morir") and not (comportamiento == "impacto" and _t_comp < 0.12)
+	var con_tono := vivo and comportamiento != "inerte" and not ((_muerte_bala or not _perfil_muerte.is_empty()) and comportamiento == "morir") and not (comportamiento == "impacto" and _t_comp < 0.12)
 	var err_suma := 0.0
 	var err_peso := 0.0
 	for mn in ART:
 		var def: Array = ART[mn]
-		var f_g: float = float(fuerzas.get(def[4], 0.1))
+		var f_g: float = float(fuerzas.get(mn, fuerzas.get(def[4], 0.1)))
 		if con_tono:
 			f_g = maxf(f_g, float(TONO[def[4]]))
 		var s: float = maxf(f_g * float(def[3]) * fuerza_mult, 0.0)
@@ -647,7 +660,7 @@ func _physics_process(dt: float) -> void:
 		pa.apply_torque(-tq)
 	error_medio = err_suma / maxf(err_peso, 1e-3)
 	# espasmos (muriendo)
-	if not _muerte_bala and comportamiento in ["morir", "retorcerse"] and _t_comp > 0.8 and _t_comp < (6.0 if comportamiento == "morir" else 99.0) \
+	if _perfil_muerte.is_empty() and not _muerte_bala and comportamiento in ["morir", "retorcerse"] and _t_comp > 0.8 and _t_comp < (6.0 if comportamiento == "morir" else 99.0) \
 			and randf() < (0.07 if comportamiento == "morir" else 0.025) * dt * 60.0:
 		var piezas := ["UpperTorso", "Head", "LeftUpperLeg", "RightUpperLeg", "LeftUpperArm", "RightUpperArm"]
 		var bp: RigidBody3D = cuerpos[piezas[randi() % piezas.size()]]
@@ -664,7 +677,7 @@ func _physics_process(dt: float) -> void:
 		_avisado = true
 		recuperado.emit()
 	# cadáver quieto: se congela (no gasta física)
-	if not vivo and _t > 6.0 and _quieto_t > 2.0:
+	if not vivo and _t > 6.0 and _quieto_t > 2.0 and (_perfil_muerte.is_empty() or _t_comp > _fin_nervios):
 		_congelar()
 
 
@@ -950,8 +963,91 @@ func _b_prepararse(t: float) -> Array:
 	}, {"core": 0.7 + 0.3 * k, "neck": 1.0, "arm": 0.9, "leg": 0.7}]
 
 
-## muerte: se agarra la herida, las rodillas ceden, cae protegiéndose, se retuerce y se apaga
+## Perfil físico continuo: misma bala y postura pueden producir caídas diferentes.
+## Una semilla explícita permite reproducir errores/pruebas; en juego se toma una nueva por muerte.
+func _preparar_muerte(semilla := -1) -> void:
+	if not _perfil_muerte.is_empty() and semilla < 0:
+		return # otro disparo no reinicia la caída ni el reloj de los espasmos
+	_semilla_muerte = semilla if semilla >= 0 else (_semilla_muerte if _semilla_muerte >= 0 else int(randi()))
+	_azar_muerte.seed = _semilla_muerte
+	var lado := -1.0 if _azar_muerte.randf() < 0.5 else 1.0
+	var antes := _azar_muerte.randf_range(0.24, 0.40)
+	var despues := antes + _azar_muerte.randf_range(0.18, 0.36)
+	_perfil_muerte = {
+		"torso": Vector3(_azar_muerte.randf_range(-0.90, 0.90), _azar_muerte.randf_range(-0.32, 0.32), lado * _azar_muerte.randf_range(0.35, 0.85)),
+		"LeftHip": Vector3(_azar_muerte.randf_range(-0.40, 0.50), 0, _azar_muerte.randf_range(-0.15, 0.15)),
+		"RightHip": Vector3(_azar_muerte.randf_range(-0.40, 0.50), 0, _azar_muerte.randf_range(-0.15, 0.15)),
+		"LeftShoulder": Vector3(_azar_muerte.randf_range(-0.22, 0.45), 0, _azar_muerte.randf_range(-0.4, 0.25)),
+		"RightShoulder": Vector3(_azar_muerte.randf_range(-0.22, 0.45), 0, _azar_muerte.randf_range(-0.25, 0.4)),
+		"LeftElbow": Vector3(_azar_muerte.randf_range(0, 0.45), 0, 0),
+		"RightElbow": Vector3(_azar_muerte.randf_range(0, 0.45), 0, 0),
+		"izquierda": antes if lado < 0.0 else despues,
+		"derecha": despues if lado < 0.0 else antes,
+	}
+	_nervios.clear()
+	_nervios_activos.clear()
+	_nervios_emitidos = 0
+	var tiempo := _azar_muerte.randf_range(0.85, 1.2)
+	var articulaciones := ["LeftKnee", "RightKnee", "LeftElbow", "RightElbow", "LeftAnkle", "RightAnkle", "Neck"]
+	for i in _azar_muerte.randi_range(4, 7):
+		var mn: String = articulaciones[_azar_muerte.randi_range(0, articulaciones.size() - 1)]
+		var amplitud := _azar_muerte.randf_range(0.18, 0.48) * (1.0 if _azar_muerte.randf() < 0.5 else -1.0)
+		if "Knee" in mn: amplitud = -absf(amplitud)
+		if "Elbow" in mn: amplitud = absf(amplitud)
+		_nervios.append({"t": tiempo, "dur": _azar_muerte.randf_range(0.14, 0.28), "mn": mn, "angulo": amplitud})
+		tiempo += _azar_muerte.randf_range(0.38, 0.70)
+	_fin_nervios = tiempo + 0.3
+
+
+func _actualizar_nervios() -> void:
+	if comportamiento != "morir" or _perfil_muerte.is_empty():
+		return
+	while not _nervios.is_empty() and float(_nervios[0].t) <= _t_comp:
+		var evento: Dictionary = _nervios.pop_front()
+		var m: RigPersonaje.Motor = rig.M[evento.mn]
+		# Contracción desde la postura que tiene el cuerpo en el suelo, no desde la postura de pie.
+		evento["base"] = (cuerpos[m.part0] as RigidBody3D).global_basis.inverse() * (cuerpos[m.part1] as RigidBody3D).global_basis
+		_nervios_activos.append(evento)
+		_nervios_emitidos += 1
+	_nervios_activos = _nervios_activos.filter(func(e): return _t_comp < float(e.t) + float(e.dur))
+
+
+func _b_muerte_variada(t: float) -> Array:
+	var pose := _pose_muerte.duplicate()
+	var fuerzas := {"core": 0.0, "neck": 0.0, "arm": 0.0, "leg": 0.0}
+	var cabeza := _pieza_golpe == "Head"
+	var k := 1.0 - smoothstep(0.10 if cabeza else 0.20, 0.48 if cabeza else 0.80, t)
+	fuerzas.core = 0.60 * k
+	fuerzas.neck = 0.35 * k
+	fuerzas.arm = 0.35 * k
+	# Cada cadena de pierna pierde tono en su propio momento: una rodilla puede ceder antes.
+	for lado in ["Left", "Right"]:
+		var fin: float = _perfil_muerte.izquierda if lado == "Left" else _perfil_muerte.derecha
+		var tono := 0.75 * (1.0 - smoothstep(fin - 0.10, fin + 0.20, t))
+		for articulacion in ["Hip", "Knee", "Ankle"]:
+			fuerzas[lado + articulacion] = tono
+	var variacion := smoothstep(0.18, 0.44, t)
+	for mn in ["Waist", "LeftHip", "RightHip", "LeftShoulder", "RightShoulder", "LeftElbow", "RightElbow"]:
+		var v: Vector3 = _perfil_muerte.torso if mn == "Waist" else _perfil_muerte[mn]
+		pose[mn] = (pose.get(mn, Basis.IDENTITY) as Basis) * Rbx.angb(v.x * variacion, v.y * variacion, v.z * variacion)
+	# Conservar el impacto dirigido; la variación no sustituye la respuesta a la bala.
+	for mn in _angulos_bala:
+		var a: Vector3 = _angulos_bala[mn]
+		var base: Basis = _base_reaccion.get(mn, Basis.IDENTITY)
+		pose[mn] = (pose.get(mn, Basis.IDENTITY) as Basis) * base.inverse() * Rbx.angb(a.x, a.y, a.z)
+	for evento in _nervios_activos:
+		var u := clampf((t - float(evento.t)) / float(evento.dur), 0, 1)
+		var pulso := sin(PI * u)
+		var decae := pow(maxf(0.0, 1.0 - t / _fin_nervios), 1.1)
+		pose[evento.mn] = (evento.base as Basis) * Rbx.angb(float(evento.angulo) * pulso * decae, 0, 0)
+		fuerzas[evento.mn] = 0.55 * pulso * decae
+	return [pose, fuerzas]
+
+
+## Muerte de objetivos por física variada; el jugador conserva su comportamiento anterior.
 func _b_morir(t: float) -> Array:
+	if not _perfil_muerte.is_empty():
+		return _b_muerte_variada(t)
 	if _muerte_bala:
 		# Primero se ve el impacto. Las piernas conservan brevemente el apoyo; soltarlas
 		# inmediatamente ocultaba el golpe bajo el desplome. No hay una pose fija de muerte.

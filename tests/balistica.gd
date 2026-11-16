@@ -42,6 +42,7 @@ func tiro(zombi: bool, pieza: String, j: Vector3, local: Vector3, perdigones := 
 		obj.recibir_disparo(10000.0, pieza, j, p)
 	var rd: Ragdoll = obj._ragdoll
 	comprobar(rd != null and rd._muerte_bala, "la muerte usa física balística")
+	rd._preparar_muerte(123) # aislar el impacto de la variedad aleatoria en esta prueba
 	for b in rd.cuerpos.values():
 		b.gravity_scale = 0.0 # aislar la cantidad de movimiento de gravedad y suelo
 	await frames(3)
@@ -50,8 +51,8 @@ func tiro(zombi: bool, pieza: String, j: Vector3, local: Vector3, perdigones := 
 	comprobar(result.p.dot(j) > 0.0, "el movimiento sigue a la bala")
 	comprobar(result.p.length() < j.length() * perdigones * 1.15, "sin impulso extra que lance el cuerpo")
 	comprobar(rd.cuerpos[pieza].has_meta("objetivo") and (rd.cuerpos[pieza].collision_layer & 2) != 0, "cadáver alcanzable por rayos")
-	var fuerzas: Dictionary = rd._b_morir(1.0)[1]
-	comprobar(fuerzas.values().all(func(f): return is_zero_approx(f)), "sin agonía ni músculos activos tras morir")
+	var fuerzas: Dictionary = rd._b_morir(8.0)[1]
+	comprobar(fuerzas.values().all(func(f): return is_zero_approx(f)), "sin actividad muscular al terminar los espasmos")
 	obj.free()
 	await frames(1)
 	return result
@@ -153,6 +154,7 @@ func probar_cadaver() -> void:
 	await frames(12)
 	z.recibir_disparo(10000, "Head", Vector3(0, 0, 0.95), z.rig.P.Head.global_position + Vector3(0.15, 0, -0.38))
 	var rd: Ragdoll = z._ragdoll
+	rd._preparar_muerte(31)
 	var estira := 0.0
 	var max_vel := 0.0
 	for i in 540:
@@ -218,6 +220,7 @@ func probar_impacto_antes_de_caer() -> void:
 				var z := pares[i]
 				var p: Vector3 = z.rig.P[pieza].global_transform * Vector3(0, 0.1, -signo*0.37)
 				z.recibir_disparo(10000, pieza, Vector3(0,0,signo*0.65) if i==0 else Vector3.ZERO, p)
+				z._ragdoll._preparar_muerte(123) # mismo perfil en tiro/control
 			var altura := pares[0]._ragdoll.pelvis().y
 			var visible := 0.0
 			var soporte_visible := 0.0

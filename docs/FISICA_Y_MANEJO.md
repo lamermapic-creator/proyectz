@@ -1,5 +1,48 @@
 # Disparos localizados y manejo de moto
 
+## Caídas variadas y actividad nerviosa simulada (vigente)
+
+Cada NPC/zombi recibe un perfil aleatorio nuevo al morir: cambia la inclinación y el giro del
+tronco, la posición de brazos y caderas, qué pierna pierde apoyo primero y cuánto tarda la otra.
+La gravedad, el disparo, el movimiento previo y las colisiones siguen actuando sobre el ragdoll.
+No se escoge entre clips ni se fuerza una posición final. La variación puede producir caídas
+parecidas, pero ya no obliga a repetir el mismo patrón.
+
+Se simulan entre cuatro y siete contracciones cortas en rodillas, codos, tobillos o cuello.
+Cada una parte del ángulo físico que tiene esa articulación en ese instante; sus tiempos,
+duración y amplitud varían. La fuerza y amplitud se debilitan hasta cero a los pocos segundos.
+Son pares musculares locales, sin impulsos verticales que hagan saltar el cadáver. El cuerpo
+acaba quieto; dispararle de nuevo no reinicia la actividad. Esta petición sustituye el criterio
+anterior de no usar espasmos en muertes de NPC/zombis. La moto y los modelos cuadrados no cambian.
+
+![Caídas y contracciones ante ocho disparos idénticos](fisica/variedad.gif)
+
+`tests/variedad_ragdoll.gd` compara ocho zombis civiles con la misma pose y el mismo disparo.
+Solo cambia la semilla de la muerte. Exige al menos cuatro posturas finales distintas, caídas
+hacia ambos lados, contracciones articulares visibles en el suelo, articulaciones unidas,
+velocidades acotadas y que toda actividad termine. Resultado: **37/37**, siete posturas
+separadas por más de un stud de distancia acumulada entre cabeza/mano/pie respecto a pelvis;
+contracción máxima medida 5,08°, separación máxima de pivotes 0,231 studs. Los ocho descansan.
+La balística compara disparo/control con la misma semilla para aislar el efecto de la bala.
+
+Revisión visual reproducible con un renderizador disponible:
+
+```sh
+godot --path . --fixed-fps 60 -s res://tests/variedad_ragdoll.gd -- --capturas=/tmp/variedad
+```
+
+Las capturas se obtienen cada 0,2 segundos de simulación. La semilla solo se fija en pruebas;
+en juego se sortea por muerte. Se mantiene el límite existente de ragdolls activos.
+Para ver un solo cuerpo de cerca, añadir `--detalle` antes de `--capturas=...`.
+
+![Primer plano de la caída y contracciones](fisica/variedad-detalle.gif)
+
+Validado con Godot **4.6.3**: 37/37 variedad, 97/97 balística y 11/11 manejo. Compilación y
+arranques de menú/nivel (600 fotogramas cada uno) sin errores. En la batería general solo
+falló `moto_zombi`, que pasó al repetirlo aislado; es la intermitencia ya documentada. Se editó
+el ejecutor durante la ejecución y se interrumpió su resumen final: su sintaxis se comprobó
+con `bash -n` y los dos arranques finales se repitieron aparte. Falta verificar Godot 4.7.2.
+
 ## Corrección vigente: se debe ver el golpe antes de la caída
 
 La revisión anterior (`f6d9956`) seguía pareciendo un desplome: el reflejo muscular de la bala

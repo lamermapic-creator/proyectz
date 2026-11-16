@@ -53,11 +53,11 @@ for m in "${MODOS[@]}"; do
 done
 
 if [ ${#SOLO[@]} -eq 0 ]; then
-	# Balística localizada y manejo de moto (dirección, agarre y freno/marcha atrás).
-	for prueba in balistica:BALISTICA manejo_moto:MANEJO_MOTO; do
+	# Balística, variedad física de muertes y manejo de moto.
+	for prueba in balistica:BALISTICA manejo_moto:MANEJO_MOTO variedad_ragdoll:VARIEDAD_RAGDOLL; do
 		archivo="${prueba%%:*}"; marca="${prueba##*:}"
 		salida="$("$GODOT" --headless --path "$RAIZ" --fixed-fps 60 -s "res://tests/$archivo.gd" 2>&1)"
-		grep -E "^($marca|MANEJO |MAL )" <<<"$salida"
+		grep -E "^($marca|MANEJO |VARIEDAD |MAL )" <<<"$salida"
 		errores="$(hay_errores "$salida")"
 		if grep -q "^$marca .*fallos=0$" <<<"$salida" && [ -z "$errores" ]; then resumen+=("OK    $archivo")
 		else [ -n "$errores" ] && echo "$errores" | head -10; fallos=$((fallos + 1)); resumen+=("FALLO $archivo"); fi
