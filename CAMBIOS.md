@@ -13,6 +13,26 @@ en el mismo commit que el cambio. Formato:
 
 ---
 
+## 2026-11-16 · Usuario · Codex — 12 modelos de zombis y seis clips de animación
+**Qué:** colección original R15 con doce aspectos de infectados, ropa/equipo por profesión, caras,
+dedos, dientes, cicatrices, roturas y costuras. Fuentes `.blend`, generador reproducible, GLB con seis
+clips compartidos (reposo, caminar, perseguir, atacar, herido y morir), catálogo con hashes y vitrina
+interactiva. Los zombis del juego eligen un aspecto al crearse; se puede fijar o volver al clásico.
+**Archivos:** `animaciones/blender/zombis/`, `modelos/zombis/`, `scripts/jugador/rig_personaje.gd`
+(registro de modelos), `scripts/zombis/zombi.gd` (selección visual), `scripts/nivel/galeria_zombis.gd`,
+`escenas/galeria_zombis.tscn`, `tests/modelos_zombis.gd`, `docs/MODELOS_ZOMBIS.md`, `CLAUDE.md`.
+**Cómo probarlo:** ejecutar `escenas/galeria_zombis.tscn` con F6; flechas cambian clip, espacio pausa,
+arrastrar y rueda controlan cámara. Jugar el nivel para ver variantes con IA. Prueba sin ventana:
+`Godot_4.7.2 --headless --path . -s res://tests/modelos_zombis.gd` (576 comprobaciones).
+**Pendiente / avisos:** estética segmentada del juego, sin esculturas fotorrealistas ni texturas de
+alta resolución. Los GLB llevan los clips nuevos para Blender/vitrina; la IA sigue usando su animador
+procedural y el ragdoll para conservar los tiempos del combate. No se ha medido rendimiento de hordas
+en GPU. Ver `docs/MODELOS_ZOMBIS.md` para regenerar y no perder ediciones manuales de Blender.
+**Validación realizada:** Godot 4.7.2: importación sin errores, 576/576 comprobaciones específicas;
+catálogo GLB/hashes correcto; galería arrancada y abierta por Godot AI. Batería general: 101/102 OK,
+único fallo `moto_zombi`, ya documentado como intermitente; repetición aislada OK. Combate, suelo,
+ragdoll, menú y nivel pasaron. Catálogo renderizado en CPU y GIF de marcha revisados.
+
 ## 2026-11-10 · Juan · Claude — zombis: ya no pegan a través de paredes, heridas de lejos y fondo del mundo
 **Qué:** Juan pidió una auditoría "bajo pruebas de acero" (Godot 4.7.2 real, sin ventana: la batería del repo más
 sondas propias) y arreglar los fallos de su parte. Tres fallos comprobados ejecutando y un cabo suelto:

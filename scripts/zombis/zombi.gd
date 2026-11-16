@@ -35,6 +35,10 @@ static var ciegos := false
 
 ## si es false se queda en su sitio cuando no oye nada (útil en pruebas)
 @export var deambula := true
+## Vacío = aspecto clásico; aleatorio = colección de Blender; o id del catálogo (civil, sanitario...).
+@export var variante_visual := "aleatorio"
+const VARIANTES_VISUALES := ["civil", "sanitario", "obrero", "mecanico", "policia", "bombero",
+	"excursionista", "oficinista", "repartidor", "paciente", "granjero", "vagabundo"]
 
 
 ## Lo último que le ha llamado la atención: dónde, cuándo (reloj del zombi), con qué fuerza (0..1)
@@ -140,6 +144,11 @@ func _ready() -> void:
 	add_child(_forma)
 	rig = RigPersonaje.new()
 	rig.name = "Rig"
+	var variante := variante_visual
+	if variante == "aleatorio":
+		variante = VARIANTES_VISUALES[_rng.randi() % VARIANTES_VISUALES.size()]
+	if variante in VARIANTES_VISUALES:
+		rig.modelo = "zombi_" + variante
 	add_child(rig)
 	_aspecto()
 	_cuerpo_de_impacto()
@@ -967,6 +976,9 @@ static var _mats := {}
 
 ## el mismo muñeco que el superviviente, sin mochila ni equipo, con piel enferma y ropa sucia
 func _aspecto() -> void:
+	# Las mallas de Blender ya llevan piel, heridas y ropa; no teñir sus materiales.
+	if rig.modelo.begins_with("zombi_") and rig._usa_modelo():
+		return
 	var piel: Color = [Color8(118, 132, 104), Color8(132, 128, 110), Color8(108, 118, 112)][_rng.randi() % 3]
 	for n in rig.find_children("M_*", "MeshInstance3D", true, false):
 		var mi := n as MeshInstance3D

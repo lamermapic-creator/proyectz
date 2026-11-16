@@ -1,5 +1,23 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
+## 2026-11-16 · Codex · Colección de zombis solicitada por el usuario
+- Añadidas 12 variantes originales de Blender en `modelos/zombis/`, con fuentes editables y generador
+  en `animaciones/blender/zombis/`. Detalle, catálogo y límites: `docs/MODELOS_ZOMBIS.md`.
+- `Zombi.variante_visual`: `aleatorio` por defecto, id de variante para forzar, `""` para recuperar el
+  clásico. `RigPersonaje.MODELOS` registra las mallas; las dimensiones R15 de impacto no cambian.
+- Para Juan y KangooG: los zombis con IA conservan su animación procedural, temporización de daño y
+  ragdoll. Los seis clips nuevos están en los GLB y Blender y se pueden revisar ejecutando
+  `escenas/galeria_zombis.tscn` con F6 (flechas: clip, espacio: pausa, arrastrar/rueda: cámara).
+  No conectar el clip de ataque al daño sin sincronizarlo con `PreparaGolpe`. No sustituir el ragdoll
+  por el clip artístico de muerte. Las tablas de animación del jugador no se han editado.
+- La prueba nueva `tests/modelos_zombis.gd` comprueba las 12 importaciones, clips con movimiento,
+  tamaños/piezas de impacto, daño, derribo y muerte (576 comprobaciones). Validación de bytes y
+  hashes: `python3 animaciones/blender/zombis/validar.py`. No se ha medido una horda en GPU.
+- Se mantiene el trabajo existente de zombis y combate. El usuario autorizó subir esta entrega a GitHub.
+- Resultado de la entrega: 576/576 comprobaciones nuevas; batería general 101/102 OK, solo
+  `moto_zombi` falló por la intermitencia conocida y pasó al repetirlo aislado. No se modificaron
+  pruebas existentes para ocultarlo. Renders: `animaciones/blender/zombis/catalogo.png` y `caminar.gif`.
+
 Este archivo es la memoria compartida del proyecto para el Claude de cada colaborador.
 Responder SIEMPRE en español. Presupuesto 0 $: solo recursos gratuitos.
 

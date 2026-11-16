@@ -1,0 +1,106 @@
+{
+  "version": 1,
+  "unidades": "studs",
+  "rig": "R15 Motor6D",
+  "origen": "Modelado original local en Blender; sin assets de terceros ni proveedores de pago",
+  "animaciones": {
+    "reposo": [
+      72,
+      true
+    ],
+    "caminar": [
+      48,
+      true
+    ],
+    "perseguir": [
+      28,
+      true
+    ],
+    "atacar": [
+      32,
+      false
+    ],
+    "herido": [
+      22,
+      false
+    ],
+    "morir": [
+      48,
+      false
+    ]
+  },
+  "modelos": [
+    {
+      "id": "civil",
+      "nombre": "Civil / camisa",
+      "sha256": "caa9b4e6ccc7c8e627f634e18ecbd0d48bc7d7b0d3e4abb4429829a55fd4622f",
+      "bytes": 379220
+    },
+    {
+      "id": "sanitario",
+      "nombre": "Sanitario",
+      "sha256": "2369c44128fd1f7d50f4104e1d2e8e572c968a7d20d5b21f7348f20f71824bbb",
+      "bytes": 390512
+    },
+    {
+      "id": "obrero",
+      "nombre": "Obrero",
+      "sha256": "281fd140bb328cb4cd831d896e470a71d4a92174754fcfd74da1773eb9508beb",
+      "bytes": 382792
+    },
+    {
+      "id": "mecanico",
+      "nombre": "Mecánico",
+      "sha256": "c5d4f0db087859c9927af767b53eba5b3cdc751816f45d003bd75d64b5b06af6",
+      "bytes": 379132
+    },
+    {
+      "id": "policia",
+      "nombre": "Policía",
+      "sha256": "f0ded1c9e7a7189ae9615ac1f63460f90a27e0d573721145cc6d7db2f88b6a6f",
+      "bytes": 393004
+    },
+    {
+      "id": "bombero",
+      "nombre": "Bombero",
+      "sha256": "16b944d2457397a5e77e4e5b8d2cce5bb9730c1cd3ff727aab0f9ac228282546",
+      "bytes": 382208
+    },
+    {
+      "id": "excursionista",
+      "nombre": "Excursionista",
+      "sha256": "7f3cf941f391ce98f65f0ac78d2c5cf2be5074c1f80e2f9ea1312cc6f73e4087",
+      "bytes": 393448
+    },
+    {
+      "id": "oficinista",
+      "nombre": "Oficinista",
+      "sha256": "2bb9d1fa3c37ec4593244c705d0a75e09116871c043deaacbc9255de0bac4c50",
+      "bytes": 388576
+    },
+    {
+      "id": "repartidor",
+      "nombre": "Repartidor",
+      "sha256": "d78c0cd68644efaf56c9eeb09acb9a6e4d9b07a37d2585c4bacbe885caa64233",
+      "bytes": 398800
+    },
+    {
+      "id": "paciente",
+      "nombre": "Paciente",
+      "sha256": "f70e7d6e3a174d0ed43e4136baca4f1c4b18aa16e5a7dee6000da12976eddda6",
+      "bytes": 404648
+    },
+    {
+      "id": "granjero",
+      "nombre": "Granjero",
+      "sha256": "e9cf71b2e4c13df3f7206b8e9358661fc16ebd3e1215fb052bfdb3a6225ba501",
+      "bytes": 387104
+    },
+    {
+      "id": "vagabundo",
+      "nombre": "Vagabundo",
+      "sha256": "52a26be5c5e1411690855c490141e7e14961e29bdf463a20752b25d211f8b3ad",
+      "bytes": 373532
+    }
+  ]
+}

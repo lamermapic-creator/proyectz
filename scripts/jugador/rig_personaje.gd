@@ -104,7 +104,21 @@ class Motor:
 ## tiñen); "superviviente" = el modelo hecho en Blender (animaciones/blender/personaje/, ~200 piezas). El esqueleto,
 ## las piezas y sus tamaños (cajas de impacto, ragdoll) son los mismos: solo cambian las mallas
 @export var modelo := ""
-const MODELOS := {"superviviente": "res://modelos/superviviente.glb"}
+const MODELOS := {
+	"superviviente": "res://modelos/superviviente.glb",
+	"zombi_civil": "res://modelos/zombis/civil.glb",
+	"zombi_sanitario": "res://modelos/zombis/sanitario.glb",
+	"zombi_obrero": "res://modelos/zombis/obrero.glb",
+	"zombi_mecanico": "res://modelos/zombis/mecanico.glb",
+	"zombi_policia": "res://modelos/zombis/policia.glb",
+	"zombi_bombero": "res://modelos/zombis/bombero.glb",
+	"zombi_excursionista": "res://modelos/zombis/excursionista.glb",
+	"zombi_oficinista": "res://modelos/zombis/oficinista.glb",
+	"zombi_repartidor": "res://modelos/zombis/repartidor.glb",
+	"zombi_paciente": "res://modelos/zombis/paciente.glb",
+	"zombi_granjero": "res://modelos/zombis/granjero.glb",
+	"zombi_vagabundo": "res://modelos/zombis/vagabundo.glb",
+}
 
 var M := {}      # nombre -> Motor
 var P := {}      # nombre de pieza -> Node3D (con su tamaño en meta "size")

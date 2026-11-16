@@ -1,5 +1,11 @@
 # Animaciones hechas en Blender (Proyecto Z)
 
+## Colección de zombis (2026-11-16)
+Doce fuentes `.blend` y su generador en `zombis/`, con seis clips compartidos por variante. Modelos
+exportados en `modelos/zombis/`; vitrina: `escenas/galeria_zombis.tscn` (F6). Guía, regeneración,
+compatibilidad y comprobaciones: `docs/MODELOS_ZOMBIS.md`. Las mallas se usan en los zombis del juego;
+los clips nuevos se revisan en la vitrina y no reemplazan su animación procedural ni ragdoll.
+
 Godot NO importa esta carpeta (`.gdignore`). Aquí están el piloto montado en Blender y los scripts que generan las
 poses de apuntado con la pistola en la moto. Blender 4.2 LTS (gratis, https://www.blender.org).
 
