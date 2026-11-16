@@ -1,5 +1,22 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
+## 2026-11-16 · Codex · Caídas variadas y contracciones nerviosas
+- Nueva petición expresa: variar las caídas y añadir movimiento nervioso. Sustituye la regla
+  anterior de no añadir espasmos para NPC/zombis del grupo `objetivos`.
+- Cada muerte sortea un perfil continuo: inclinación/giro del torso, brazos y caderas, pierna
+  que cede primero y tiempos de pérdida de apoyo. Jolt resuelve la caída desde la pose actual.
+  Se conserva el reflejo dirigido del disparo; no se aumenta su impulso ni se lanza el cuerpo.
+- Entre 4 y 7 contracciones articulares breves, irregulares y decrecientes, desde la pose física
+  del momento. Terminan a los pocos segundos; después el cadáver descansa y se congela.
+  Los disparos posteriores no reinician la secuencia. El jugador conserva su comportamiento.
+- `tests/variedad_ragdoll.gd`: ocho tiros/posturas iguales con semillas reproducibles; exige
+  diversidad, movimiento articular en el suelo, uniones estables y reposo final. Capturas con
+  `-- --capturas=/ruta`; evidencia en `docs/FISICA_Y_MANEJO.md`. Arte cuadrado y moto conservados.
+- Godot 4.6.3: variedad 37/37, balística 97/97 y manejo 11/11; compilación y arranque de menú/nivel
+  sin errores. En batería, `moto_zombi` falló y pasó aislada (intermitencia conocida). El resumen
+  del shell se interrumpió por editar el ejecutor en marcha; sintaxis comprobada y arranques
+  repetidos aparte. Pendiente verificar Godot 4.7.2.
+
 ## 2026-11-16 · Codex · Corrección: impacto visible antes de caer
 - El usuario señala que con f6d9956 los zombis solo se desploman. Causa comprobada: el reflejo
   registrado en el fotograma mortal no se transfería al ragdoll, y el tono de piernas/core se
@@ -164,7 +181,7 @@ Responder SIEMPRE en español. Presupuesto 0 $: solo recursos gratuitos.
 5. No borrar ni reescribir código del otro sin hablarlo. Si algo suyo falla, anotarlo en "Problemas conocidos".
 6. Todo el juego usa **studs** (1 stud ≈ 0.31 m) y gravedad 35, como el original de Roblox.
 7. Probar antes de subir: abrir el juego desde el editor (F5) y comprobar que no hay errores en la Salida.
-   Además, si se puede ejecutar Godot por consola: `tests/ejecutar_pruebas.sh <ruta a Godot>` (104 comprobaciones
+   Además, si se puede ejecutar Godot por consola: `tests/ejecutar_pruebas.sh <ruta a Godot>` (105 comprobaciones
    automáticas, ~6-7 min; en Windows con Git Bash). Si añades algo importante, añade su prueba.
 
 8. Lee también **`AUDITORIA.md`** (2026-10-23): revisión técnica con fallos comprobados, deuda técnica,

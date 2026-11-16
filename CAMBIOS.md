@@ -1,3 +1,13 @@
+## 2026-11-16 — Caídas distintas y contracciones en el ragdoll
+
+NPC y zombis sortean por muerte el equilibrio del torso, brazos y pérdida de apoyo de cada
+pierna. La bala conserva su reacción localizada; las colisiones y la gravedad resuelven la
+caída. Contracciones breves en rodillas, codos, tobillos o cuello, con tiempos e intensidad
+variables que se debilitan hasta detenerse. No se repite un clip de muerte.
+
+Prueba de ocho tiros iguales con variedad física, movimiento en el suelo, estabilidad y
+reposo final; añadida a la batería general. Captura reproducible en `docs/FISICA_Y_MANEJO.md`.
+
 ## 2026-11-16 — Mostrar el impacto antes del desplome
 
 Corregida la reacción mortal que quedaba registrada pero no llegaba al ragdoll. Se transfiere
