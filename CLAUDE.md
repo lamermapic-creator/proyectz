@@ -1,5 +1,23 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
+## 2026-11-16 · Codex · Balística localizada y manejo de moto
+- Petición del usuario: mejorar física de reacciones/muertes por disparos y **conducción de la moto**
+  (aclarado expresamente). Se conserva el arte cuadrado limpio v7.
+- Entrada opcional `recibir_disparo(daño,pieza,impulso,punto)` en Zombi/Maniqui. Arsenal conserva
+  el punto real y usa impulsos acotados por arma; los perdigones se acumulan antes de arrancar Jolt.
+- Ragdoll: por bala pierde tono desde su postura actual, impulso aplicado en la pieza/punto, sin
+  patada global, par prefijado ni ciclo de agonía/espasmos repetidos. Se pueden disparar cadáveres
+  sin otra baja. En vivo, muelles locales por articulación. NPC actual comprobado: Maniqui de pruebas.
+- Moto: dirección progresiva, menos margen de curva al frenar/acelerar, velocidad conservada con
+  agarre, derrape progresivo y pausa de 0,35 s entre frenar y marcha atrás. El freno sujeta la pausa
+  en pendiente (si no, la deriva del apoyo reiniciaba el temporizador y atascaba la moto entre bloques).
+- Archivo compartido `zombi.gd`: solo entrada balística, reacción visual y paso al ragdoll; no se
+  cambian vista, oído, navegación, ataques ni velocidades de IA. El contrato de daño existente sigue.
+- Pruebas nuevas `tests/balistica.gd`, `tests/manejo_moto.gd`, incluidas en la batería general.
+  Revisión visual reproducible: `tests/revision_balistica.gd`. Validado en Godot 4.6.3: 89/89
+  balística, 11/11 manejo, batería general 104/104 en dos tramos por reinicio del entorno.
+  Capturas, límites y resultados: `docs/FISICA_Y_MANEJO.md`.
+
 ## 2026-11-16 · Codex · v7: referencias de bloques limpios
 - El usuario aporta tres imágenes: granjero con peto amarillo/azul, repartidor rojo y civil marrón.
   Dirección vigente: **formas cuadradas sencillas, pocos detalles, nada de repliegues superpuestos**.
@@ -130,7 +148,7 @@ Responder SIEMPRE en español. Presupuesto 0 $: solo recursos gratuitos.
 5. No borrar ni reescribir código del otro sin hablarlo. Si algo suyo falla, anotarlo en "Problemas conocidos".
 6. Todo el juego usa **studs** (1 stud ≈ 0.31 m) y gravedad 35, como el original de Roblox.
 7. Probar antes de subir: abrir el juego desde el editor (F5) y comprobar que no hay errores en la Salida.
-   Además, si se puede ejecutar Godot por consola: `tests/ejecutar_pruebas.sh <ruta a Godot>` (102 comprobaciones
+   Además, si se puede ejecutar Godot por consola: `tests/ejecutar_pruebas.sh <ruta a Godot>` (104 comprobaciones
    automáticas, ~6-7 min; en Windows con Git Bash). Si añades algo importante, añade su prueba.
 
 8. Lee también **`AUDITORIA.md`** (2026-10-23): revisión técnica con fallos comprobados, deuda técnica,

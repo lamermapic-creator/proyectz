@@ -32,6 +32,8 @@ var _flash := 0.0
 ## ragdoll (v0.4): derribado o "muerto" cae con física y se levanta donde quedó
 var _ragdoll: Ragdoll = null
 var _impulso_golpe := Vector3.ZERO
+var _bala := {} # contexto solo durante recibir_disparo; el contrato cuerpo a cuerpo no cambia
+var _reaccion_balas := ImpactoBalistico.new()
 var _pieza_golpe := "UpperTorso"
 var _sale_ragdoll_t := -1.0
 var S := {
@@ -119,8 +121,20 @@ func _actualizar_etiqueta() -> void:
 
 
 ## Daño (como ZShared.DamageZombie): devuelve true si lo ha matado
-func recibir_danio(cantidad: float, pieza: String, impulso: Vector3) -> bool:
+## Entrada opcional de las armas: conserva el punto exacto y separa balas de golpes/atropellos.
+func recibir_disparo(cantidad: float, pieza: String, impulso: Vector3, punto: Vector3) -> bool:
+	_bala = {"pieza": pieza, "punto_local": ImpactoBalistico.punto_local(rig, pieza, punto)}
 	if _ragdoll != null and is_instance_valid(_ragdoll):
+		_ragdoll.disparo(pieza, impulso, punto)
+	elif vivo():
+		_reaccion_balas.registrar(rig, pieza, impulso, punto)
+	var muerto := recibir_danio(cantidad, pieza, impulso)
+	_bala = {}
+	return muerto
+
+
+func recibir_danio(cantidad: float, pieza: String, impulso: Vector3) -> bool:
+	if _bala.is_empty() and _ragdoll != null and is_instance_valid(_ragdoll):
 		_ragdoll.golpe(pieza, impulso * 0.15)
 	if not vivo():
 		return false
@@ -131,18 +145,22 @@ func recibir_danio(cantidad: float, pieza: String, impulso: Vector3) -> bool:
 	var killed := health <= 0
 	var dir := Rbx.flat(impulso)
 	dir = dir.normalized() if dir.length() > 0.01 else -global_transform.basis.z
-	var k := clampf(cantidad / 30.0, 0.3, 1.6)
-	# reacción: el torso y la cabeza se van con el golpe
-	var d_loc := Rbx.vec_to_obj(Rbx.ang(0, _yaw0, 0), dir)
-	S.hitPitch.impulse(d_loc.z * 3.5 * k)
-	S.hitYaw.impulse(-d_loc.x * 3.0 * k)
-	S.hitRoll.impulse(d_loc.x * 2.0 * k)
-	S.hitHead.impulse((d_loc.z * 4.5 if pieza != "Head" else 9.0) * k)
+	if _bala.is_empty():
+		var k := clampf(cantidad / 30.0, 0.3, 1.6)
+		# reacción: el torso y la cabeza se van con el golpe
+		var d_loc := Rbx.vec_to_obj(Rbx.ang(0, _yaw0, 0), dir)
+		S.hitPitch.impulse(d_loc.z * 3.5 * k)
+		S.hitYaw.impulse(-d_loc.x * 3.0 * k)
+		S.hitRoll.impulse(d_loc.x * 2.0 * k)
+		S.hitHead.impulse((d_loc.z * 4.5 if pieza != "Head" else 9.0) * k)
 	if killed:
 		_estado = "muerto"
 		_caer(dir, reaparecer)
+		if not _bala.is_empty():
+			_ragdoll.morir(true)
+			_ragdoll.vivo = true # muñeco de entrenamiento: reaparece, no es un cadáver permanente
 	elif _estado == "pie":
-		_vel += dir * minf(impulso.length() * 0.14, 9.0)
+		_vel += dir * (minf(impulso.length() * 0.14, 9.0) if _bala.is_empty() else 0.0)
 		_stagger_hasta = _t + 0.3
 	_actualizar_etiqueta()
 	return killed
@@ -208,19 +226,25 @@ func _caer(dir: Vector3, dur: float) -> void:
 	cuerpo.process_mode = Node.PROCESS_MODE_DISABLED
 	(cuerpo.get_child(0) as CollisionShape3D).disabled = true
 	if _ragdoll == null or not is_instance_valid(_ragdoll):
-		var imp := _impulso_golpe * 0.3
-		if imp.length() > 16.0:
-			imp = imp.normalized() * 16.0
-		if imp.length() < 2.0:
-			imp = _caida_dir * 4.0 + Vector3(0, 1.0, 0)
+		var imp := _impulso_golpe if not _bala.is_empty() else _impulso_golpe * 0.3
+		if _bala.is_empty():
+			if imp.length() > 16.0:
+				imp = imp.normalized() * 16.0
+			if imp.length() < 2.0:
+				imp = _caida_dir * 4.0 + Vector3(0, 1.0, 0)
 		_ragdoll = Ragdoll.iniciar(self, rig, _vel, {"comportamiento": "caer" if _estado != "muerto" else "morir",
-			"vivo": true, "impulso": imp, "pieza": _pieza_golpe, "duracion": dur})
+			"vivo": true, "impulso": imp, "pieza": _pieza_golpe, "balistica": not _bala.is_empty(), "punto_local": _bala.get("punto_local", Vector3.ZERO), "duracion": dur})
 		_ragdoll.recuperado.connect(_ragdoll_levantar)
 
 
 func _process(dt: float) -> void:
 	dt = minf(dt, 0.1)
 	_t += dt
+	if _estado == "muerto" and _t >= _hasta and is_instance_valid(_ragdoll) and _sale_ragdoll_t < 0.0 and _ragdoll.comportamiento == "morir":
+		# La agonía no estaba entre los estados recuperables: el muñeco muerto no reaparecía.
+		_ragdoll.vivo = true
+		_ragdoll.duracion = _ragdoll._t
+		_ragdoll.cambiar("retorcerse")
 	if _ragdoll != null or _sale_ragdoll_t >= 0.0:
 		# en el suelo con física (o mezclando al levantarse): de pie en su sitio y sin la caída de antes
 		if _sale_ragdoll_t >= 0.0 and _t > _sale_ragdoll_t:
@@ -283,6 +307,7 @@ func _pose(dt: float, caido: float) -> void:
 	(M.RightHip as RigPersonaje.Motor).transform = Rbx.ang(caido * 0.15, 0, caido * 0.15)
 	(M.LeftKnee as RigPersonaje.Motor).transform = Rbx.ang(-caido * 0.4, 0, 0)
 	(M.RightKnee as RigPersonaje.Motor).transform = Rbx.ang(-caido * 0.2, 0, 0)
+	_reaccion_balas.aplicar(rig, dt)
 	rig.aplicar()
 	_flash = maxf(0.0, _flash - dt * 6.0)
 	etiqueta.visible = caido < 0.5 or _estado == "muerto"

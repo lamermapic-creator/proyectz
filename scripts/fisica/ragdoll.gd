@@ -14,7 +14,8 @@ extends Node3D
 ##   impacto      golpe contra el suelo: un instante sin fuerza y luego aturdido se retuerce (más débil
 ##                cuanto peor fue el golpe).
 ##   retorcerse   en el suelo con dolor: se sujeta la herida, encoge las piernas, levanta la cabeza.
-##   morir        se agarra la herida, le fallan las rodillas, cae, se retuerce cada vez más débil y
+##   morir        por bala: pierde tono desde la pose actual y cae por gravedad/impacto. Otros golpes:
+##                se agarra la herida, le fallan las rodillas, cae, se retuerce cada vez más débil y
 ##                queda inerte (con algún espasmo).
 ##   inerte       sin fuerza.
 ##
@@ -106,6 +107,12 @@ var _vel0 := Vector3.ZERO
 var _giro0 := Vector3.ZERO
 var _impulso := Vector3.ZERO
 var _pieza_golpe := "UpperTorso"
+var _balistica := false
+var _muerte_bala := false
+var _punto_bala := Vector3.ZERO # local a la pieza: sigue siendo válido al arrancar la física
+var _balas_pendientes: Array[Dictionary] = []
+var _pose_muerte := {}
+
 var _v_prev := Vector3.ZERO
 var _golpe_t := -9.0
 var _caida_max := 0.0
@@ -126,7 +133,8 @@ var _final_raiz := Transform3D.IDENTITY
 
 
 ## crea el ragdoll del rig "r" de "d". vel = velocidad del cuerpo. opciones: comportamiento, vivo, duracion,
-## impulso (cambio de velocidad en la pieza golpeada), pieza, giro (velocidad angular), gravedad
+## impulso (Δv para golpes; cantidad de movimiento con balistica=true), pieza, punto_local,
+## giro (velocidad angular), gravedad
 static func iniciar(d: Node3D, r: RigPersonaje, vel: Vector3, opciones := {}) -> Ragdoll:
 	var rd := Ragdoll.new()
 	rd.name = "Ragdoll"
@@ -140,6 +148,9 @@ static func iniciar(d: Node3D, r: RigPersonaje, vel: Vector3, opciones := {}) ->
 	rd._giro0 = opciones.get("giro", Vector3.ZERO)
 	rd._impulso = opciones.get("impulso", Vector3.ZERO)
 	rd._pieza_golpe = opciones.get("pieza", "UpperTorso")
+	rd._balistica = opciones.get("balistica", false)
+	rd._muerte_bala = rd._balistica and rd.comportamiento == "morir"
+	rd._punto_bala = opciones.get("punto_local", Vector3.ZERO)
 	rd._semilla = randf() * 100.0
 	d.add_child(rd)
 	rd._construir()
@@ -187,6 +198,8 @@ func _construir() -> void:
 	for mn in guardado:
 		(rig.M[mn] as RigPersonaje.Motor).transform = guardado[mn]
 	rig.aplicar()
+	for mn in guardado:
+		_pose_muerte[mn] = (guardado[mn] as Transform3D).basis
 	# el rig va suelto mientras dure el ragdoll (lo coloca este nodo)
 	_rig_top0 = rig.top_level
 	_rig_local0 = rig.transform
@@ -335,7 +348,7 @@ func _musculo_6dof(mn: String, obj: Basis, k: float, c: float) -> void:
 	var e := delta.get_euler(CONV_ORDEN) * CONV_SIGNO
 	# (solo se tocan los parámetros si han cambiado algo: cambiarlos cuesta)
 	var prev: Array = _ultimo_musculo.get(mn, [])
-	if not prev.is_empty() and absf(prev[0] - k) < 0.04 * k and (prev[1] as Vector3).distance_to(e) < 0.012:
+	if not prev.is_empty() and absf(prev[0] - k) <= maxf(0.0001, 0.04 * k) and (prev[1] as Vector3).distance_to(e) < 0.012:
 		return
 	_ultimo_musculo[mn] = [k, e]
 	var K := Generic6DOFJoint3D.PARAM_ANGULAR_SPRING_STIFFNESS
@@ -387,11 +400,17 @@ func _arrancar() -> void:
 		var b: RigidBody3D = cuerpos[n]
 		b.global_transform = _pose_real[n]
 		b.collision_layer = CAPA
+		if dueno.is_in_group("objetivos"):
+			b.collision_layer |= 2 # las balas también alcanzan un cadáver extendido fuera de su caja de pie
+			b.set_meta("objetivo", dueno)
+			b.set_meta("pieza", n)
 		b.collision_mask = MASCARA
 		b.freeze = false
 		b.linear_velocity = _vel0 + _giro0.cross((_pose_real[n] as Transform3D).origin - c_torso)
 		b.angular_velocity = _giro0
-	if _impulso.length() > 0.01:
+	if _balistica:
+		_aplicar_bala(_pieza_golpe, _impulso, _punto_bala)
+	elif _impulso.length() > 0.01:
 		var bp: RigidBody3D = cuerpos.get(_pieza_golpe, cuerpos.UpperTorso)
 		bp.apply_central_impulse(_impulso * bp.mass)
 		var bt: RigidBody3D = cuerpos.UpperTorso
@@ -403,6 +422,9 @@ func _arrancar() -> void:
 			bt.apply_torque_impulse(eje * minf(plano.length(), 60.0) * _inercia.UpperTorso * 0.9)
 		var lp := bt.global_transform.affine_inverse() * bp.global_position
 		lado_herida = 1.0 if lp.x >= 0.0 else -1.0
+	for bala in _balas_pendientes:
+		_aplicar_bala(bala.pieza, bala.impulso, bala.punto)
+	_balas_pendientes.clear()
 	_v_prev = _vel_centro()
 	_fase = 1
 
@@ -460,6 +482,37 @@ func golpe(pieza: String, impulso: Vector3) -> void:
 	_quieto_t = 0.0
 
 
+## Impacto balístico: cantidad de movimiento localizada, sin patada global ni par prefijado.
+func disparo(pieza: String, impulso: Vector3, punto: Vector3) -> void:
+	if cuerpos.is_empty() or _mezcla >= 0.0:
+		return
+	if not cuerpos.has(pieza):
+		pieza = "UpperTorso"
+	if vivo:
+		_pieza_golpe = pieza
+	var b: RigidBody3D = cuerpos[pieza]
+	var t: Transform3D = _pose_real[pieza] if _fase == 0 else b.global_transform
+	var medio: Vector3 = (rig.P[pieza] as Node3D).get_meta("size") * 0.5
+	var local := (t.affine_inverse() * punto).clamp(-medio, medio)
+	if _fase == 0:
+		# Escopeta: todos los perdigones del mismo fotograma llegan antes del primer paso de física.
+		_balas_pendientes.append({"pieza": pieza, "impulso": impulso, "punto": local})
+		return
+	_aplicar_bala(pieza, impulso, local)
+
+
+func _aplicar_bala(pieza: String, impulso: Vector3, local: Vector3) -> void:
+	var b: RigidBody3D = cuerpos.get(pieza, cuerpos.UpperTorso)
+	if _congelado:
+		_descongelar()
+	b.sleeping = false
+	var medio: Vector3 = (rig.P.get(pieza, rig.P.UpperTorso) as Node3D).get_meta("size") * 0.5
+	var brazo := b.global_basis * local.clamp(-medio, medio)
+	# Se acota el cambio local por estabilidad, especialmente en manos y pies muy ligeros.
+	b.apply_impulse(impulso.limit_length(b.mass * 6.0), brazo)
+	_quieto_t = 0.0
+
+
 ## no chocar con "obj" durante "seg" segundos (el piloto que sale despedido no se engancha en su moto)
 func ignorar(obj: PhysicsBody3D, seg: float) -> void:
 	if obj == null or not is_instance_valid(obj):
@@ -469,7 +522,14 @@ func ignorar(obj: PhysicsBody3D, seg: float) -> void:
 	_ignorados.append([obj, seg])
 
 
-func morir() -> void:
+func morir(por_disparo := false) -> void:
+	if por_disparo:
+		_muerte_bala = true
+		if _fase > 0:
+			# Muerte en el suelo: conservar la pose actual, no reproducir una caída de pie.
+			for mn in ART:
+				var m: RigPersonaje.Motor = rig.M[mn]
+				_pose_muerte[mn] = (cuerpos[m.part0] as RigidBody3D).global_basis.inverse() * (cuerpos[m.part1] as RigidBody3D).global_basis
 	vivo = false
 	duracion = -1.0
 	if comportamiento != "morir":
@@ -531,7 +591,7 @@ func _physics_process(dt: float) -> void:
 	var pose: Dictionary = res[0]
 	var fuerzas: Dictionary = res[1]
 	# vivo y consciente: los músculos nunca se sueltan del todo (salvo el instante del golpe contra el suelo)
-	var con_tono := vivo and comportamiento != "inerte" and not (comportamiento == "impacto" and _t_comp < 0.12)
+	var con_tono := vivo and comportamiento != "inerte" and not (_muerte_bala and comportamiento == "morir") and not (comportamiento == "impacto" and _t_comp < 0.12)
 	var err_suma := 0.0
 	var err_peso := 0.0
 	for mn in ART:
@@ -540,7 +600,9 @@ func _physics_process(dt: float) -> void:
 		if con_tono:
 			f_g = maxf(f_g, float(TONO[def[4]]))
 		var s: float = maxf(f_g * float(def[3]) * fuerza_mult, 0.0)
-		if s <= 0.001 and not MUSCULOS_JOLT:
+		if s <= 0.001:
+			if MUSCULOS_JOLT:
+				_musculo_6dof(mn, Basis.IDENTITY, 0.0, 0.0)
 			continue
 		var m: RigPersonaje.Motor = rig.M[mn]
 		var pa: RigidBody3D = cuerpos[m.part0]
@@ -572,7 +634,7 @@ func _physics_process(dt: float) -> void:
 		pa.apply_torque(-tq)
 	error_medio = err_suma / maxf(err_peso, 1e-3)
 	# espasmos (muriendo)
-	if comportamiento in ["morir", "retorcerse"] and _t_comp > 0.8 and _t_comp < (6.0 if comportamiento == "morir" else 99.0) \
+	if not _muerte_bala and comportamiento in ["morir", "retorcerse"] and _t_comp > 0.8 and _t_comp < (6.0 if comportamiento == "morir" else 99.0) \
 			and randf() < (0.07 if comportamiento == "morir" else 0.025) * dt * 60.0:
 		var piezas := ["UpperTorso", "Head", "LeftUpperLeg", "RightUpperLeg", "LeftUpperArm", "RightUpperArm"]
 		var bp: RigidBody3D = cuerpos[piezas[randi() % piezas.size()]]
@@ -877,6 +939,12 @@ func _b_prepararse(t: float) -> Array:
 
 ## muerte: se agarra la herida, las rodillas ceden, cae protegiéndose, se retuerce y se apaga
 func _b_morir(t: float) -> Array:
+	if _muerte_bala:
+		# La gravedad y el impacto deciden la caída. La pérdida de tono depende de la zona,
+		# sin agacharse siempre igual, protegerse ni retorcerse artificialmente durante seis segundos.
+		var suelta := 0.12 if _pieza_golpe == "Head" else 0.45
+		var k := pow(maxf(0.0, 1.0 - t / suelta), 2.0)
+		return [_pose_muerte, {"core": 0.14 * k, "neck": 0.08 * k, "arm": 0.06 * k, "leg": 0.04 * k}]
 	if t < 0.35:
 		var pose: Dictionary = _b_retorcerse(t)[0]
 		pose.LeftKnee = _ang(-1.1)

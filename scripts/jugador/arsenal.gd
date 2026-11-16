@@ -812,8 +812,14 @@ func shoot() -> void:
 				# caída de daño con la distancia
 				if hit_pos.distance_to(origin) > float(w.Range) * 0.5:
 					dmg *= 0.75
-				if obj.vivo():
-					var killed: bool = obj.recibir_danio(dmg, pieza, dir * (45.0 if n_balas == 1 else 12.0))
+				var estaba_vivo: bool = obj.vivo()
+				var killed := false
+				if obj.has_method("recibir_disparo"):
+					var factor := 0.75 if hit_pos.distance_to(origin) > float(w.Range) * 0.5 else 1.0
+					killed = obj.recibir_disparo(dmg, pieza, dir * ImpactoBalistico.impulso(equipado) * factor, hit_pos)
+				elif estaba_vivo:
+					killed = obj.recibir_danio(dmg, pieza, dir * (45.0 if n_balas == 1 else 12.0))
+				if estaba_vivo:
 					acerto = true
 					mato = mato or killed
 					cabeza = cabeza or pieza == "Head"

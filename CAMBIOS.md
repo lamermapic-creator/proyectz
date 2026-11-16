@@ -1,3 +1,13 @@
+## 2026-11-16 — Disparos localizados y conducción de moto
+
+Las balas conservan punto, dirección y pieza de impacto; aplican impulsos modestos por arma y
+perdigón. Reacciones vivas locales y muerte física desde la pose actual, sin agonía prefijada
+repetida ni lanzamiento global del cuerpo. Cadáveres alcanzables y recuperación del muñeco.
+
+Moto con dirección progresiva, curva sin pérdida numérica de velocidad, margen de giro según
+agarre/frenada y transición frenada–marcha atrás con pausa, también en pendiente. Nuevas pruebas
+y grabaciones reales de Godot en `docs/FISICA_Y_MANEJO.md`. Arte v7 conservado.
+
 ## 2026-11-16 — Zombis limpios según referencias del usuario (v7)
 
 Rehechas las doce variantes con bloques sencillos y detalles mínimos de oficio. Eliminados

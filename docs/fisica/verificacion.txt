@@ -1,0 +1,117 @@
+Godot 4.6.3. Base: c8867c9. Batería final: 104 grupos.
+Tramo 1: compilar todos los scripts + 29 modos de ruido/IA/movimiento + balística + manejo + moto_conducir = 33.
+Interrupción por reinicio del entorno. Tramo 2: 71 grupos restantes.
+
+== prueba: unidad
+== prueba: pasos
+== prueba: disparo
+== prueba: oye_disparo
+== prueba: sigilo
+== prueba: oclusion
+== prueba: jauria
+== prueba: navegacion
+== prueba: ataque_y_muerte
+== prueba: regeneracion
+== prueba: danio_zombi
+== prueba: maniqui
+== prueba: andar
+== prueba: cadencia
+== prueba: completo
+== prueba: rendimiento
+== prueba: vista_frente
+== prueba: vista_espalda
+== prueba: vista_pared
+== prueba: vista_lejos
+== prueba: vista_postura
+== prueba: vista_sigue
+== prueba: anticipar
+== prueba: busqueda
+== prueba: reaccion
+== prueba: indicador
+== prueba: ataque_pared
+== prueba: herida_lejos
+== prueba: fondo_mundo
+BALISTICA caída estiramiento=0.135 velocidad_max=9.729 quieto=true
+BALISTICA comprobaciones=89 fallos=0
+MANEJO curva fps=30 rumbo=2.34293 velocidad=20.00004
+MANEJO curva fps=60 rumbo=2.34167 velocidad=20.00001
+MANEJO curva fps=120 rumbo=2.34115 velocidad=20.00013
+MANEJO freno parado=20 atras=42 pausa=0.367 velocidad=-4.941
+MANEJO_MOTO comprobaciones=11 fallos=0
+OK moto_conducir
+
+Tramo 2, resumen del ejecutor original:
+
+OK    moto_salto
+OK    moto_morro
+OK    moto_cuesta
+OK    moto_bloque
+OK    moto_lento
+OK    moto_levantar
+OK    moto_atropello
+OK    moto_zombi
+OK    moto_choque
+OK    moto_disparar
+OK    moto_golpear
+OK    moto_derrape
+OK    moto_bajar
+OK    moto_suspension
+OK    moto_empinada_15
+OK    moto_empinada_30
+OK    moto_empinada_50
+OK    moto_bajada
+OK    moto_morro_30fps
+OK    moto_empinada_50_30fps
+OK    moto_eyecta_bloque20_50
+OK    moto_eyecta_bloque40_50
+OK    moto_eyecta_muro_35
+OK    moto_fila_--vel=6
+OK    moto_fila_--vel=12_--lado=0.6
+OK    moto_levantar_hueco_--x=-33.9_--ang=45
+OK    moto_levantar_hueco_--x=-35.68_--ang=0
+OK    moto_apuntar360
+OK    moto_apuntar360_--mover
+OK    moto_giros
+OK    moto_atasco_0_3_0
+OK    moto_atasco_0_3_25
+OK    moto_atasco_0_16_25
+OK    moto_atasco_0_8_50
+OK    derribo_llano
+OK    dintel
+OK    dintel_bajo
+OK    cc_todo_manos
+OK    cc_todo_Cuchillo
+OK    cc_todo_Bate
+OK    cc_todo_Pistola
+OK    cc_todo_Rifle
+OK    cc_golpes_manos
+OK    cc_golpes_Cuchillo
+OK    cc_golpes_Machete
+OK    cc_golpes_Bate
+OK    fisica_empujon
+OK    fisica_patada
+OK    suelo_pisoton
+OK    suelo_puno
+OK    suelo_cuchillo
+OK    suelo_bate
+OK    suelo_pisoton --muerto
+OK    suelo_cuchillo --muerto --distancia=4.0
+OK    suelo_puno --distancia=4.2
+OK    suelo_puno --grupo
+OK    suelo_pisoton --grupo
+OK    suelo_cuchillo --grupo
+OK    suelo_puno --grupo --mira_abajo
+OK    suelo_pisoton --grupo --mira_abajo
+OK    ragdoll_empuje
+OK    ragdoll_alto
+OK    ragdoll_morir
+OK    ragdoll_limites
+OK    ragdoll_j_derribo
+OK    ragdoll_j_caida
+OK    ragdoll_j_aterriza
+OK    ragdoll_j_morir
+OK    ragdoll_j_moto
+OK    arrancar menú principal 10 s sin errores
+OK    arrancar res://escenas/pruebas_movimiento.tscn 10 s sin errores
+=========================================
+TODO BIEN

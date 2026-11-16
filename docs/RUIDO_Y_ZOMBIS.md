@@ -540,3 +540,17 @@ Siguientes pasos propuestos (por orden):
 | `scripts/ruido/ruido.gd` | + `MOTOR` en las constantes, `PESO` (0,5, como antes por omisión) y `COLOR` |
 | `scripts/config/zconfig.gd` | + `WORLD.FondoMundo`, `ZOMBI.HeridaCerca`, `ZOMBI.HeridaRastro` (nada existente cambia) |
 | `tests/pruebas_ruido.gd`, `tests/ejecutar_pruebas.sh` | + `ataque_pared`, `herida_lejos`, `fondo_mundo`; `unidad` comprueba las tablas de tipos de ruido |
+
+
+## Balística localizada (2026-11-16)
+
+Las armas pueden usar la entrada opcional `recibir_disparo(cantidad,pieza,impulso,punto)`.
+Zombi y Maniqui la implementan; el contrato `recibir_danio` sigue atendiendo golpes y atropellos.
+Los cuerpos rígidos de objetivos añaden la capa 2 de rayos con metadatos `objetivo` y `pieza`:
+los cadáveres siguen siendo blancos reales aunque sus extremidades salgan de la caja de pie.
+No se otorga otra baja ni marcador de daño por disparar a un muerto.
+
+La animación viva recibe reacción local de articulación. La muerte por bala suelta tono y
+conserva postura y velocidad: caída por gravedad e impulso en el punto real, sin la rutina fija
+de agonía ni espasmos. No cambia la selección de objetivos de la IA ni cuándo causa daño.
+Implementación, pruebas, límites y capturas: [Física y manejo](FISICA_Y_MANEJO.md).

@@ -53,6 +53,15 @@ for m in "${MODOS[@]}"; do
 done
 
 if [ ${#SOLO[@]} -eq 0 ]; then
+	# Balística localizada y manejo de moto (dirección, agarre y freno/marcha atrás).
+	for prueba in balistica:BALISTICA manejo_moto:MANEJO_MOTO; do
+		archivo="${prueba%%:*}"; marca="${prueba##*:}"
+		salida="$("$GODOT" --headless --path "$RAIZ" --fixed-fps 60 -s "res://tests/$archivo.gd" 2>&1)"
+		grep -E "^($marca|MANEJO |MAL )" <<<"$salida"
+		errores="$(hay_errores "$salida")"
+		if grep -q "^$marca .*fallos=0$" <<<"$salida" && [ -z "$errores" ]; then resumen+=("OK    $archivo")
+		else [ -n "$errores" ] && echo "$errores" | head -10; fallos=$((fallos + 1)); resumen+=("FALLO $archivo"); fi
+	done
 	# moto (v0.4, tests/moto.gd): conducir, saltar, cuestas, bloques, girar despacio, levantarla, atropellar,
 	# chocar, armas, derrapar, bajarse
 	# (empinada_N: a fondo contra las rampas de 15/30/50°; bajada: cuesta abajo por la de 30°; 30fps: lo mismo a 30 FPS)

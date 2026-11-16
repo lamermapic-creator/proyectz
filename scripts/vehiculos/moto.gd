@@ -56,6 +56,8 @@ var yaw_rate := 0.0
 var rpm := 0.0                 # 0..1
 var marcha := 1
 var gas := 0.0
+const PAUSA_ATRAS := 0.35 # S frena primero; al parar hay una pausa antes de empujar hacia atrás
+var _espera_atras := 0.0
 var frenando := 0.0
 var derrapando := 0.0          # 0..1
 var aparcada := true           # sobre la pata de cabra
@@ -218,6 +220,7 @@ func se_puede_subir() -> bool:
 
 ## ---------------------------------------------------------------- subir / bajar / caer
 func subir(j: Node) -> void:
+	_espera_atras = 0.0
 	piloto = j
 	aparcada = false
 	motor_on = true
@@ -379,9 +382,9 @@ func paso(dt: float, mandos: Dictionary) -> void:
 	if caida and (_fisica != null or levantando):
 		_paso_fisica(dt)
 		return
-	var g_in := float(mandos.get("gas", 0.0))
-	var f_in := float(mandos.get("freno", 0.0))
-	var giro_in := float(mandos.get("giro", 0.0))
+	var g_in := clampf(float(mandos.get("gas", 0.0)), 0.0, 1.0)
+	var f_in := clampf(float(mandos.get("freno", 0.0)), 0.0, 1.0)
+	var giro_in := clampf(float(mandos.get("giro", 0.0)), -1.0, 1.0)
 	var mano: bool = mandos.get("freno_mano", false)
 	gas = Rbx.damp(gas, g_in if motor_on else 0.0, 8.0, dt)
 	frenando = f_in
@@ -390,6 +393,10 @@ func paso(dt: float, mandos: Dictionary) -> void:
 	var v_f := vel_h.dot(f)
 	var v_l := vel_h.dot(r)
 	var va := absf(v_f)
+	var vf_inicial := v_f
+	var frenaba_avance := f_in > 0.05 and v_f > 0.5
+	if f_in <= 0.05 or g_in > 0.05 or frenaba_avance:
+		_espera_atras = 0.0
 
 	if caida:
 		# tumbada: se arrastra hasta pararse (chispas si va deprisa)
@@ -415,7 +422,7 @@ func paso(dt: float, mandos: Dictionary) -> void:
 				else:
 					# curva de par: mucho empuje abajo (arranca y sube cuestas con fuerza) que se acaba en la punta
 					var k_v := clampf(v_f / VMAX, 0.0, 1.0)
-					var empuje := ACEL * gas * (1.6 - 0.9 * k_v) * (1.0 - pow(k_v, 4.0))
+					var empuje := ACEL * gas * (1.0 - f_in) * (1.6 - 0.9 * k_v) * (1.0 - pow(k_v, 4.0))
 					# (2026-10-29) la rueda no puede empujar más de lo que agarra: en una cuesta muy empinada patina
 					# (cuesta arriba a más de ~40° ya no gana velocidad: si no, trepaba paredes de 50° como un cohete)
 					if apoyo == 2:
@@ -425,8 +432,16 @@ func paso(dt: float, mandos: Dictionary) -> void:
 				if v_f > 0.5:
 					v_f = maxf(0.0, v_f - FRENO * f_in * dt)
 				elif g_in < 0.05:
-					# parada: marcha atrás, empujando con los pies
-					v_f = move_toward(v_f, -ATRAS * f_in, 11.0 * dt)
+					# S no cambia de sentido en el instante de detenerse.
+					if v_f > 0.1:
+						v_f = maxf(0.0, v_f - FRENO * f_in * dt)
+						_espera_atras = 0.0
+					else:
+						v_f = minf(v_f, 0.0) # absorber el pequeño avance numérico del apoyo
+						var anterior := _espera_atras
+						_espera_atras += dt
+						var paso_atras := maxf(0.0, _espera_atras - maxf(anterior, PAUSA_ATRAS))
+						v_f = move_toward(v_f, -ATRAS * f_in, 11.0 * paso_atras)
 			if mano:
 				v_f = move_toward(v_f, 0.0, 9.0 * dt)
 			# rozamiento, aire y freno motor
@@ -440,29 +455,13 @@ func paso(dt: float, mandos: Dictionary) -> void:
 					# delante metida en un hueco no había forma de sacarla marcha atrás)
 					var k_g := 0.25 if (piloto != null and f_in > 0.05 and g_in < 0.05 and v_f < 0.6) else 1.0
 					v_f -= GRAV * sin(cab_suelo) * dt * k_g
+					if f_in > 0.05 and g_in < 0.05 and _espera_atras > 0.0 and _espera_atras <= PAUSA_ATRAS:
+						# Durante la pausa el freno sujeta la pendiente; no reinicia el temporizador por deriva.
+						v_f = 0.0
 				# parada sin tocar nada con alguien encima: el piloto la sujeta con el freno
 				if piloto != null and g_in < 0.05 and f_in < 0.05 and absf(v_f) < 1.2:
 					v_f = move_toward(v_f, 0.0, 30.0 * dt)
-			# --- dirección: el manillar gira mucho parado y muy poco deprisa
-			var lim := lerpf(0.62, 0.075, Rbx.smooth(clampf(va / 55.0, 0.0, 1.0)))
-			# y nunca más de lo que permite la inclinación máxima (aceleración lateral = g·tan(48°))
-			if va > 1.0:
-				lim = minf(lim, atan(BATALLA * GRAV * tan(INCL_MAX) * 0.92 / (va * va)))
-			if piloto == null:
-				giro_in = 0.0
-			direccion = Rbx.damp(direccion, -giro_in * lim, 7.0, dt)
-			yaw_rate = v_f * tan(direccion) / BATALLA
-			# freno de mano deprisa: la rueda de atrás se va (sobreviraje) y la moto derrapa
-			derrapando = Rbx.damp(derrapando, 1.0 if (mano and va > 10.0) else 0.0, 6.0, dt)
-			yaw_rate *= 1.0 + 0.9 * derrapando
-			rumbo = Rbx.wrap_a(rumbo + yaw_rate * dt)
-			# la velocidad sigue al nuevo rumbo (agarre); derrapando, se queda atrás
-			var f2 := adelante()
-			var r2 := derecha()
-			var vel := f * v_f + r * v_l
-			v_f = vel.dot(f2)
-			v_l = move_toward(vel.dot(r2), 0.0, lerpf(AGARRE, AGARRE_DERRAPE, derrapando) * dt)
-			vel_h = f2 * v_f + r2 * v_l
+			_paso_direccion(dt, giro_in, mano, v_f, v_l, (v_f - vf_inicial) / maxf(dt, 0.0001))
 		else:
 			yaw_rate = Rbx.damp(yaw_rate, 0.0, 1.5, dt)
 			rumbo = Rbx.wrap_a(rumbo + yaw_rate * dt)
@@ -500,6 +499,38 @@ func paso(dt: float, mandos: Dictionary) -> void:
 	if piloto != null or absf(v_now) > ATROPELLO_MIN:
 		_atropellar()
 	_visual(dt)
+
+
+## Dirección progresiva y presupuesto de agarre compartido entre frenada/aceleración y curva.
+## Con agarre se conserva el módulo de velocidad: proyectarla cada fotograma perdía energía según FPS.
+func _paso_direccion(dt: float, giro_in: float, mano: bool, v_f: float, v_l: float, acel: float) -> void:
+	var va := absf(v_f)
+	var lim := lerpf(0.62, 0.075, Rbx.smooth(clampf(va / 55.0, 0.0, 1.0)))
+	if va > 1.0:
+		lim = minf(lim, atan(BATALLA * GRAV * tan(INCL_MAX) * 0.92 / (va * va)))
+	if piloto == null:
+		giro_in = 0.0
+	var antes := direccion
+	direccion = Rbx.damp(direccion, -giro_in * lim, 7.0, dt)
+	# El ángulo medio integra el giro de este paso, en vez de usar solo el valor final.
+	var media := (antes + direccion) * 0.5
+	derrapando = Rbx.damp(derrapando, 1.0 if (mano and va > 10.0) else 0.0, 6.0, dt)
+	var agarre := AGARRE_RUEDA * GRAV * maxf(0.2, cos(cab_suelo)) * (1.0 if apoyo == 2 else 0.65)
+	var uso_long := minf(absf(acel), agarre * 0.92)
+	var lateral := sqrt(maxf(0.0, agarre * agarre - uso_long * uso_long))
+	var objetivo := v_f * tan(media) / BATALLA * (1.0 + 0.9 * derrapando)
+	var max_giro := lateral / maxf(va, 1.0) * (1.0 + 0.35 * derrapando)
+	objetivo = clampf(objetivo, -max_giro, max_giro)
+	var giro_antes := yaw_rate
+	yaw_rate = move_toward(yaw_rate, objetivo, 2.8 * dt)
+	# El límite de neumático también se cumple tras un cambio de velocidad o de frenada.
+	yaw_rate = clampf(yaw_rate, -max_giro, max_giro)
+	var delta := (giro_antes + yaw_rate) * 0.5 * dt
+	var vel := adelante() * v_f + derecha() * v_l
+	rumbo = Rbx.wrap_a(rumbo + delta)
+	vel = vel.rotated(Vector3.UP, delta * lerpf(1.0, 0.18, derrapando))
+	var lat := move_toward(vel.dot(derecha()), 0.0, lerpf(lateral, AGARRE_DERRAPE, derrapando) * dt)
+	vel_h = adelante() * vel.dot(adelante()) + derecha() * lat
 
 
 ## ---------------------------------------------------------------- suelo, cuestas, saltos y aterrizajes

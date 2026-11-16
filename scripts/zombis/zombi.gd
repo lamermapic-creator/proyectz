@@ -93,6 +93,8 @@ var _muerte_t := 0.0
 ## cuerpo cae con física (scripts/fisica/ragdoll.gd); al levantarse se mezcla con la animación
 var _ragdoll: Ragdoll = null
 var _impulso_golpe := Vector3.ZERO
+var _bala := {} # contexto solo durante recibir_disparo; el contrato cuerpo a cuerpo no cambia
+var _reaccion_balas := ImpactoBalistico.new()
 var _pieza_golpe := "UpperTorso"
 var _sale_ragdoll_t := -1.0     # mezclando la postura del suelo con la de pie (hasta esta hora)
 var _fase := 0.0                # fase de la zancada
@@ -183,8 +185,20 @@ func centro() -> Vector3:
 	return (rig.P.UpperTorso as Node3D).global_position
 
 
-func recibir_danio(cantidad: float, pieza: String, impulso: Vector3) -> bool:
+## Entrada opcional de las armas: conserva el punto exacto y separa balas de golpes/atropellos.
+func recibir_disparo(cantidad: float, pieza: String, impulso: Vector3, punto: Vector3) -> bool:
+	_bala = {"pieza": pieza, "punto_local": ImpactoBalistico.punto_local(rig, pieza, punto)}
 	if _ragdoll != null and is_instance_valid(_ragdoll):
+		_ragdoll.disparo(pieza, impulso, punto)
+	elif vivo():
+		_reaccion_balas.registrar(rig, pieza, impulso, punto)
+	var muerto := recibir_danio(cantidad, pieza, impulso)
+	_bala = {}
+	return muerto
+
+
+func recibir_danio(cantidad: float, pieza: String, impulso: Vector3) -> bool:
+	if _bala.is_empty() and _ragdoll != null and is_instance_valid(_ragdoll):
 		# en el suelo (o muerto): el golpe sacude el cuerpo
 		_ragdoll.golpe(pieza, impulso * 0.15)
 	if not vivo():
@@ -194,19 +208,20 @@ func recibir_danio(cantidad: float, pieza: String, impulso: Vector3) -> bool:
 	health = maxf(0.0, health - cantidad)
 	var dir := Rbx.flat(impulso)
 	dir = dir.normalized() if dir.length() > 0.01 else -global_transform.basis.z
-	var k := clampf(cantidad / 30.0, 0.3, 1.6)
-	var d_loc := Rbx.vec_to_obj(global_transform, dir)
-	S.hitPitch.impulse(d_loc.z * 3.5 * k)
-	S.hitYaw.impulse(-d_loc.x * 3.0 * k)
-	S.hitRoll.impulse(d_loc.x * 2.0 * k)
-	S.hitHead.impulse((d_loc.z * 4.5 if pieza != "Head" else 9.0) * k)
+	if _bala.is_empty():
+		var k := clampf(cantidad / 30.0, 0.3, 1.6)
+		var d_loc := Rbx.vec_to_obj(global_transform, dir)
+		S.hitPitch.impulse(d_loc.z * 3.5 * k)
+		S.hitYaw.impulse(-d_loc.x * 3.0 * k)
+		S.hitRoll.impulse(d_loc.x * 2.0 * k)
+		S.hitHead.impulse((d_loc.z * 4.5 if pieza != "Head" else 9.0) * k)
 	if health <= 0.0:
 		_morir(dir)
 		return true
 	# nota de qué lado le han dado (y, si lo tiene cerca o ya lo había notado, quién ha sido)
 	_notar_golpe(impulso)
 	if en_pie():
-		_empuje += dir * minf(impulso.length() * 0.1, 6.0)
+		_empuje += dir * (minf(impulso.length() * 0.1, 6.0) if _bala.is_empty() else 0.0)
 		_tambaleo_hasta = reloj + 0.25
 	return false
 
@@ -848,12 +863,13 @@ func _caer(dir: Vector3, dur: float) -> void:
 	_forma.disabled = true
 	# ragdoll: el golpe (bate, atropello, bala) lanza el cuerpo en su dirección
 	if _ragdoll == null or not is_instance_valid(_ragdoll):
-		var imp := _impulso_golpe * 0.3
-		if imp.length() > 16.0:
-			imp = imp.normalized() * 16.0
-		if imp.length() < 2.0:
-			imp = _caida_dir * 4.0 + Vector3(0, 1.0, 0)
-		_ragdoll = Ragdoll.iniciar(self, rig, velocity, {"comportamiento": "caer", "impulso": imp, "pieza": _pieza_golpe,
+		var imp := _impulso_golpe if not _bala.is_empty() else _impulso_golpe * 0.3
+		if _bala.is_empty():
+			if imp.length() > 16.0:
+				imp = imp.normalized() * 16.0
+			if imp.length() < 2.0:
+				imp = _caida_dir * 4.0 + Vector3(0, 1.0, 0)
+		_ragdoll = Ragdoll.iniciar(self, rig, velocity, {"comportamiento": "caer", "impulso": imp, "pieza": _pieza_golpe, "balistica": not _bala.is_empty(), "punto_local": _bala.get("punto_local", Vector3.ZERO),
 			"duracion": minf(dur, 30.0)})
 		_ragdoll.recuperado.connect(_ragdoll_levantar)
 	velocity = Vector3.ZERO
@@ -862,7 +878,7 @@ func _caer(dir: Vector3, dur: float) -> void:
 func _morir(dir: Vector3) -> void:
 	_caer(dir, 1e9)
 	if _ragdoll != null and is_instance_valid(_ragdoll):
-		_ragdoll.morir()
+		_ragdoll.morir(not _bala.is_empty())
 	_muerte_t = reloj
 	_cambiar(Estado.MUERTO)
 	remove_from_group(Ruido.GRUPO)
@@ -960,6 +976,7 @@ func _process(dt: float) -> void:
 		sh.transform = Rbx.ang(pitch_b + hp * 0.1, sg * 0.05 * _brazos, sg * (0.1 + caido * 1.1 - 0.04 * _brazos))
 		el.transform = Rbx.ang(lerpf(0.2, 0.3, _brazos) + caido * 0.4 - lanza * 0.2, 0, 0)
 		wr.transform = Rbx.ang(-0.35 * _brazos, 0, 0)
+	_reaccion_balas.aplicar(rig, dt)
 	rig.aplicar()
 	_etiqueta.visible = Ruido.ver
 	if Ruido.ver:
