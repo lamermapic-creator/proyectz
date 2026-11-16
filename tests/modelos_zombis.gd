@@ -59,7 +59,7 @@ func probar() -> void:
 						if mat and mat.albedo_texture:
 							piel_embebida = mat.albedo_texture.get_width() == 512 and mat.albedo_texture.get_height() == 512
 				comprobar(piel_embebida, id + " piel embebida 512x512")
-				comprobar(relieve_embebido, id + " normales de piel embebidas")
+				comprobar(not relieve_embebido, id + " piel plana sin relieve añadido")
 			if parte in ["Head", "UpperTorso"]:
 				var detalle := false
 				for mi in meshes:
@@ -71,7 +71,7 @@ func probar() -> void:
 							if parte == "UpperTorso" and mat.resource_name.begins_with("SangreRopa") and mat.albedo_texture:
 								detalle = mat.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED
 				if parte == "Head":
-					comprobar(detalle == (id in ["civil", "sanitario", "paciente"]), id + " cerebro solo en variantes previstas")
+					comprobar(not detalle, id + " cráneo cerrado según referencias")
 				else:
 					comprobar(detalle, id + " sangre con textura y transparencia")
 		var vida := z.health

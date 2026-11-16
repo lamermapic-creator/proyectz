@@ -6,9 +6,9 @@ root=Path(__file__).resolve().parents[3]
 folder=root/'modelos/zombis'
 catalog=json.loads((folder/'catalogo.json').read_text())
 assert len(catalog['modelos']) == 12
-assert catalog['version'] == 6
+assert catalog['version'] == 7
 assert catalog['presupuesto_triangulos'] == 16000
-assert {s['id'] for s in catalog['modelos'] if s['cerebro_visible']} == {'civil','sanitario','paciente'}
+assert {s['id'] for s in catalog['modelos'] if s['cerebro_visible']} == set()
 for spec in catalog['modelos']:
     data=(folder/(spec['id']+'.glb')).read_bytes()
     assert hashlib.sha256(data).hexdigest()==spec['sha256'], spec['id']+' hash'
@@ -18,8 +18,8 @@ for spec in catalog['modelos']:
     assert kind==b'JSON'
     doc=json.loads(data[20:20+jlen])
     assert not doc.get('extensionsRequired')
-    assert len(doc.get('images', [])) == 4
-    assert sum('normalTexture' in m for m in doc['materials']) >= 3
+    assert len(doc.get('images', [])) == 2
+    assert not any('normalTexture' in m for m in doc['materials'])
     for image in doc['images']:
         assert 'uri' not in image and image['mimeType']=='image/png'
         view=doc['bufferViews'][image['bufferView']]

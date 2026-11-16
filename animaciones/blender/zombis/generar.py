@@ -54,97 +54,6 @@ def build(index, spec):
     scene, pieces, centers = ns['esc'], ns['vacios'], ns['PIEZAS']
     box, cyl, cv = ns['caja'], ns['cil'], ns['g2b']
     root = ns['raiz']; root.name = 'Zombi_' + ident
-    rng = random.Random(4100 + index)
-    skin = [(125,139,111),(142,136,116),(109,128,122),(147,143,126)][index % 4]
-    dark = tuple(int(c*.60) for c in shirt)
-    wound, bone, boot = (82,33,31), (190,177,139), (38,33,29)
-    for part, (size, pos) in centers.items():
-        category = part.replace('Left','').replace('Right','')
-        color = skin if category in ['Head','LowerArm','Hand'] else pants if category in ['LowerTorso','UpperLeg','LowerLeg'] else boot if category == 'Foot' else shirt
-        width = 1 + (index % 3 - 1)*.065 if 'Torso' in part else 1
-        dims = (size[0]*width, size[1], size[2])
-        box(part, 'Base_'+part, pos, dims, color, 'Skin' if color == skin else 'Fabric', bisel=.065 if part=='Head' else .035, segs=2)
-        if category == 'Hand':
-            for f in range(4):
-                box(part, 'Dedo', (pos[0]-.105+f*.07,pos[1]-.24,pos[2]-.025), (.055,.22-rng.random()*.06,.10),skin,'Skin',rot=(0,0,(f-1.5)*5),bisel=.015)
-            box(part,'Pulgar',(pos[0]+(.17 if part.startswith('Left') else -.17),pos[1]-.08,-.01),(.09,.19,.13),skin,'Skin',rot=(0,0,25),bisel=.02)
-        if category in ['UpperLeg','LowerLeg','UpperArm']:
-            box(part,'Costura',(pos[0]+size[0]*.48,pos[1],-.03),(.014,size[1]*.82,.035),dark,bisel=.002)
-        if category == 'Foot':
-            box(part,'Suela',(pos[0],-3.085,-.18),(.48,.065,1.01),boot,'Rubber',bisel=.015)
-            for z in range(4):
-                box(part,'Cordon',(pos[0],-2.79,-.39+z*.11),(.31,.018,.025),bone,bisel=.003)
-    # Cara hundida: cuencas, ojos opacos, pómulos y mandíbula asimétrica.
-    for side in [-1,1]:
-        box('Head','Cuenca',(side*.17,2.10,-.391),(.25,.19,.045),(49,55,45),'Skin',rot=(0,0,side*9),bisel=.04,segs=2)
-        box('Head','Ojo',(side*.17,2.09,-.422),(.105,.065,.025),(185,181,146),'Eye',bisel=.018)
-        box('Head','Iris',(side*.18,2.09,-.438),(.026,.034,.009),(83,94,70),'Eye',bisel=.006)
-        box('Head','Pomulo',(side*.25,1.94,-.399),(.16,.13,.07),skin,'Skin',rot=(0,0,side*17),bisel=.035)
-        box('Head','Oreja',(side*.385,2.02,.01),(.10,.21,.14),skin,'Skin',bisel=.035)
-    box('Head','Nariz',(0,2.015,-.43),(.105,.21,.11),skin,'Skin',bisel=.025)
-    box('Head','Boca',(0,1.81,-.401),(.36,.16,.035),(37,28,24),'Skin',rot=(0,0,-6),bisel=.03)
-    for tooth in range(5):
-        box('Head','Diente',(-.14+tooth*.067,1.85,-.428),(.045,.055,.025),bone,'Wood',bisel=.004)
-    box('Head','Labio',(0,1.72,-.405),(.34,.035,.04),wound,'Skin',rot=(0,0,-8),bisel=.01)
-    for i in range(5):
-        box('Head','Cicatriz',(-.28+i*.027,2.22-i*.035,-.407),(.035,.07,.012),wound,'Skin',rot=(0,0,24),bisel=.005)
-    if kind not in ['obra','bombero','paciente','capucha']:
-        box('Head','PeloNuca',(0,2.23,.32),(.73,.35,.17),(43,39,31),'Hair',bisel=.06)
-        for i in range(6):
-            box('Head','Mechon',(-.30+i*.12,2.44,.04),(.10,.12+rng.random()*.10,.58),(43,39,31),'Hair',rot=(0,0,rng.uniform(-15,15)),bisel=.025)
-    # Roturas superpuestas con borde irregular, remiendos y suciedad geométrica.
-    for part in ['UpperTorso','LeftUpperLeg','RightLowerLeg','RightUpperArm']:
-        sz, pos = centers[part]
-        for i in range(3):
-            x=pos[0]+rng.uniform(-sz[0]*.28,sz[0]*.28); y=pos[1]+rng.uniform(-sz[1]*.3,sz[1]*.3)
-            z=-sz[2]/2-.008
-            box(part,'Rotura',(x,y,z),(.09+rng.random()*.13,.12+rng.random()*.18,.015),skin,'Skin',rot=(0,0,rng.uniform(-25,25)),bisel=.008)
-            box(part,'BordeRoto',(x-.05,y,z-.012),(.025,.19,.012),dark,rot=(0,0,15),bisel=.003)
-    for side in [-1,1]:
-        part='LeftUpperLeg' if side<0 else 'RightUpperLeg'
-        box(part,'Bolsillo',(side*.33,-.70,-.295),(.32,.34,.07),pants,bisel=.025)
-        box(part,'Solapa',(side*.33,-.52,-.32),(.34,.07,.07),dark,bisel=.01)
-    for i in range(4):
-        box('UpperTorso','Boton',(.06,.47+i*.27,-.39),(.045,.045,.025),bone,'Plastic',bisel=.01)
-    box('LowerTorso','Cinturon',(0,-.05,-.35),(1.23,.12,.055),boot,'Leather',bisel=.01)
-    box('LowerTorso','Hebilla',(.08,-.05,-.39),(.18,.14,.035),(115,111,91),'Metal',bisel=.012)
-    T='UpperTorso'; H='Head'
-    if kind in ['obra','bombero']:
-        col=(188,153,53) if kind=='obra' else (91,39,30)
-        box(H,'Casco',(0,2.45,.02),(.83,.30,.90),col,'Plastic',bisel=.12,segs=3)
-        box(H,'AlaCasco',(0,2.31,-.08),(.98,.06,1.10),col,'Plastic',bisel=.025)
-    if kind in ['obra','bombero']:
-        for x in [-.45,.45]: box(T,'BandaReflectante',(x,.91,-.395),(.13,1.17,.035),(186,192,128),bisel=.008)
-        box(T,'BandaHorizontal',(0,.47,-.40),(1.42,.10,.04),(186,192,128),bisel=.008)
-    if kind=='medico':
-        box(T,'BolsilloPecho',(-.36,1.06,-.415),(.36,.30,.06),dark,bisel=.018)
-        box(T,'Identificacion',(.34,1.12,-.41),(.23,.30,.025),(184,185,160),'Plastic',rot=(0,0,-9),bisel=.008)
-        box(T,'Boligrafo',(-.35,1.25,-.45),(.035,.23,.03),(40,52,74),'Plastic',bisel=.004)
-        box(H,'MascarillaCaida',(0,1.61,-.35),(.52,.12,.18),(139,167,151),bisel=.025)
-    if kind=='policia':
-        box(T,'Chaleco',(0,.94,-.42),(1.20,1.07,.14),dark,bisel=.04)
-        for x in [-.39,0,.39]: box(T,'Portacargador',(x,.62,-.54),(.25,.36,.13),shirt,bisel=.018)
-        box(T,'Placa',(-.29,1.25,-.51),(.19,.23,.025),(167,146,73),'Metal',bisel=.025)
-    if kind in ['mochila','gorra']:
-        for x in [-.46,.46]: box(T,'Correa',(x,.94,-.40),(.13,1.22,.06),boot,'Leather',bisel=.014)
-        box(T,'Mochila',(0,.90,.62),(1.10,1.18,.47),shirt,bisel=.09,segs=2)
-        box(T,'BolsilloMochila',(0,.70,.89),(.83,.51,.13),dark,bisel=.03)
-    if kind=='gorra':
-        box(H,'Gorra',(0,2.40,0),(.76,.19,.81),shirt,bisel=.06)
-        box(H,'Visera',(0,2.31,-.51),(.70,.05,.43),shirt,bisel=.04)
-    if kind=='corbata':
-        box(T,'Corbata',(.04,.97,-.42),(.14,.94,.04),(74,39,36),rot=(0,0,-11),bisel=.012)
-        for x in [-.22,.22]: box(T,'Cuello',(x,1.51,-.40),(.26,.25,.045),shirt,rot=(0,0,x*80),bisel=.02)
-    if kind=='peto':
-        box(T,'Peto',(0,.64,-.42),(.86,.73,.07),pants,bisel=.025)
-        for x in [-.40,.40]: box(T,'Tirante',(x,1.19,-.41),(.14,.73,.05),pants,bisel=.01)
-    if kind=='capucha':
-        box(H,'Capucha',(0,2.26,.17),(.89,.65,.72),shirt,bisel=.12,segs=3)
-        box(T,'Bufanda',(0,1.58,-.05),(.84,.24,.72),dark,bisel=.07)
-    if kind=='paciente':
-        for y in [.5,.75,1,1.25]:
-            for x in [-.46,-.17,.17,.46]: box(T,'PatronBata',(x,y,-.38),(.025,.04,.012),dark,bisel=.003)
-        box('LeftLowerArm','Pulsera',(-.92,-.42,0),(.36,.08,.40),bone,'Plastic',bisel=.015)
     refinar(ns, index, spec)
     # Comprobación previa a fusionar: ninguna cara suavizada ni bisel redondeado.
     for e in pieces.values():
@@ -236,5 +145,5 @@ def build(index, spec):
 OUT.mkdir(parents=True,exist_ok=True)
 result=[build(i,spec) for i,spec in enumerate(VARIANTES) if not PREVIEW or spec[0]=='sanitario']
 if not PREVIEW:
-    (OUT/'catalogo.json').write_text(json.dumps({'version':6,'presupuesto_triangulos':16000,'unidades':'studs','rig':'R15 Motor6D','origen':'Modelado original local en Blender; sin assets de terceros ni proveedores de pago','animaciones':CLIPS,'modelos':result},indent=2,ensure_ascii=False)+'\n')
+    (OUT/'catalogo.json').write_text(json.dumps({'version':7,'presupuesto_triangulos':16000,'unidades':'studs','rig':'R15 Motor6D','origen':'Modelado original local en Blender; sin assets de terceros ni proveedores de pago','animaciones':CLIPS,'modelos':result},indent=2,ensure_ascii=False)+'\n')
 print('COLECCION_OK',len(result))

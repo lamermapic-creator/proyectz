@@ -1,3 +1,11 @@
+## 2026-11-16 — Zombis limpios según referencias del usuario (v7)
+
+Rehechas las doce variantes con bloques sencillos y detalles mínimos de oficio. Eliminados
+pliegues y parches superpuestos, heridas volumétricas, cerebro expuesto y microrelieve; piel
+uniforme y sangre pequeña por píxeles. Se conservan rig, clips y combate. Las pruebas visuales
+cambian su expectativa a cráneo cerrado y ausencia de normales: es la dirección solicitada,
+no una reducción de las comprobaciones funcionales. Ver `docs/MODELOS_LIMPIOS_V7.md`.
+
 ## 2026-11-16 — Corrección de todas las piezas de zombis a bloques
 
 Sustituidos los detalles ovalados que seguían en v5 por cajas rectas: cara, manos, barba,

@@ -1,5 +1,18 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
+## 2026-11-16 · Codex · v7: referencias de bloques limpios
+- El usuario aporta tres imágenes: granjero con peto amarillo/azul, repartidor rojo y civil marrón.
+  Dirección vigente: **formas cuadradas sencillas, pocos detalles, nada de repliegues superpuestos**.
+- Reconstruido el arte de las doce variantes: un bloque limpio por segmento, cara mínima, piel
+  uniforme, sangre pequeña por píxeles. Solo elementos de oficio discretos: sombrero, peto,
+  gorra, bolsillo, placa o mochila. Fuera pliegues, tendones, coágulos, parches y capas faciales.
+- Cráneos cerrados en todas las variantes según la referencia limpia; esta decisión sustituye
+  las tres aberturas de v4–v6. Sin mapas normales de poros/tejido ni realismo de piel.
+- Se mantienen quince piezas, pivotes R15, impacto, seis clips y contratos de combate.
+  Godot 4.6.3: 624/624 modelos, 56/56 menú renderizado, batería general 101/102; único fallo
+  `moto_zombi` intermitente, repetición aislada OK. 398–458 triángulos por variante.
+  Vistas y comprobaciones actuales: `docs/MODELOS_LIMPIOS_V7.md`.
+
 ## 2026-11-16 · Codex · Corrección v6: TODO cuadrado
 - El usuario aclara que **todas las partes** deben ser cuadradas; la revisión v5 aún tenía
   elementos ovalados. Ahora ojos, iris, palmas, dedos, pulgares, barba, pliegues, coágulos,
