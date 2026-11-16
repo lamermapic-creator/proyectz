@@ -13,6 +13,23 @@ en el mismo commit que el cambio. Formato:
 
 ---
 
+## 2026-11-16 · Usuario · Codex — zombis ensangrentados y cerebro visible en tres variantes (v4)
+**Qué:** sangre seca/reciente en piel, boca, ropa y extremidades; cortes y coágulos en antebrazos.
+Civil, sanitario y paciente tienen abertura real de cráneo, corteza con pliegues/vasos, borde herido
+y hueso expuesto. Los otros nueve mantienen la cabeza cerrada. Conservada la estética cuadrada.
+**Archivos:** nuevo `deterioro.py`, `rostro.py`, `refinado.py`, `generar.py`, `validar.py`, modelos y
+fuentes de Blender, catálogo y vistas, `tests/modelos_zombis.gd`, `CLAUDE.md`, `docs/MODELOS_ZOMBIS.md`.
+**Cómo probarlo:** F6 en `escenas/galeria_zombis.tscn`; comparar civil/sanitario/paciente con las otras
+nueve variantes y cambiar los clips con las flechas. Prueba de recursos: `tests/modelos_zombis.gd`.
+**Pendiente / avisos:** el deterioro es parte del aspecto inicial del modelo, no heridas que se generen
+al recibir un disparo. No cambian daño, colisiones ni comportamiento. La sangre en ropa añade una
+superficie transparente por pieza afectada; falta medir una horda en GPU.
+**Validación específica v4:** 612/612 comprobaciones; importación y galería sin errores, dos texturas
+embebidas/UV/hashes correctos, tres variantes con corteza y nueve sin ella, techo de geometría respetado.
+**Batería general v4:** 102/102 OK (`TODO BIEN`), incluyendo moto, combate, suelo, ragdoll y arranque
+de menú/nivel. Catálogo, primer plano y GIF de marcha renderizados y revisados. No se alteraron
+las aserciones ni los umbrales de las pruebas existentes para obtener ese resultado.
+
 ## 2026-11-16 · Usuario · Codex — corregir rostros y recuperar el arte cuadrado (v3)
 **Qué:** retirada la apariencia de cuencas negras, ojos saltones, cejas/pómulos de goma y boca negra
 abierta. Cabeza cuadrada R15 con relieve facial bajo, ojos estrechos, párpados finos, nariz proporcionada,

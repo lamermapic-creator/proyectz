@@ -1,5 +1,21 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
+## 2026-11-16 · Codex · Sangre y deterioro visible (v4)
+- Petición del usuario: aspecto más sanguinario conservando el arte cuadrado. Añadidas sangre seca
+  y reciente en boca/barbilla, salpicaduras faciales, cortes, manos/antebrazos y manchas en ropa.
+- Solo **civil, sanitario y paciente** tienen cerebro visible: abertura real del cráneo y pelo mediante
+  Boolean, hueso en el borde, corteza con pliegues continuos y vasos. Los otros nueve conservan cráneo
+  cerrado. No convertir esta variante en la apariencia de todos los zombis.
+- Fuente nueva `animaciones/blender/zombis/deterioro.py`, llamada desde el refinado y la pintura de
+  piel. Las manchas de ropa se proyectan sobre sus mallas con rayos; tienen alfa irregular y siguen
+  las prendas. Dos texturas originales de 512×512 embebidas por GLB, sin dependencias externas.
+- Se mantiene la corrección v3: cabeza cuadrada, ojos discretos sin cuencas negras. Sin cambios a
+  rig, cajas de impacto, IA, temporización de ataques o ragdoll. Catálogo v4 declara `cerebro_visible`.
+- Verificación específica v4: 612/612 comprobaciones (incluyen la selección de cerebro y la sangre
+  con textura/alfa); dos PNG embebidos, UV, hashes y techo de 16.000 triángulos verificados.
+- Batería general v4: **102/102 OK**, con `TODO BIEN`; pasan moto, combate, suelo, ragdoll y arranque
+  del menú/nivel. Catálogo, primer plano y GIF actualizados y revisados en Blender CPU.
+
 ## 2026-11-16 · Codex · Rostros cuadrados y proporciones contenidas (v3, corrección solicitada)
 - El usuario rechazó el rostro redondeado y las cuencas negras de v2. Restaurada la cabeza cuadrada
   R15, con relieves muy bajos, ojos estrechos sin manchas negras, párpados finos, nariz integrada y

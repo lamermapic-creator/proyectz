@@ -1,8 +1,9 @@
 """Piel original generada localmente y relieve facial sobre la cabeza cuadrada R15."""
 import bpy, bmesh, math
 import numpy as np
+from deterioro import pintar_piel, CEREBRO_VISIBLE
 
-def esculpir(head, ns, index, skin):
+def esculpir(head, ns, index, skin, ident):
     bm=bmesh.new(); bm.from_mesh(head.data)
     front=next(f for f in bm.faces if (ns['C'].inverted() @ f.normal).z < -.9)
     bmesh.ops.subdivide_edges(bm,edges=list(front.edges),cuts=19,use_grid_fill=True)
@@ -58,6 +59,7 @@ def esculpir(head, ns, index, skin):
             rgb-=wrinkle[...,None]*.012
         fold=np.exp(-((xx-side*(.082+.24*np.maximum(0,-yy)))/.003)**2)*np.exp(-((yy+.16)/.073)**4)
         rgb-=fold[...,None]*.012
+    pintar_piel(rgb, xx, yy, index, rng, ident in CEREBRO_VISIBLE)
     pixels=np.ones((size,size,4),dtype=np.float32); pixels[:,:,:3]=np.clip(rgb,0,1)
     image=bpy.data.images.new('PielRostro_%02d'%index,width=size,height=size)
     image.colorspace_settings.name='sRGB'

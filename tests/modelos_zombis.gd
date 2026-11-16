@@ -56,6 +56,20 @@ func probar() -> void:
 						if mat and mat.albedo_texture:
 							piel_embebida = mat.albedo_texture.get_width() == 512 and mat.albedo_texture.get_height() == 512
 				comprobar(piel_embebida, id + " piel embebida 512x512")
+			if parte in ["Head", "UpperTorso"]:
+				var detalle := false
+				for mi in meshes:
+					for superficie in mi.mesh.get_surface_count():
+						var mat := mi.mesh.surface_get_material(superficie) as BaseMaterial3D
+						if mat:
+							if parte == "Head" and mat.resource_name.begins_with("Cerebro"):
+								detalle = true
+							if parte == "UpperTorso" and mat.resource_name.begins_with("SangreRopa") and mat.albedo_texture:
+								detalle = mat.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED
+				if parte == "Head":
+					comprobar(detalle == (id in ["civil", "sanitario", "paciente"]), id + " cerebro solo en variantes previstas")
+				else:
+					comprobar(detalle, id + " sangre con textura y transparencia")
 		var vida := z.health
 		z.recibir_danio(10, "UpperTorso", Vector3.FORWARD)
 		comprobar(z.health < vida, id + " recibir daño")

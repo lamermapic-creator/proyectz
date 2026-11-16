@@ -2,6 +2,7 @@
 import bpy, bmesh, math, random
 from mathutils import Vector
 from rostro import esculpir
+from deterioro import aplicar as deteriorar
 
 # Ancho de torso, profundidad, volumen de miembros, ancho de mandíbula y peinado.
 PERFILES = {
@@ -104,7 +105,7 @@ def aplicar(ns, index, spec):
         if g.y < -.20:
             g.x *= .94 + .05*jaw
         v.co=ns['C'] @ g
-    esculpir(head, ns, index, skin)
+    esculpir(head, ns, index, skin, ident)
     for s in [-1,1]:
         eye_y=2.085 + (index%3-1)*s*.007
         # Cuenca casi al ras de la cara, del mismo tono de piel ligeramente apagado.
@@ -192,3 +193,4 @@ def aplicar(ns, index, spec):
         for s in [-1,1]: oval(T,'BotonTirante',(s*.4,.91,-.46),(.065,.065,.025),(147,137,95),'Metal',segments=8,rings=6)
     if kind=='capucha':
         for n in range(3): box(T,'ParcheAbrigo',(-.33+n*.24,.6+(n%2)*.36,-.40),(.20,.27,.04),pants,rot=(0,0,n*9-9),bisel=.014)
+    deteriorar(ns, index, spec, oval)

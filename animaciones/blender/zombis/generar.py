@@ -13,6 +13,7 @@ if PREVIEW:
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(SOURCE))
 from refinado import aplicar as refinar
+from deterioro import CEREBRO_VISIBLE
 # Reutilizamos las mismas dimensiones, conversión de ejes y primitivas del superviviente.
 helpers = (SOURCE.parent / 'personaje/personaje.py').read_text().split('# ================================================================= DISEÑO NUEVO')[0]
 VARIANTES = [
@@ -215,10 +216,10 @@ def build(index, spec):
         export_animations=True,export_animation_mode='NLA_TRACKS',export_force_sampling=True,
         export_frame_range=False,export_materials='EXPORT',export_cameras=False,export_lights=False)
     data=(OUT/(ident+'.glb')).read_bytes()
-    return {'id':ident,'nombre':label,'sha256':hashlib.sha256(data).hexdigest(),'bytes':len(data)}
+    return {'id':ident,'nombre':label,'cerebro_visible':ident in CEREBRO_VISIBLE,'sha256':hashlib.sha256(data).hexdigest(),'bytes':len(data)}
 
 OUT.mkdir(parents=True,exist_ok=True)
 result=[build(i,spec) for i,spec in enumerate(VARIANTES) if not PREVIEW or spec[0]=='sanitario']
 if not PREVIEW:
-    (OUT/'catalogo.json').write_text(json.dumps({'version':3,'presupuesto_triangulos':16000,'unidades':'studs','rig':'R15 Motor6D','origen':'Modelado original local en Blender; sin assets de terceros ni proveedores de pago','animaciones':CLIPS,'modelos':result},indent=2,ensure_ascii=False)+'\n')
+    (OUT/'catalogo.json').write_text(json.dumps({'version':4,'presupuesto_triangulos':16000,'unidades':'studs','rig':'R15 Motor6D','origen':'Modelado original local en Blender; sin assets de terceros ni proveedores de pago','animaciones':CLIPS,'modelos':result},indent=2,ensure_ascii=False)+'\n')
 print('COLECCION_OK',len(result))

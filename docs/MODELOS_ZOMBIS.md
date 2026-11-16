@@ -1,6 +1,40 @@
 # Colección de zombis — 2026-11-16
 
-## Revisión vigente: v3, conservar el arte cuadrado
+## Revisión vigente: v4, sangre y tres cráneos abiertos
+
+Se mantiene el arte cuadrado aprobado en v3 y se añade deterioro sanguinario solicitado por el usuario:
+sangre seca y reciente alrededor de boca/barbilla, salpicaduras en cara, cortes, coágulos y manchas de
+arrastre en ropa, antebrazos, manos y pantalones. Las cuencas negras exageradas no vuelven.
+
+Solo **civil, sanitario y paciente** tienen cerebro visible. El generador corta de verdad frente y parte
+superior del cráneo (también el pelo) mediante Boolean; comprueba mediante un rayo que la superficie
+frontal haya desaparecido en la abertura. La corteza está dentro, con pliegues continuos y vasos, hueso
+y un borde ensangrentado. No es un dibujo de cerebro pegado sobre una cabeza cerrada.
+
+El aspecto es estático al crear el zombi: no es un sistema nuevo de desmembramiento ni heridas por
+impacto. Todo sigue unido a las 15 piezas R15, con sus clips y el ragdoll actuales. Las cajas de impacto
+siguen completas: la abertura visual no cambia qué disparos pueden acertar a la cabeza.
+
+`deterioro.py` es la fuente del diseño. `rostro.py` la usa para pintar la piel y `refinado.py` para
+proyectar manchas sobre las prendas y construir las heridas. Se usan dos imágenes originales de
+512×512 por modelo: piel y manchas RGBA. Ambas están embebidas en GLB/Blender; la ropa emplea
+transparencia para evitar rectángulos de color. No requiere servicios ni material de terceros.
+
+El catálogo v4 registra `cerebro_visible` por modelo. `validar.py` comprueba que sean exactamente esas
+tres variantes, que sus materiales de corteza estén presentes solo en ellas, y que existan las dos
+imágenes embebidas, UV y materiales de sangre con alfa. Se mantiene el techo de 16.000 triángulos.
+El coste de transparencias en hordas debe medirse en GPU; los renders de revisión son de Blender CPU.
+Los archivos v4 tienen 12.360–15.144 triángulos. La pintura de sangre se mantiene separada de las
+zonas de ojos para respetar la corrección de cuencas exageradas. Los coágulos usan otro material,
+con rugosidad baja frente al acabado mate de sangre seca. No se añade ningún cambio de daño o IA.
+
+Validación v4: **612/612** comprobaciones específicas y **102/102** pruebas generales correctas
+(`TODO BIEN`). Importación y galería sin errores; selección de las tres variantes con cerebro,
+texturas/alfa, UV, hashes y presupuesto verificados. Renders de catálogo, detalle y marcha revisados.
+Registros locales: `/workspace/setup-logs/zombis-v4-test.log`, `zombis-v4-regresion.log`,
+`zombis-v4-validacion.log` y `zombis-v4-import.log`.
+
+## Base artística v3, conservada en v4
 
 El usuario rechazó las cuencas negras exageradas y el aspecto redondeado de la revisión v2.
 La dirección vigente es **cuadrada**, como el superviviente R15: cabeza de caja biselada, planos claros
@@ -160,9 +194,10 @@ Usar el binario 4.7.2, no el `godot` 4.6.3 del PATH de la máquina de onboarding
 `XDG_CACHE_HOME=/workspace/.cache`, `XDG_CONFIG_HOME=/workspace/.config` y
 `XDG_DATA_HOME=/workspace/.local/share` antes de ejecutar.
 
-La prueba específica vigente ejecuta 588 comprobaciones: doce importaciones reales, seis clips por modelo
+La prueba específica vigente ejecuta 612 comprobaciones: doce importaciones reales, seis clips por modelo
 con movimiento, 15 piezas y sus tamaños, selección de variante, daño, derribo y muerte. La galería
 también se ejecutó sin ventana. V3 añade doce comprobaciones de la textura embebida de cada cabeza.
+V4 añade doce de selección de cerebro y doce de sangre con textura/transparencia.
 El render de catálogo revisa la geometría en Blender; no acredita
 calidad visual ni rendimiento del renderizador Forward+ de Godot en una GPU.
 

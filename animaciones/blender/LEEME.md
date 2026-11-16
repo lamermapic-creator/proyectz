@@ -10,6 +10,8 @@ La revisión v2 añade anatomía y vestuario mediante `zombis/refinado.py`; edit
 La corrección vigente v3 restaura cabeza/cuerpo cuadrados y rostros con poco relieve, sin cuencas
 negras exageradas. `zombis/rostro.py` genera la cara y su piel embebida de 512×512. Ver la guía antes
 de recuperar formas de v2. Se puede revisar una exportación temporal con `--vista-previa`.
+V4 añade `zombis/deterioro.py`: sangre y manchas RGBA embebidas; cerebro visible únicamente en civil,
+sanitario y paciente mediante una abertura real del cráneo. Se conserva la base artística cuadrada v3.
 
 Godot NO importa esta carpeta (`.gdignore`). Aquí están el piloto montado en Blender y los scripts que generan las
 poses de apuntado con la pistola en la moto. Blender 4.2 LTS (gratis, https://www.blender.org).
