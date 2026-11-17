@@ -153,6 +153,11 @@ func _construir() -> void:
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	env.ssao_enabled = true
+	# Gris suave en la imagen 3D: ambiente apagado sin teñir el HUD.
+	env.adjustment_enabled = true
+	env.adjustment_saturation = 0.78
+	env.adjustment_brightness = 0.98
+	env.adjustment_contrast = 0.98
 	we.environment = env
 	g.add_child(we)
 

@@ -17,6 +17,11 @@ func _ready() -> void:
 	env.fog_enabled = true
 	env.fog_light_color = Color("26383d")
 	env.fog_density = 0.018
+	# Gris suave en la imagen 3D: ambiente apagado sin teñir el HUD.
+	env.adjustment_enabled = true
+	env.adjustment_saturation = 0.78
+	env.adjustment_brightness = 0.98
+	env.adjustment_contrast = 0.98
 	add_child(ambiente)
 	var luna := DirectionalLight3D.new()
 	luna.rotation_degrees = Vector3(-36, -38, 0)

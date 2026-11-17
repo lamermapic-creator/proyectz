@@ -1,5 +1,11 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
+## 2026-11-16 · Codex · Ambiente ligeramente gris
+- Petición del usuario: filtro gris suave para un ambiente triste. Ajuste del Environment
+  del nivel y fondo 3D del menú: saturación 0,78, brillo 0,98 y contraste 0,98.
+- Solo imagen 3D; HUD y textos conservan sus colores. Persiste al cambiar calidad gráfica.
+- Compilación y arranque de menú/nivel comprobados sin errores en Godot 4.6.3.
+
 ## 2026-11-16 · Codex · Restricciones de salto y patada
 - Petición del usuario: impedir saltos hacia atrás/laterales (incluidas diagonales laterales)
   y patadas al correr. Se permite salto vertical y frontal respecto a la cámara.

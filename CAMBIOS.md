@@ -1,3 +1,8 @@
+## 2026-11-16 — Filtro gris suave
+
+Desaturación ligera de la imagen 3D del juego y fondo del menú para un ambiente más triste.
+Brillo y contraste suavemente reducidos; HUD y textos mantienen sus colores.
+
 ## 2026-11-16 — Saltos frontales y patadas sin carrera
 
 Bloqueados los saltos hacia atrás, laterales y diagonales laterales. Se mantienen el salto
