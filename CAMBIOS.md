@@ -1,3 +1,10 @@
+## 2026-11-16 — Pasos menos trabados y exagerados
+
+Suavizada la mezcla de caminar/correr, limitado el alcance posterior y frontal y reducida
+la elevación excesiva. El pie despega antes de estirar demasiado la pierna y avanza sin
+un fotograma congelado; corregido el despegue hacia atrás. Prueba de continuidad y alcance
+en `tests/pasos_suaves.gd`; captura real en `docs/fisica/pasos-suaves.gif`.
+
 ## 2026-11-16 — Arma primero y giros suaves
 
 El arma larga inicia el giro con margen respecto al cuerpo. Armas cortas con una mano,

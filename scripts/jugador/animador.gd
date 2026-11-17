@@ -132,6 +132,7 @@ var gait_rate := 0.0
 var gait_amp := 0.0
 # ciclos de la marcha hechos en Blender (Movimientos, 2026-11-02): mezcla andar / correr / agachado y amplitud
 var mez_run := 0.0     # 0 andar, 1 correr (según la velocidad, como run01 de los pasos)
+var _mezcla_paso_carrera := 0.0
 var mez_pie_run := 0.0 # lo mismo, para la forma del paso (sin suavizar: el de update_feet)
 var amp_ciclo := 0.0   # 0 quieto, 1 a la velocidad para la que está hecho el ciclo
 var gait01 := 0.0       # reloj de la marcha (0..1): marca cuándo despega y apoya cada pie (ver update_feet)
@@ -623,7 +624,9 @@ func update_feet(root_cf: Transform3D, vel: Vector3, speed: float, dt: float, gr
 	# andar de verdad). Corriendo, pasos rápidos con fase aérea
 	var step_dur := clampf(0.36 - speed * 0.005, 0.25, 0.36)
 	# corriendo el pie toca el suelo poco tiempo (no se queda atrás arrastrando la pierna)
-	var run01 := clampf((speed - 7.0) / 6.0, 0, 1) * _factor_carrera_direccion(vel_h, root_cf)
+	var objetivo_run := clampf((speed - 7.0) / 6.0, 0, 1) * _factor_carrera_direccion(vel_h, root_cf)
+	_mezcla_paso_carrera = Rbx.damp(_mezcla_paso_carrera, objetivo_run, 8.0, dt)
+	var run01 := _mezcla_paso_carrera
 	mez_pie_run = run01
 	var k_thr := lerpf(0.83, 0.5, run01)
 	# el pie se apoya delante de la cadera (andando más; corriendo justo bajo el cuerpo)
@@ -948,7 +951,7 @@ func _pierna_anim(en_paso: bool, x: float, zan: float, fr: float, run01: float, 
 	var u := x
 	var m0 := -fr / (1.0 - fr)
 	var a := _curva_pierna("avance", u, run01) + m0 * (u * u * u - 2.0 * u * u + u) + _par_pierna("retrae", run01) * m0 * (u * u * u - u * u)
-	var k_alto := clampf(speed / _par_pierna("v_ref", run01), 0.5, 1.15)
+	var k_alto := clampf(speed / _par_pierna("v_ref", run01), 0.35, 1.0)
 	return [dd * (delante - 1.0 + a), _curva_pierna("alto", u, run01) * k_alto, _curva_pierna("inclina_aire", u, run01), true, u]
 
 
@@ -957,8 +960,8 @@ func _tobillo_anim(k: String, z: float, eje: Vector3, desp_x: float, estrecha: f
 	var side: float = feet[k].side
 	# (frenando de correr a andar, el paso de andar más largo hacía que el pie apoyara demasiado lejos y la cadera se
 	# hundía): por delante, el pie no va más allá de lo que alcanza la pierna con la cadera casi a su altura
-	if z > 1.1:
-		z = 1.1 + 0.3 * tanh((z - 1.1) / 0.3)
+	if absf(z) > 1.1:
+		z = signf(z) * (1.1 + 0.3 * tanh((absf(z) - 1.1) / 0.3))
 	var x := side * (hip_x - estrecha) + eje.x * z + side * desp_x
 	if x * side < ANIM_MIN_X:
 		x = side * ANIM_MIN_X
@@ -1088,6 +1091,9 @@ func _marcha_animada(root_cf: Transform3D, frame: Transform3D, vel_h: Vector3, s
 		if stumble_until > ahora():
 			zan *= 0.7
 	zan *= 1.0 - 0.5 * lat_f
+	# Acotar el recorrido real del apoyo, también al frenar entre carrera y marcha.
+	if esc_fondo <= 0.0:
+		zan = minf(zan, 2.8 / maxf(0.2, 1.0 - fr))
 	zan = maxf(zan, 0.8)
 	# la zancada no cambia de golpe (si no, el pie que va en el aire cambia de sitio de repente)
 	anim_zan = zan if anim_w <= 0.0 or anim_zan <= 0.0 else Rbx.damp(anim_zan, zan, 5.0, dt)
@@ -1153,10 +1159,9 @@ func _marcha_animada(root_cf: Transform3D, frame: Transform3D, vel_h: Vector3, s
 		if not fk.ap_paso and fk.get("anim_lock") != null and anim_w >= 1.0:
 			var hip_g := frame * Vector3(fk.side * hip_x, 0.0, 0.0)
 			var lk: Vector3 = fk.anim_lock
-			if Vector2(lk.x - hip_g.x, lk.z - hip_g.z).length() > leg_len * 0.95 and Vector3(lk.x - hip_g.x, 0.0, lk.z - hip_g.z).dot(vel_dir * anim_sentido) < 0.0:
+			if Vector2(lk.x - hip_g.x, lk.z - hip_g.z).length() > leg_len * 0.80 and Vector3(lk.x - hip_g.x, 0.0, lk.z - hip_g.z).dot(vel_dir) < 0.0:
 				fk.ap_paso = true
-				fk.ap_x = 0.0
-				continue
+				fk.ap_x = 0.0 if anim_sentido > 0.0 else 1.0
 		_avanza_pie(fk, dphi + corr, fr)
 	ritmo_periodo = zan / maxf(v_fase, 0.1)
 	reloj_activo = true

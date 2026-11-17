@@ -1,5 +1,15 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
+## 2026-11-16 · Codex · Fluidez de pasos y alcance de zancada
+- Petición aclarada: corregir pasos trabados/exagerados. Mezcla andar/correr amortiguada;
+  alcance acotado delante y detrás, menor elevación a baja velocidad, apoyo libera antes
+  de estirar la pierna. Corregidos sentido y primer avance del despegue al retroceder.
+- `tests/pasos_suaves.gd`: alcance simétrico y continuidad, sin fallos (salto de muestra
+  máximo 0,069 studs). Recorridos andar, correr con giro y escalera ejecutados en 4.6.3.
+- Captura real lateral: `docs/fisica/pasos-suaves.gif`. Persisten resbalones puntuales
+  medidos en giros (pico andar 10,39 studs/s frente a 11,09 previo); no afirmar deslizamiento cero.
+- Fuentes generadas de Blender intactas; ajustes en resolución procedural/IK.
+
 ## 2026-11-16 · Codex · Giro anticipado del arma y transiciones suaves
 - Armas largas: margen de 12° antes de que siga el cuerpo; el arma sigue la mira con
   muelle amortiguado y límites de velocidad/aceleración. Recarga y agarre a dos manos conservados.
