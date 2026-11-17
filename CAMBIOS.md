@@ -1,3 +1,8 @@
+## 2026-11-16 — Pasos laterales y hacia atrás
+
+Mezcla direccional de carrera y velocidad ajustada a pasos rápidos de lado/atrás, evitando
+reproducir la carrera frontal a velocidad excesiva en esas direcciones.
+
 ## 2026-11-16 — Apuntado caminando y transición tras carrera
 
 Eliminada flexión adicional de piernas al caminar apuntando. Pausa de 0,16 s tras correr

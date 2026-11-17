@@ -604,16 +604,24 @@ func _suelo_valido(y: float, body_gy: float) -> bool:
 	return y <= body_gy + 1.3 and y >= body_gy - 1.3
 
 
+## La carrera frontal solo se mezcla cuando el desplazamiento acompaña al cuerpo.
+func _factor_carrera_direccion(vel: Vector3, base: Transform3D) -> float:
+	var v := Rbx.flat(vel)
+	if v.length() < 0.1:
+		return 0.0
+	return smoothstep(0.35, 0.85, v.normalized().dot(Rbx.flat(Rbx.look(base)).normalized()))
+
+
 func update_feet(root_cf: Transform3D, vel: Vector3, speed: float, dt: float, grounded: bool) -> void:
 	var body_yaw := Rbx.yaw_of(root_cf)
 	var yaw_cf := Rbx.ang(0, body_yaw, 0)
 	var vel_h := Vector3(vel.x, 0, vel.z)
-	var running := speed > 10
+	var running := speed > 10 and _factor_carrera_direccion(vel_h, root_cf) > 0.5
 	# duración del vuelo de cada pie (andando ~0.33 s; el apoyo dura más que el vuelo, como al
 	# andar de verdad). Corriendo, pasos rápidos con fase aérea
 	var step_dur := clampf(0.36 - speed * 0.005, 0.25, 0.36)
 	# corriendo el pie toca el suelo poco tiempo (no se queda atrás arrastrando la pierna)
-	var run01 := clampf((speed - 7.0) / 6.0, 0, 1)
+	var run01 := clampf((speed - 7.0) / 6.0, 0, 1) * _factor_carrera_direccion(vel_h, root_cf)
 	mez_pie_run = run01
 	var k_thr := lerpf(0.83, 0.5, run01)
 	# el pie se apoya delante de la cadera (andando más; corriendo justo bajo el cuerpo)
@@ -2466,7 +2474,7 @@ func update_rig(dt: float) -> void:
 		# MARCHA (ciclos hechos en Blender, Movimientos): la pelvis sube y baja, se desplaza sobre el pie de apoyo, gira
 		# con la pierna que avanza y cae del lado de la pierna en el aire; los hombros giran al revés y la cabeza se
 		# queda estable. Mezcla andar / correr / agachado según la velocidad; amplitud según lo deprisa que va
-		mez_run = Rbx.damp(mez_run, clampf((speed - 7.0) / 6.0, 0, 1), 6.0, dt)
+		mez_run = Rbx.damp(mez_run, clampf((speed - 7.0) / 6.0, 0, 1) * _factor_carrera_direccion(jugador.vel_real, jugador.root_cf()), 6.0, dt)
 		var v_nom := lerpf(lerpf(6.5, 18.5, mez_run), 3.5, crouch_b)
 		amp_ciclo = gait_amp * clampf(speed / v_nom, 0.45, 1.15) if grounded else Rbx.damp(amp_ciclo, 0.0, 8.0, dt)
 		ph01 = gait_ph / TAU

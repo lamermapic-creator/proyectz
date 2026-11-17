@@ -1,5 +1,12 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
+## 2026-11-16 · Codex · Marcha lateral y hacia atrás
+- Corregida mezcla de carrera frontal al desplazarse de lado/atrás: depende de dirección
+  real respecto al cuerpo. Velocidad lateral y posterior limitada a pasos rápidos, con
+  transición progresiva hacia carrera frontal al girar. Fuentes generadas intactas.
+- Compilación de ambos scripts y arranque del nivel sin errores en Godot 4.6.3.
+  Falta revisión visual interactiva de las tres direcciones.
+
 ## 2026-11-16 · Codex · Transición breve tras correr
 - Pausa de 0,16 s tras sprint antes de apuntar, subir o levantar moto. Mantener clic derecho
   completa el apuntado al terminar la pausa y detiene sprint. Al caminar apuntando se elimina

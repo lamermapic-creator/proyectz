@@ -1324,6 +1324,9 @@ func update_character(dt: float) -> void:
 	if sprinting:
 		# de frente a tope; de lado ~60 %; hacia atrás ~50 %
 		speed *= 0.6 + 0.4 * pow(fwd_k, 1.5) - 0.1 * back_k
+		# Pasos tácticos laterales/atrás: no arrastrar la marcha a velocidad de carrera frontal.
+		if stance == 0:
+			speed = minf(speed, lerpf(C.PLAYER.WalkSpeed * (1.3 - 0.1 * back_k), C.PLAYER.SprintSpeed, pow(fwd_k, 2.0)))
 	else:
 		speed *= 0.9 + 0.1 * fwd_k - 0.12 * back_k
 	# cansancio: por debajo del 40 % de estamina se va notando; agotado, del todo
