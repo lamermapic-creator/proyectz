@@ -43,6 +43,7 @@ var arma_alzada := 0.0 # 0-1: arma levantada por tener una pared delante (no se 
 var conv_w := 0.0 # 0-1: cuánto se orienta el cañón hacia el punto de la mira
 var conv_q := Quaternion.IDENTITY
 var _ajuste_mira := Quaternion.IDENTITY
+var _recogida_cerca := 0.0
 var agache_techo := 0.0 # agachado bajo un techo bajo: cuánto más se agacha
 var lat_k := 0.0 # 0-1: cuánto se anda de lado (pasos laterales)
 var prev_lv := Vector3.ZERO
@@ -2903,6 +2904,12 @@ func update_rig(dt: float) -> void:
 		_soltar_mano_moto()
 		if J.arsenal.cfg().get("Kind", "") == "Gun" and (aiming or L.firing or now - last_shot_t < 0.45):
 			rel_obj = Rbx.wrap_a(float(L.yaw) - yaw)
+			if aiming:
+				var punto_cerca := J.arsenal.punto_mira()
+				var hacia_cerca := punto_cerca - chest_cf.origin
+				if hacia_cerca.length() < 10.0 and hacia_cerca.length() > 0.3:
+					var rumbo_cerca := atan2(-hacia_cerca.x, -hacia_cerca.z)
+					rel_obj += Rbx.wrap_a(rumbo_cerca - float(L.yaw)) * (1.0 - smoothstep(6.0, 10.0, hacia_cerca.length()))
 	if mt != null:
 		# en la moto el torso y el brazo giran como un cuerpo de verdad (2026-11-01): muelle críticamente
 		# amortiguado con velocidad máxima (antes, con un suavizado simple, un tirón del ratón movía la mano a
@@ -3294,6 +3301,18 @@ func update_rig(dt: float) -> void:
 							fuera_saca = Rbx.smooth(clampf((u3 - 0.1) / 0.45, 0, 1))
 						support_w = Rbx.smooth(clampf((u3 - 0.7) / 0.3, 0, 1))
 
+		# Recoger el arma antes de que la boca sobrepase un blanco pegado.
+		var recogida_cerca_obj := 0.0
+		if aiming and kind == "Gun" and mt == null and mdl and mdl.has_node("Muzzle") and draw_st == null and holster_t == null and not reloading:
+			var punto_pegado := J.arsenal.punto_mira()
+			var eje_pegado := -handle_cf.basis.z.normalized()
+			var boca_pegada: Vector3 = handle_cf * (mdl.get_node("Muzzle") as Node3D).position
+			if punto_pegado.distance_to(handle_cf.origin) < 6.0:
+				var delante_boca := (punto_pegado - boca_pegada).dot(eje_pegado)
+				recogida_cerca_obj = clampf(0.8 - delante_boca, 0.0, 1.5)
+		_recogida_cerca = Rbx.damp(_recogida_cerca, recogida_cerca_obj, 8.0, dt)
+		if kind == "Gun":
+			handle_cf.origin += handle_cf.basis.z.normalized() * _recogida_cerca
 		# apuntando o disparando, el cañón se orienta hacia lo que marca la mira (la cámara va al hombro,
 		# así que sin esto el arma iba paralela a la mira y la bala salía con otra inclinación). La bala
 		# sale en la dirección del cañón (Arsenal.shoot), así que lo que se ve es lo que pasa
@@ -3308,8 +3327,15 @@ func update_rig(dt: float) -> void:
 			var mz_w := handle_cf * mz_l
 			var d0 := (-handle_cf.basis.z).normalized()
 			var obj: Vector3 = J.arsenal.punto_mira() - mz_w
-			if obj.length() > 3.0 and d0.angle_to(obj) < deg_to_rad(35):
-				var q := Quaternion(d0, obj.normalized())
+			if obj.length() > 0.25 and d0.angle_to(obj) < deg_to_rad(110 if obj.length() < 4.0 else 35):
+				# Resolver el paralaje desde la empuñadura, sin iteraciones que oscilen cerca.
+				var objetivo_mira := J.arsenal.punto_mira()
+				var desde_grip := objetivo_mira - handle_cf.origin
+				var alineado := handle_cf
+				if desde_grip.length() > absf(mz_l.y) + 0.05:
+					var base_mira := Basis.looking_at(desde_grip.normalized(), handle_cf.basis.y)
+					alineado.basis = base_mira * Basis(Vector3.RIGHT, -asin(clampf(mz_l.y / desde_grip.length(), -0.95, 0.95)))
+				var q := (alineado.basis * handle_cf.basis.inverse()).get_rotation_quaternion()
 				conv_q = conv_q.slerp(q, 1.0 - exp(-25.0 * dt))
 			else:
 				# la mira está pegada al arma (blanco encima) o muy desviada: sin corrección
@@ -3319,12 +3345,16 @@ func update_rig(dt: float) -> void:
 				var boca_real := mdl.get_node("Muzzle") as Node3D
 				var hacia := J.arsenal.punto_mira() - boca_real.global_position
 				var eje_real := -boca_real.global_basis.z.normalized()
-				if hacia.length() > 3.0 and eje_real.angle_to(hacia) < deg_to_rad(5):
+				var ajuste_cerca := hacia.length() < 4.0
+				if hacia.length() > 0.25 and eje_real.angle_to(hacia) < deg_to_rad(45 if ajuste_cerca else 5):
 					var error_mira := Quaternion(eje_real, hacia.normalized())
 					_ajuste_mira = (Quaternion.IDENTITY.slerp(error_mira, 1.0 - exp(-4.0 * dt)) * _ajuste_mira).normalized()
 					var angulo_ajuste := _ajuste_mira.get_angle()
-					if angulo_ajuste > deg_to_rad(3):
-						_ajuste_mira = Quaternion.IDENTITY.slerp(_ajuste_mira, deg_to_rad(3) / angulo_ajuste)
+					var limite_ajuste := deg_to_rad(15 if ajuste_cerca else 3)
+					if angulo_ajuste > limite_ajuste:
+						_ajuste_mira = Quaternion.IDENTITY.slerp(_ajuste_mira, limite_ajuste / angulo_ajuste)
+				else:
+					_ajuste_mira = _ajuste_mira.slerp(Quaternion.IDENTITY, 1.0 - exp(-8.0 * dt))
 			else:
 				_ajuste_mira = _ajuste_mira.slerp(Quaternion.IDENTITY, 1.0 - exp(-8.0 * dt))
 			var qw := _ajuste_mira * Quaternion.IDENTITY.slerp(conv_q, conv_w)

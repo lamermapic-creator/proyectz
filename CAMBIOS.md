@@ -1,3 +1,9 @@
+## 2026-11-17 — Facilitar disparos a corta distancia
+
+Corregidos paralaje de cámara lateral, corte de alineación a menos de 3 studs y sobrepaso
+del cañón en blancos pegados. Postura y arma se adaptan suavemente a la distancia; las
+balas mantienen dirección física. Pruebas a 3/5/8 studs con tres armas y regresión lejana.
+
 ## 2026-11-17 — Actualizar mapa del proyecto
 
 Añadido `docs/MAPA_PROYECTO.md` con estado vigente, archivos, pruebas y límites de cobertura

@@ -9,7 +9,8 @@ Base de código verificada: `2f0e2282ad3cbe51ca1d99cc3307e8d4a60c523b` (main al 
 - Cobertura parcial: la consulta general recupera principalmente fuentes Python de Blender;
   `graphify_file_neighbors(file="scripts/jugador/jugador.gd")` devuelve archivo no encontrado.
   Esto NO significa que el archivo ni sus dependencias estén ausentes del proyecto.
-- Este mapa combina Graphify con el checkout actual. Los cambios de esta entrega son documentación.
+- Este mapa combina Graphify con el checkout y revisiones posteriores; el apartado de corto
+  alcance fue actualizado el 2026-11-17. El snapshot del grafo puede quedar atrás del código.
 - Consultar con `repository_id="lamermapic-creator/proyectz"` y empezar por
   `query_graph(skeleton=true, budget=1000–2000)`. Ampliar solo símbolos necesarios.
 - Comparar siempre `commitSha` con HEAD y leer archivos actuales ante resultados vacíos,
@@ -53,7 +54,9 @@ Base de código verificada: `2f0e2282ad3cbe51ca1d99cc3307e8d4a60c523b` (main al 
 - `Arsenal.salida_bala()` toma posición y dirección del **Muzzle real**, con dispersión del arma.
   Eliminadas correcciones de trayectoria hacia mira/pecho; sin Muzzle visible no dispara.
 - `Animador` alinea suavemente la postura del arma con el punto de mira al estabilizar apuntado:
-  corrección de muñeca máxima 3°, pausada durante retroceso y giros rápidos. No desvía la bala.
+  corrección de muñeca máxima 3° lejos y 15° cerca, pausada durante retroceso y giros rápidos. No desvía la bala.
+- A corta distancia, cuerpo/arma convergen al punto de mira y el arma se recoge suavemente;
+  sin el antiguo corte de convergencia a 3 studs. `tests/precision_cerca.gd`: tres armas a 3/5/8 studs.
 - `scripts/fisica/impacto_balistico.gd`: reacción localizada de articulaciones; estado transferido al ragdoll.
 - `scripts/fisica/ragdoll.gd`: cuerpos/articulaciones Jolt, impacto localizado y cadáveres alcanzables.
   NPC/zombis sortean pérdida de apoyo, torso/brazos/caderas y 4–7 contracciones breves decrecientes.

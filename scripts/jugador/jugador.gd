@@ -1500,9 +1500,16 @@ func update_character(dt: float) -> void:
 				rotation = Vector3(0, cy + Rbx.wrap_a(ty - cy) * minf(1, dt * 8), 0)
 		elif not sprinting and (aiming or arsenal.armado()):
 			# con arma o apuntando, el cuerpo sigue a la mira con algo de peso
-			var diff2 := Rbx.wrap_a(yaw - cy)
+			var yaw_apuntado := yaw
+			if aiming and arsenal.cfg().get("Kind", "") == "Gun":
+				var punto_cerca := arsenal.punto_mira()
+				var hacia_cerca := Rbx.flat(punto_cerca - global_position)
+				if hacia_cerca.length() > 0.3 and hacia_cerca.length() < 10.0:
+					var giro_cerca := atan2(-hacia_cerca.x, -hacia_cerca.z)
+					yaw_apuntado += Rbx.wrap_a(giro_cerca - yaw) * (1.0 - smoothstep(6.0, 10.0, hacia_cerca.length()))
+			var diff2 := Rbx.wrap_a(yaw_apuntado - cy)
 			var margen := deg_to_rad(4.0) if arsenal.cfg().get("Slot", "") == "Larga" and (aiming or firing) else 0.0
-			_girar_cuerpo_hacia(yaw - signf(diff2) * minf(absf(diff2), margen), dt, 6.0)
+			_girar_cuerpo_hacia(yaw_apuntado - signf(diff2) * minf(absf(diff2), margen), dt, 6.0)
 		else:
 			# sin arma o corriendo: el cuerpo sigue el movimiento; los pies tienen tiempo de dar
 			# sus pasos y las piernas no se cruzan al machacar WASD

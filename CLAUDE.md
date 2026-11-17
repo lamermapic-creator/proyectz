@@ -1,5 +1,15 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
+## 2026-11-17 · Codex · Apuntado a blancos cercanos
+- Eliminado corte de convergencia a 3 studs. Cuerpo y rumbo del arma acompañan al punto
+  cercano de la mira (transición 6–10 studs), compensando cámara lateral. Arma se recoge
+  suavemente si la boca sobrepasa al blanco. No se modifica la trayectoria de la bala.
+- Convergencia analítica de empuñadura/cañón, evitando iteraciones inestables cerca; ajuste
+  fino acotado hasta 15° cerca y 3° lejos, con retorno al salir del margen.
+- `tests/precision_cerca.gd`: rifle/pistola/escopeta a 3/5/8 studs; alineación y rayo físico.
+  Nueve casos pasan (<0,14°); precisión lejana, salida de cañón 25/25 y balística 97/97
+  también comprobadas en Godot 4.6.3. Postura cercana inspeccionada en captura real.
+
 ## 2026-11-17 · Codex · Mapa actualizado
 - Mapa compartido en `docs/MAPA_PROYECTO.md`, base de código 2f0e228.
 - Graphify coincide con esa base: 216 nodos/389 relaciones; cobertura parcial, no encuentra
