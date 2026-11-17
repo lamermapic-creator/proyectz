@@ -1,5 +1,13 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
+## 2026-11-16 · Codex · Giro anticipado del arma y transiciones suaves
+- Armas largas: margen de 12° antes de que siga el cuerpo; el arma sigue la mira con
+  muelle amortiguado y límites de velocidad/aceleración. Recarga y agarre a dos manos conservados.
+- Armas cortas: agarre de una mano también al apuntar o disparar parado; mano izquierda
+  libre salvo tareas como recarga. Giro corporal con aceleración/frenado en carrera y mira.
+- `tests/giros_fluidos.gd`: cambio de sentido a 30/60/120 FPS, límites 300°/s y 1200°/s²;
+  todos pasan. Nivel, pistola y rifle ejecutados en Godot 4.6.3; revisión visual pendiente.
+
 ## 2026-11-16 · Codex · Disparo durante carrera y frenada de combate
 - Pistola: disparar sin apuntar mantiene sprint y orientación de carrera; brazo derecho
   usa IK del arma y la izquierda queda libre. Torso/cuello acompañan el tiro gradualmente.

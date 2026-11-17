@@ -1,3 +1,9 @@
+## 2026-11-16 — Arma primero y giros suaves
+
+El arma larga inicia el giro con margen respecto al cuerpo. Armas cortas con una mano,
+excepto durante la recarga. Giro de arma y cuerpo con aceleración y frenado progresivos.
+Prueba de inversión de giro a 30, 60 y 120 FPS incluida.
+
 ## 2026-11-16 — Carrera con pistola y frenada antes de golpear
 
 Disparar con pistola desde la cadera mantiene la carrera y libera el brazo izquierdo.

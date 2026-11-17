@@ -35,6 +35,7 @@ const PAUSA_TRAS_CARRERA := 0.16
 var _carrera_hasta := -9.0
 var _apuntar_pedido := false
 var _frenar_combate_hasta := -9.0
+var _vel_giro_cuerpo := 0.0
 var _salto_pedido := false
 var _salto_t := -9.0               # último salto (para agarrarse a un borde en el aire)
 var colgado = null               # colgado de una cornisa (ver step_colgado)
@@ -1256,6 +1257,18 @@ func _paso_salud(dt: float) -> void:
 		get_tree().reload_current_scene()
 
 
+## Giro con aceleración y frenada, sin saltos al cambiar de dirección.
+func _girar_cuerpo_hacia(destino: float, dt: float, rapidez: float) -> void:
+	var error := Rbx.wrap_a(destino - rotation.y)
+	var objetivo := clampf(error * rapidez, -deg_to_rad(300), deg_to_rad(300))
+	_vel_giro_cuerpo = move_toward(_vel_giro_cuerpo, objetivo, deg_to_rad(1200) * dt)
+	var paso := _vel_giro_cuerpo * dt
+	if paso * error > 0.0 and absf(paso) > absf(error):
+		paso = error
+		_vel_giro_cuerpo = 0.0
+	rotation.y += paso
+
+
 func update_character(dt: float) -> void:
 	if health <= 0:
 		if vaulting != null:
@@ -1488,18 +1501,15 @@ func update_character(dt: float) -> void:
 		elif not sprinting and (aiming or arsenal.armado()):
 			# con arma o apuntando, el cuerpo sigue a la mira con algo de peso
 			var diff2 := Rbx.wrap_a(yaw - cy)
-			rotation = Vector3(0, cy + clampf(diff2 * minf(1, dt * 6), -deg_to_rad(300) * dt, deg_to_rad(300) * dt), 0)
+			var margen := deg_to_rad(12.0) if arsenal.cfg().get("Slot", "") == "Larga" and (aiming or firing) else 0.0
+			_girar_cuerpo_hacia(yaw - signf(diff2) * minf(absf(diff2), margen), dt, 6.0)
 		else:
 			# sin arma o corriendo: el cuerpo sigue el movimiento; los pies tienen tiempo de dar
 			# sus pasos y las piernas no se cruzan al machacar WASD
 			var md := move_direction
 			if md.length() > 0.1 and getup_p <= 0:
 				var ty := atan2(-md.x, -md.z)
-				var diff3 := Rbx.wrap_a(ty - cy)
-				var max_step := deg_to_rad(400 if stance == 1 else 560) * dt
-				var step_a := clampf(diff3 * minf(1, dt * 10), -max_step, max_step)
-				if absf(step_a) > 1e-5:
-					rotation = Vector3(0, cy + step_a, 0)
+				_girar_cuerpo_hacia(ty, dt, 10.0)
 
 	# estado para el sistema de animación
 	L.pitch = pitch

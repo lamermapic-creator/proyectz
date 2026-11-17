@@ -117,6 +117,7 @@ var moto_pose: Array = []    # pose de Blender de este fotograma: Waist, Neck, R
 var moto_corr_q := Quaternion.IDENTITY # pequeña corrección de la muñeca para que el cañón vaya a la mira
 var feet_aim := 0.0
 var _entrada_apuntar := 0.0
+var _vel_giro_arma_pie := 0.0
 var prone_rel := 0.0
 var w_side := {"L": 0.0, "R": 0.0}
 var step_k := 0.4
@@ -2888,7 +2889,7 @@ func update_rig(dt: float) -> void:
 			rel_obj = clampf(Rbx.wrap_a(float(L.yaw) - yaw), -GOLPE_MOTO_DER, GOLPE_MOTO_IZQ)
 	else:
 		_soltar_mano_moto()
-		if L.sprinting and (L.firing or now - last_shot_t < 0.45):
+		if J.arsenal.cfg().get("Kind", "") == "Gun" and (aiming or L.firing or now - last_shot_t < 0.45):
 			rel_obj = Rbx.wrap_a(float(L.yaw) - yaw)
 	if mt != null:
 		# en la moto el torso y el brazo giran como un cuerpo de verdad (2026-11-01): muelle críticamente
@@ -2899,7 +2900,14 @@ func update_rig(dt: float) -> void:
 		moto_giro_vel = mr[1]
 	else:
 		moto_giro_vel = 0.0
-		rel_aim = Rbx.damp(rel_aim, rel_obj, 3.5 if prone_aim else 5.0, dt)
+		if prone_aim:
+			rel_aim = Rbx.damp(rel_aim, rel_obj, 3.5, dt)
+			_vel_giro_arma_pie = 0.0
+		else:
+			var destino_pie := rel_aim + Rbx.wrap_a(rel_obj - rel_aim)
+			var giro_pie := _muelle_lim(rel_aim, _vel_giro_arma_pie, destino_pie, 12.0, deg_to_rad(540), deg_to_rad(2400), dt)
+			rel_aim = Rbx.wrap_a(giro_pie[0])
+			_vel_giro_arma_pie = giro_pie[1]
 	if mt != null:
 		if moto_fuego:
 			# APUNTADO EN LA MOTO: la pose (cintura, cuello y brazo derecho) sale de las poses hechas en Blender
@@ -3370,7 +3378,7 @@ func update_rig(dt: float) -> void:
 			hand_ik.L = {"pos": pos, "pole": pole_l, "w": 1.0}
 			left_free = false
 		elif support and h_arma == "R":
-			var one_handed: bool = (Armas.base(tool) == "Pistola" and L.sprinting and not aiming) or (kind == "Melee" and not Armas.dos_manos(tool)) \
+			var one_handed: bool = (kind == "Gun" and w_cfg.get("Slot", "") == "Corta") or (kind == "Melee" and not Armas.dos_manos(tool)) \
 				or mt != null # en la moto la izquierda va en el manillar
 			if not one_handed:
 				hand_ik.L = {"pos": handle_cf * support_pos, "pole": pole_l, "w": support_w}
