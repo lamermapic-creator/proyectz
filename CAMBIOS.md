@@ -1,3 +1,9 @@
+## 2026-11-16 — Carrera con pistola y frenada antes de golpear
+
+Disparar con pistola desde la cadera mantiene la carrera y libera el brazo izquierdo.
+Torso y cabeza acompañan el tiro suavemente. Los golpes pedidos al correr esperan una
+frenada breve antes de ejecutarse; giro hacia la mira más gradual.
+
 ## 2026-11-16 — Entrada suave al apuntado
 
 Arma y postura entran más lentamente al apuntar; el codo respira conservando el agarre.

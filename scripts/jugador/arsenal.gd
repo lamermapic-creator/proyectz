@@ -892,7 +892,23 @@ func _confirmar(killed: bool, headshot: bool) -> void:
 
 
 ## ---------------------------------------------------------------- cuerpo a cuerpo
+var _golpe_tras_frenar := ""
+var _golpe_caduca := -9.0
+
+func _esperar_frenada(tipo: String) -> bool:
+	if J.moto != null:
+		return false
+	if J.L.sprinting or (Rbx.flat(J.vel_real).length() > C.PLAYER.WalkSpeed * 1.1):
+		_golpe_tras_frenar = tipo
+		_golpe_caduca = ahora() + 0.7
+		J._frenar_combate_hasta = ahora() + 0.25
+		return true
+	return false
+
+
 func melee() -> void:
+	if _esperar_frenada("arma"):
+		return
 	if recogiendo != null:
 		return
 	var w := cfg()
@@ -1190,6 +1206,8 @@ func pisoton() -> void:
 ## SIN ARMA, clic izquierdo: puñetazos encadenados (directo, cruzado, gancho, gancho de abajo; si pasa un rato, vuelve
 ## a empezar por el directo)
 func punetazo() -> void:
+	if _esperar_frenada("puno"):
+		return
 	if equipado != "" or not cc_puede():
 		return
 	var now := ahora()
@@ -1560,6 +1578,16 @@ func _cc_atacante(desde: Vector3):
 ## ---------------------------------------------------------------- cada fotograma
 func actualizar(dt: float) -> void:
 	var now := ahora()
+	if _golpe_tras_frenar != "":
+		if now > _golpe_caduca or J.health <= 0 or J.ragdoll != null or J.moto != null:
+			_golpe_tras_frenar = ""
+		else:
+			J._frenar_combate_hasta = now + 0.25
+			if not J.L.sprinting and Rbx.flat(J.vel_real).length() <= C.PLAYER.WalkSpeed * 1.1:
+				var pedido := _golpe_tras_frenar
+				_golpe_tras_frenar = ""
+				if pedido == "arma": melee()
+				else: punetazo()
 	_cc_paso(dt)
 	if recogiendo != null:
 		_paso_recoger()

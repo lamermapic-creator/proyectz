@@ -2888,6 +2888,8 @@ func update_rig(dt: float) -> void:
 			rel_obj = clampf(Rbx.wrap_a(float(L.yaw) - yaw), -GOLPE_MOTO_DER, GOLPE_MOTO_IZQ)
 	else:
 		_soltar_mano_moto()
+		if L.sprinting and (L.firing or now - last_shot_t < 0.45):
+			rel_obj = Rbx.wrap_a(float(L.yaw) - yaw)
 	if mt != null:
 		# en la moto el torso y el brazo giran como un cuerpo de verdad (2026-11-01): muelle críticamente
 		# amortiguado con velocidad máxima (antes, con un suavizado simple, un tirón del ratón movía la mano a
@@ -2917,6 +2919,9 @@ func update_rig(dt: float) -> void:
 		var rel_a := clampf(Rbx.wrap_a(ay - axis), -0.35, 0.35)
 		prone_rel = Rbx.damp(prone_rel, rel_a, 6, dt)
 		waistY += prone_rel * 0.35 # el torso acompaña un poco el margen de los brazos
+	if mt == null and L.sprinting and (L.firing or now - last_shot_t < 0.45):
+		waistY += clampf(rel_aim * 0.4, -0.6, 0.6)
+		neckY += clampf(rel_aim * 0.3, -0.5, 0.5)
 	var rl_now := rl if pb > 0.5 else 0.0
 
 	## ------------------------------------------------ brazos
@@ -3365,7 +3370,7 @@ func update_rig(dt: float) -> void:
 			hand_ik.L = {"pos": pos, "pole": pole_l, "w": 1.0}
 			left_free = false
 		elif support and h_arma == "R":
-			var one_handed: bool = (Armas.base(tool) == "Pistola" and sprinting and not aiming) or (kind == "Melee" and not Armas.dos_manos(tool)) \
+			var one_handed: bool = (Armas.base(tool) == "Pistola" and L.sprinting and not aiming) or (kind == "Melee" and not Armas.dos_manos(tool)) \
 				or mt != null # en la moto la izquierda va en el manillar
 			if not one_handed:
 				hand_ik.L = {"pos": handle_cf * support_pos, "pole": pole_l, "w": support_w}

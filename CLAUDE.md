@@ -1,5 +1,14 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
+## 2026-11-16 · Codex · Disparo durante carrera y frenada de combate
+- Pistola: disparar sin apuntar mantiene sprint y orientación de carrera; brazo derecho
+  usa IK del arma y la izquierda queda libre. Torso/cuello acompañan el tiro gradualmente.
+- Armas largas conservan frenada al disparar. Giro hacia la mira limitado a 300 grados/s.
+- Puñetazo/golpe de arma pedido al correr espera hasta velocidad de paso; caduca a 0,7 s.
+  La guardia de clic derecho también espera la frenada. Sin cambios en fuentes generadas.
+- Godot 4.6.3: compilación/arranque limpios, cc_manos OK y banco de frenada + pistola OK.
+  Falta revisión visual interactiva de disparos en todas las direcciones.
+
 ## 2026-11-16 · Codex · Apuntado más fluido
 - Entrada progresiva de 0,45 s al apuntar: interpolación inicial más lenta, recupera
   rapidez al completar la postura. Codo con respiración leve conservando agarre IK.

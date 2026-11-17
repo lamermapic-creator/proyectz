@@ -34,6 +34,7 @@ var vel_real := Vector3.ZERO      # root.AssemblyLinearVelocity
 const PAUSA_TRAS_CARRERA := 0.16
 var _carrera_hasta := -9.0
 var _apuntar_pedido := false
+var _frenar_combate_hasta := -9.0
 var _salto_pedido := false
 var _salto_t := -9.0               # último salto (para agarrarse a un borde en el aire)
 var colgado = null               # colgado de una cornisa (ver step_colgado)
@@ -1273,8 +1274,8 @@ func update_character(dt: float) -> void:
 	# estamina y velocidad
 	var moving := move_direction.length() > 0.1
 	if _apuntar_pedido:
-		aiming = ahora() >= _carrera_hasta
-	var want_sprint := Input.is_physical_key_pressed(KEY_SHIFT) and moving and not aiming and not firing and not _apuntar_pedido
+		aiming = ahora() >= _carrera_hasta and (arsenal.cfg().get("Kind", "") == "Gun" or Rbx.flat(vel_real).length() <= C.PLAYER.WalkSpeed * 1.1)
+	var want_sprint: bool = Input.is_physical_key_pressed(KEY_SHIFT) and moving and not aiming and not _apuntar_pedido and ahora() >= _frenar_combate_hasta and (not firing or arsenal.cfg().get("Slot", "") == "Corta")
 	if arsenal.cc.accion != null and arsenal.cc.accion.tipo in ["patada", "pisoton"]:
 		want_sprint = false
 	# tumbado: Shift = reptar rápido (solo boca abajo y ya tumbado); agachado se corre agachado
@@ -1487,7 +1488,7 @@ func update_character(dt: float) -> void:
 		elif not sprinting and (aiming or arsenal.armado()):
 			# con arma o apuntando, el cuerpo sigue a la mira con algo de peso
 			var diff2 := Rbx.wrap_a(yaw - cy)
-			rotation = Vector3(0, cy + diff2 * minf(1, dt * 10), 0)
+			rotation = Vector3(0, cy + clampf(diff2 * minf(1, dt * 6), -deg_to_rad(300) * dt, deg_to_rad(300) * dt), 0)
 		else:
 			# sin arma o corriendo: el cuerpo sigue el movimiento; los pies tienen tiempo de dar
 			# sus pasos y las piernas no se cruzan al machacar WASD
@@ -1512,7 +1513,7 @@ func update_character(dt: float) -> void:
 	L.stanceT = stance_change_t
 	L.stanceFrom = stance_from
 	L.proneP = prone_p
-	L.yaw = rotation.y if sprinting else yaw
+	L.yaw = rotation.y if sprinting and not firing else yaw
 	L.supine = supine
 	if L.levanta_arriba != null and (stance == 2 or prone_p <= 0.001):
 		L.levanta_arriba = null
