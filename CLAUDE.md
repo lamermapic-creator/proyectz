@@ -1,5 +1,13 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
+## 2026-11-16 · Codex · Alinear mira con cañón al terminar de apuntar
+- Tras quitar la asistencia de trayectoria quedó visible el error residual de postura/IK.
+  Servo angular pequeño (máximo 3°) sobre la postura de muñeca, solo apuntado estabilizado,
+  sin recarga/obstáculo ni giro grande. Corrige el arma visible; no cambia las balas.
+- `tests/precision_mira.gd`: mide cañón real contra punto de mira con rifle, pistola y escopeta.
+  Error máximo asentado <0,05° en pruebas a 30/60 FPS (rifle previo ~0,385°); salida física 25/25.
+  Conservadas dispersión, reacción y desalineación durante transiciones. Godot 4.6.3.
+
 ## 2026-11-16 · Codex · Bala alineada con cañón real
 - Eliminada corrección de salida hacia punto de mira y salida desde pecho para blancos
   pegados. Dirección siempre del Muzzle, más dispersión; colisiones de arma conservadas.
