@@ -1,5 +1,13 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
+## 2026-11-17 · Codex · Agarre y mejora de iluminación
+- Grip de armas de fuego calibrado por posición/inclinación; mano de apoyo con objetivo
+  completo de palma, no solo posición. Agarre corto a una mano y recarga conservados.
+- Nivel: cielo frío, sol cálido sutil, ACES, sombras suaves/cascadas mezcladas, SSAO ajustado,
+  glow moderado y niebla ligera; se conserva saturación gris y estilo cuadrado.
+- `tests/agarre_armas.gd`, precisión cercana/lejana y disparo/recarga ejecutados en 4.6.3.
+  Capturas reales y alcance de validación: `docs/AGARRE_Y_GRAFICOS.md`. No se midió rendimiento GPU.
+
 ## 2026-11-17 · Codex · Tumbarse rápido desde carrera
 - Z corriendo de pie y en suelo: transición corporal de 0,4 s y deslizamiento frenado de
   hasta 0,45 s en dirección/velocidad reales, con tope de velocidad de sprint.

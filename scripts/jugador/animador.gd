@@ -3440,7 +3440,8 @@ func update_rig(dt: float) -> void:
 			var one_handed: bool = (kind == "Gun" and w_cfg.get("Slot", "") == "Corta") or (kind == "Melee" and not Armas.dos_manos(tool)) \
 				or mt != null # en la moto la izquierda va en el manillar
 			if not one_handed:
-				hand_ik.L = {"pos": handle_cf * support_pos, "pole": pole_l, "w": support_w}
+				# Anclar palma y orientación al guardamanos; no solo la punta del brazo.
+				hand_ik.L = {"cf": handle_cf * Rbx.cfp(support_pos) * Armas.grip_att().affine_inverse(), "pole": pole_l, "w": support_w}
 				left_free = false
 		# combate cuerpo a cuerpo (CombateCC): la mano izquierda. Con arma corta (cuchillo, pistola) va donde diga la pose
 		# (guardando la cara, empujando con la palma o con el antebrazo); con arma larga, al bloquear y al empujar agarra

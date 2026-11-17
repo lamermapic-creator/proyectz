@@ -1,3 +1,9 @@
+## 2026-11-17 — Agarre de armas y gráficos del nivel
+
+Empuñaduras ajustadas al modelo y palma izquierda anclada al guardamanos con orientación
+completa. Mejoradas paleta del cielo, luz, sombras, tonemapping y profundidad ambiental.
+Se conserva el estilo cuadrado y gris. Detalle y capturas: `docs/AGARRE_Y_GRAFICOS.md`.
+
 ## 2026-11-17 — Tumbarse rápido al correr
 
 Z durante la carrera permite tirarse cuerpo a tierra en 0,4 s, con un breve deslizamiento

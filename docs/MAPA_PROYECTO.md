@@ -26,9 +26,10 @@ Base de código verificada: `2f0e2282ad3cbe51ca1d99cc3307e8d4a60c523b` (main al 
 - Jugar → `escenas/pruebas_movimiento.tscn`.
 - `scripts/ui/fondo_menu.gd`: cuarentena nocturna; zombis decorativos sin IA.
 - `scripts/ui/atmosfera_menu.gdshader`, `suelo_menu.gdshader`: efectos visuales del fondo.
-- `scripts/nivel/nivel_pruebas.gd`: escenario, maniquíes, zombis y motos.
+- `scripts/nivel/nivel_pruebas.gd`: escenario, maniquíes, zombis y motos; cielo frío, sol cálido
+  sutil, ACES, sombras suaves y niebla ligera. Ver `docs/AGARRE_Y_GRAFICOS.md`.
 - Filtro gris suave en los Environment del nivel y fondo del menú: saturación 0,78,
-  brillo/contraste 0,98. No afecta al HUD. `scripts/ui/opciones.gd`: calidad y opciones.
+  brillo 0,98; contraste 1,03 en nivel / 0,98 en menú. No afecta al HUD. `scripts/ui/opciones.gd`: calidad y opciones.
 
 ## Jugador, movimiento y animación
 
@@ -53,6 +54,8 @@ Base de código verificada: `2f0e2282ad3cbe51ca1d99cc3307e8d4a60c523b` (main al 
 
 - `scripts/jugador/arsenal.gd`: inventario, disparo, recarga, guardia y cuerpo a cuerpo.
 - `scripts/armas/armas.gd`, `modelos_armas.gd` y resto de `scripts/armas/`: datos, modelos y efectos.
+- `Armas.grip()`: referencia por empuñadura; apoyo izquierdo con posición y orientación IK.
+  `tests/agarre_armas.gd` comprueba el contacto de las manos.
 - `Arsenal.salida_bala()` toma posición y dirección del **Muzzle real**, con dispersión del arma.
   Eliminadas correcciones de trayectoria hacia mira/pecho; sin Muzzle visible no dispara.
 - `Animador` alinea suavemente la postura del arma con el punto de mira al estabilizar apuntado:

@@ -141,23 +141,41 @@ func _construir() -> void:
 	sol.rotation_degrees = Vector3(-50, -35, 0)
 	sol.shadow_enabled = true
 	sol.light_energy = 1.2
+	sol.light_color = Color("ffe9d8")
+	sol.light_angular_distance = 0.6
+	sol.directional_shadow_blend_splits = true
 	g.add_child(sol)
 
 	var we := WorldEnvironment.new()
 	we.name = "Ambiente"
 	var env := Environment.new()
 	var cielo := Sky.new()
-	cielo.sky_material = ProceduralSkyMaterial.new()
+	var cielo_mat := ProceduralSkyMaterial.new()
+	cielo_mat.sky_top_color = Color("556b82")
+	cielo_mat.sky_horizon_color = Color("b0b8bd")
+	cielo_mat.ground_bottom_color = Color("343b41")
+	cielo_mat.ground_horizon_color = Color("b0b8bd")
+	cielo.sky_material = cielo_mat
 	env.background_mode = Environment.BG_SKY
 	env.sky = cielo
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.ambient_light_energy = 0.65
+	env.tonemap_mode = Environment.TONE_MAPPER_ACES
 	env.ssao_enabled = true
+	env.ssao_radius = 1.0
+	env.ssao_intensity = 1.2
+	env.ssao_detail = 0.6
+	env.glow_intensity = 0.3
+	env.glow_hdr_threshold = 1.3
+	env.fog_enabled = true
+	env.fog_light_color = Color("a5b2bf")
+	env.fog_density = 0.0015
+	env.fog_sky_affect = 0.25
 	# Gris suave en la imagen 3D: ambiente apagado sin teñir el HUD.
 	env.adjustment_enabled = true
 	env.adjustment_saturation = 0.78
 	env.adjustment_brightness = 0.98
-	env.adjustment_contrast = 0.98
+	env.adjustment_contrast = 1.03
 	we.environment = env
 	g.add_child(we)
 

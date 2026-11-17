@@ -143,18 +143,18 @@ static func holster(nombre: String) -> Dictionary:
 	return {}
 
 
-## Tool.Grip (GripPos con orientación identidad en todas las armas)
+## Grip calibrado al centro e inclinación de la empuñadura visible de cada arma.
 static func grip(nombre: String) -> Transform3D:
 	match nombre:
-		"Pistola": return cf(0, -0.066 * ModelosArmas.escala("Pistola"), 0.066 * ModelosArmas.escala("Pistola"))
-		"Rifle": return cf(0, -0.049, 0.049)
+		"Pistola": return cf(0, -0.06 * ModelosArmas.escala("Pistola"), 0.03 * ModelosArmas.escala("Pistola")) * Rbx.ang(deg_to_rad(-10), 0, 0)
+		"Rifle": return cf(0, -0.05, 0.01) * Rbx.ang(deg_to_rad(-18), 0, 0)
 		"Machete": return cf(0, 0, 0.05)
 		"Bate": return cf(0, 0, 0.18)
 		"Cuchillo": return cf(0, 0, 0.04)
-		"Revolver": return cf(0, -0.06, 0.07)
-		"Subfusil": return cf(0, -0.05, 0.05)
-		"Escopeta": return cf(0, -0.05, 0.05)
-		"Francotirador": return cf(0, -0.05, 0.05)
+		"Revolver": return cf(0, -0.06, 0.06) * Rbx.ang(deg_to_rad(-18), 0, 0)
+		"Subfusil": return cf(0, -0.04, 0.01) * Rbx.ang(deg_to_rad(-15), 0, 0)
+		"Escopeta": return cf(0, -0.04, 0.03) * Rbx.ang(deg_to_rad(-25), 0, 0)
+		"Francotirador": return cf(0, -0.05, 0.01) * Rbx.ang(deg_to_rad(-15), 0, 0)
 		"Hacha": return cf(0, 0, 0.2)
 		"Palanca": return cf(0, 0, 0.12)
 	return Transform3D.IDENTITY
