@@ -1,5 +1,12 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
+## 2026-11-16 · Codex · Corrección de brazos al anticipar arma larga
+- El giro relativo del arma podía crecer sin límite mientras seguía el torso, forzando IK.
+  Armas largas: objetivo y resultado acotados a ±8°, sin acumular velocidad contra el límite.
+  Margen del cuerpo reducido de 12° a 4°. Arma corta conserva libertad y agarre de una mano.
+- `tests/anticipacion_arma.gd`: 18/18; giro rápido con disparos y recarga de rifle sin errores
+  en Godot 4.6.3. Captura real del giro: `docs/fisica/giro-brazos.gif`. Fuentes generadas intactas.
+
 ## 2026-11-16 · Codex · Fluidez de pasos y alcance de zancada
 - Petición aclarada: corregir pasos trabados/exagerados. Mezcla andar/correr amortiguada;
   alcance acotado delante y detrás, menor elevación a baja velocidad, apoyo libera antes

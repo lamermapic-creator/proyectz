@@ -303,6 +303,12 @@ func _soltar_mano_moto() -> void:
 
 
 ## postura de pie de Blender para el arma y el estado: se acerca a ella con suavidad (ritmo del arma)
+## Anticipación corta: el rifle nunca arrastra el IK fuera del alcance del torso.
+static func _limitar_anticipacion_arma(angulo: float, larga: bool) -> float:
+	var giro := Rbx.wrap_a(angulo)
+	return clampf(giro, -deg_to_rad(8), deg_to_rad(8)) if larga else giro
+
+
 func _paso_postura_pie(tool: String, estado: String, pc: float, activa: bool, ritmo: float, dt: float) -> void:
 	var b := Armas.base(tool)
 	var tabla: Dictionary = PosturasPie.DATOS.get(b, {})
@@ -2909,10 +2915,14 @@ func update_rig(dt: float) -> void:
 			rel_aim = Rbx.damp(rel_aim, rel_obj, 3.5, dt)
 			_vel_giro_arma_pie = 0.0
 		else:
+			var larga_pie: bool = J.arsenal.cfg().get("Slot", "") == "Larga"
+			rel_obj = _limitar_anticipacion_arma(rel_obj, larga_pie)
 			var destino_pie := rel_aim + Rbx.wrap_a(rel_obj - rel_aim)
 			var giro_pie := _muelle_lim(rel_aim, _vel_giro_arma_pie, destino_pie, 12.0, deg_to_rad(540), deg_to_rad(2400), dt)
-			rel_aim = Rbx.wrap_a(giro_pie[0])
+			rel_aim = _limitar_anticipacion_arma(giro_pie[0], larga_pie)
 			_vel_giro_arma_pie = giro_pie[1]
+			if larga_pie and absf(rel_aim) >= deg_to_rad(8) - 0.0001 and _vel_giro_arma_pie * rel_aim > 0.0:
+				_vel_giro_arma_pie = 0.0
 	if mt != null:
 		if moto_fuego:
 			# APUNTADO EN LA MOTO: la pose (cintura, cuello y brazo derecho) sale de las poses hechas en Blender

@@ -1,3 +1,9 @@
+## 2026-11-16 — Corregir brazos durante giro del arma larga
+
+Limitada la anticipación del rifle y su velocidad acumulada al alcanzar el límite.
+El cuerpo sigue más cerca al arma, evitando forzar el alcance de los brazos. Armas cortas
+conservan su movimiento libre. Regresión de 18 comprobaciones y prueba de giro con disparos.
+
 ## 2026-11-16 — Pasos menos trabados y exagerados
 
 Suavizada la mezcla de caminar/correr, limitado el alcance posterior y frontal y reducida
