@@ -1,5 +1,13 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
+## 2026-11-16 · Codex · Bala alineada con cañón real
+- Eliminada corrección de salida hacia punto de mira y salida desde pecho para blancos
+  pegados. Dirección siempre del Muzzle, más dispersión; colisiones de arma conservadas.
+- Sin modelo/Muzzle visible no se consume munición ni se dispara desde cámara.
+- `tests/salida_canon.gd`: 25 comprobaciones (arma desalineada/subiendo y sin modelo).
+  Balística 97/97; fixture usa Muzzle real en vez del antiguo fallback de cámara. Godot 4.6.3.
+- Disparar antes de subir/alinear el arma puede impactar fuera de la mira; comportamiento pedido.
+
 ## 2026-11-16 · Codex · Corrección de brazos al anticipar arma larga
 - El giro relativo del arma podía crecer sin límite mientras seguía el torso, forzando IK.
   Armas largas: objetivo y resultado acotados a ±8°, sin acumular velocidad contra el límite.

@@ -536,24 +536,11 @@ func punto_mira() -> Vector3:
 func salida_bala() -> Array:
 	var mz_t := (modelo_mano.get_node("Muzzle") as Node3D).global_transform
 	var dir := (-mz_t.basis.z).normalized()
-	var pecho: Vector3 = (J.rig.P.UpperTorso as Node3D).global_position
 	# ¿la boca del cañón está metida en una pared? Se mira A LO LARGO DEL ARMA (de la empuñadura a la boca),
 	# no desde el pecho: con el arma apoyada sobre un muro, la línea pecho-boca rozaba el propio muro y
 	# la bala "salía del torso" contra él
 	var empu: Vector3 = modelo_mano.global_position
 	var dentro := J.raycast(empu, mz_t.origin - empu)
-	# el arma aún está subiendo hacia la mira (primer disparo desde la pose baja): la bala va al punto
-	# de la mira desde el cañón, en vez de al suelo. Pegado a una pared (arma levantada), donde apunte
-	if anim == null or anim.arma_alzada < 0.1:
-		var pm := punto_mira()
-		var al := pm - mz_t.origin
-		if al.length() < 3.0 or al.dot(pm - pecho) < 0.0:
-			# blanco PEGADO (un zombi encima): el cañón puede quedar a su lado o dentro de él; la bala va
-			# desde el pecho hacia lo que marca la mira
-			if (pm - pecho).length() > 0.3:
-				return [mz_t.origin, (pm - pecho).normalized(), {}, pecho]
-		elif dir.angle_to(al) > deg_to_rad(8):
-			dir = al.normalized()
 	# el rayo de la bala empieza en la línea del cañón a la altura de la empuñadura, no en la boca: con
 	# un zombi pegado, la boca del cañón queda DENTRO de él (el rayo cuenta los blancos desde dentro)
 	var atras := maxf(0.0, (mz_t.origin - empu).dot(dir))
@@ -714,6 +701,9 @@ func shoot() -> void:
 		return
 	if cc.bloqueo or cc.accion != null:
 		return
+	# No disparar desde la cámara si el arma visual todavía no está disponible.
+	if modelo_mano == null or not modelo_mano.visible or not modelo_mano.has_node("Muzzle"):
+		return
 	var now := ahora()
 	# humanamente imposible disparar ahí: se bloquea (y se reintenta un instante mientras el arma se alinea)
 	if not aim_check()[0]:
@@ -761,18 +751,11 @@ func shoot() -> void:
 	# la bala sale del CAÑÓN y en la dirección del CAÑÓN (el animador orienta el arma hacia la mira al
 	# apuntar o disparar). Si entre el arma y lo que se ve en la mira hay algo (esquina, muro bajo,
 	# la pared contra la que está pegado), la bala da ahí; el círculo rojo del HUD lo avisa.
-	var cam := J.camara.global_transform
-	var look := Rbx.look(cam)
-	var origin := cam.origin
-	var eje := look
-	var forzado := {}
-	var desde := origin
-	if modelo_mano and modelo_mano.has_node("Muzzle"):
-		var sb := salida_bala()
-		origin = sb[0]
-		eje = sb[1]
-		forzado = sb[2]
-		desde = sb[3]
+	var sb := salida_bala()
+	var origin: Vector3 = sb[0]
+	var eje: Vector3 = sb[1]
+	var forzado: Dictionary = sb[2]
+	var desde: Vector3 = sb[3]
 	# perdigones (escopeta): varios rayos con su propia dispersión; un solo marcador de impacto
 	var n_balas := int(w.get("Pellets", 1))
 	var pell := float(w.get("PelletSpread", 0.0))

@@ -1,3 +1,9 @@
+## 2026-11-16 — Disparo en dirección real del cañón
+
+Eliminada asistencia que dirigía la bala hacia la mira al levantar el arma y la salida
+desde el pecho a corta distancia. Sin cañón visual disponible no se dispara. Se conservan
+dispersión y obstáculos. Pruebas de desalineación y balística con Muzzle real.
+
 ## 2026-11-16 — Corregir brazos durante giro del arma larga
 
 Limitada la anticipación del rifle y su velocidad acumulada al alcanzar el límite.

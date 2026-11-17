@@ -102,7 +102,7 @@ func probar_arma() -> void:
 	j.get_node("Animador").set_process(false)
 	j.arsenal.set_process(false)
 	j.arsenal._equipar("Pistola")
-	j.arsenal.modelo_mano = null # cañón de prueba: el rayo sale de la cámara, con dispersión real
+	j.arsenal.modelo_mano.visible = true # cañón físico de prueba, sin salida alternativa desde cámara
 	j.arsenal.draw_until = -100.0
 	j.arsenal.last_shot = -100.0
 	j.aiming = true
@@ -114,6 +114,8 @@ func probar_arma() -> void:
 	obj.set_process(false)
 	j.camara.global_position = Vector3(0, obj.centro().y, 15)
 	j.camara.look_at(obj.centro())
+	var boca := j.arsenal.modelo_mano.get_node("Muzzle") as Node3D
+	boca.global_transform = j.camara.global_transform
 	await frames(2)
 	j.arsenal.shoot()
 	comprobar(not obj.vivo() and is_instance_valid(obj._ragdoll) and obj._ragdoll._balistica, "Arsenal transmite el impacto balístico real")
@@ -123,6 +125,7 @@ func probar_arma() -> void:
 		var p: Vector3 = obj._ragdoll.cuerpos.UpperTorso.global_position
 		j.camara.global_position = p + Vector3(0, 0, 15)
 		j.camara.look_at(p)
+		boca.global_transform = j.camara.global_transform
 		var marcador := j.arsenal.hit_t
 		j.arsenal.last_shot = -100.0
 		j.arsenal.shoot()
