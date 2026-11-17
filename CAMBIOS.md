@@ -1,3 +1,9 @@
+## 2026-11-16 — Recuperar precisión de la mira sin desviar la bala
+
+Ajuste suave y acotado de la postura del arma para cerrar el error residual del IK al
+apuntar. La bala sigue saliendo en dirección real del cañón. Medición con rifle, pistola
+y escopeta en `tests/precision_mira.gd`; dispersión de cada arma conservada.
+
 ## 2026-11-16 — Disparo en dirección real del cañón
 
 Eliminada asistencia que dirigía la bala hacia la mira al levantar el arma y la salida

@@ -42,6 +42,7 @@ var arma_retro := 0.0        # 0-1: arma recogida hacia el cuerpo por tener una 
 var arma_alzada := 0.0 # 0-1: arma levantada por tener una pared delante (no se puede disparar)
 var conv_w := 0.0 # 0-1: cuánto se orienta el cañón hacia el punto de la mira
 var conv_q := Quaternion.IDENTITY
+var _ajuste_mira := Quaternion.IDENTITY
 var agache_techo := 0.0 # agachado bajo un techo bajo: cuánto más se agacha
 var lat_k := 0.0 # 0-1: cuánto se anda de lado (pasos laterales)
 var prev_lv := Vector3.ZERO
@@ -3313,7 +3314,20 @@ func update_rig(dt: float) -> void:
 			else:
 				# la mira está pegada al arma (blanco encima) o muy desviada: sin corrección
 				conv_q = conv_q.slerp(Quaternion.IDENTITY, 1.0 - exp(-10.0 * dt))
-			var qw := Quaternion.IDENTITY.slerp(conv_q, conv_w)
+			# Cerrar el error de la postura/IK sobre el arma visible, nunca sobre la bala.
+			if aiming and _entrada_apuntar >= 0.45 and conv_w > 0.99 and mt == null and now - last_shot_t > 0.35 and absf(yaw_rate) < 0.4:
+				var boca_real := mdl.get_node("Muzzle") as Node3D
+				var hacia := J.arsenal.punto_mira() - boca_real.global_position
+				var eje_real := -boca_real.global_basis.z.normalized()
+				if hacia.length() > 3.0 and eje_real.angle_to(hacia) < deg_to_rad(5):
+					var error_mira := Quaternion(eje_real, hacia.normalized())
+					_ajuste_mira = (Quaternion.IDENTITY.slerp(error_mira, 1.0 - exp(-4.0 * dt)) * _ajuste_mira).normalized()
+					var angulo_ajuste := _ajuste_mira.get_angle()
+					if angulo_ajuste > deg_to_rad(3):
+						_ajuste_mira = Quaternion.IDENTITY.slerp(_ajuste_mira, deg_to_rad(3) / angulo_ajuste)
+			else:
+				_ajuste_mira = _ajuste_mira.slerp(Quaternion.IDENTITY, 1.0 - exp(-8.0 * dt))
+			var qw := _ajuste_mira * Quaternion.IDENTITY.slerp(conv_q, conv_w)
 			# gira alrededor de la empuñadura (la mano no se mueve; el cañón sube/baja/gira un poco)
 			handle_cf = Transform3D(Basis(qw) * handle_cf.basis, handle_cf.origin)
 		# las armas blancas nunca atraviesan el propio cuerpo (torso, cabeza, cadera, muslos)
