@@ -1484,12 +1484,12 @@ func update_character(dt: float) -> void:
 				var lado_m := 0.35 if arsenal.recogiendo.mano == "R" else -0.35
 				var ty := atan2(-dv.x, -dv.z) + lado_m
 				rotation = Vector3(0, cy + Rbx.wrap_a(ty - cy) * minf(1, dt * 8), 0)
-		elif aiming or arsenal.armado():
+		elif not sprinting and (aiming or arsenal.armado()):
 			# con arma o apuntando, el cuerpo sigue a la mira con algo de peso
 			var diff2 := Rbx.wrap_a(yaw - cy)
 			rotation = Vector3(0, cy + diff2 * minf(1, dt * 10), 0)
 		else:
-			# sin arma: el cuerpo gira hacia donde se mueve CON PESO: los pies tienen tiempo de dar
+			# sin arma o corriendo: el cuerpo sigue el movimiento; los pies tienen tiempo de dar
 			# sus pasos y las piernas no se cruzan al machacar WASD
 			var md := move_direction
 			if md.length() > 0.1 and getup_p <= 0:
@@ -1512,7 +1512,7 @@ func update_character(dt: float) -> void:
 	L.stanceT = stance_change_t
 	L.stanceFrom = stance_from
 	L.proneP = prone_p
-	L.yaw = yaw
+	L.yaw = rotation.y if sprinting else yaw
 	L.supine = supine
 	if L.levanta_arriba != null and (stance == 2 or prone_p <= 0.001):
 		L.levanta_arriba = null

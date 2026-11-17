@@ -1,5 +1,12 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
+## 2026-11-16 · Codex · Carrera libre respecto a la mira
+- Al correr con Shift, incluso armado, el cuerpo gira suavemente hacia el movimiento.
+  Cabeza y torso reciben ese giro en vez del yaw de cámara; la cámara queda libre.
+  Al dejar de correr vuelve la orientación habitual al apuntar/llevar arma.
+- Godot 4.6.3: compilación y arranque sin errores; banco temporal con arma: seis
+  comprobaciones de giro lateral/posterior, cámara libre y retorno, todas correctas.
+
 ## 2026-11-16 · Codex · Marcha lateral y hacia atrás
 - Corregida mezcla de carrera frontal al desplazarse de lado/atrás: depende de dirección
   real respecto al cuerpo. Velocidad lateral y posterior limitada a pasos rápidos, con

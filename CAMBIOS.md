@@ -1,3 +1,8 @@
+## 2026-11-16 — Correr sin fijación a la mira
+
+El cuerpo armado se orienta hacia el movimiento durante la carrera. La animación recibe
+esa orientación para evitar retorcer torso y piernas hacia la cámara.
+
 ## 2026-11-16 — Pasos laterales y hacia atrás
 
 Mezcla direccional de carrera y velocidad ajustada a pasos rápidos de lado/atrás, evitando
