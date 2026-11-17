@@ -1,3 +1,8 @@
+## 2026-11-17 — Actualizar mapa del proyecto
+
+Añadido `docs/MAPA_PROYECTO.md` con estado vigente, archivos, pruebas y límites de cobertura
+de Graphify. Incluye cambios de movimiento, modelos v7, balística, precisión y ragdoll.
+
 ## 2026-11-16 — Recuperar precisión de la mira sin desviar la bala
 
 Ajuste suave y acotado de la postura del arma para cerrar el error residual del IK al

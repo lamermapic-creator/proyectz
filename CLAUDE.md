@@ -1,5 +1,10 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
+## 2026-11-17 · Codex · Mapa actualizado
+- Mapa compartido en `docs/MAPA_PROYECTO.md`, base de código 2f0e228.
+- Graphify coincide con esa base: 216 nodos/389 relaciones; cobertura parcial, no encuentra
+  jugador.gd. No tratar el grafo como inventario completo de GDScript.
+
 ## 2026-11-16 · Codex · Alinear mira con cañón al terminar de apuntar
 - Tras quitar la asistencia de trayectoria quedó visible el error residual de postura/IK.
   Servo angular pequeño (máximo 3°) sobre la postura de muñeca, solo apuntado estabilizado,

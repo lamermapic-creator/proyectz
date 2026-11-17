@@ -1,0 +1,110 @@
+# Mapa de Proyecto Z
+
+Actualizado: 2026-11-17. Repositorio: `lamermapic-creator/proyectz`.
+Base de código verificada: `2f0e2282ad3cbe51ca1d99cc3307e8d4a60c523b` (main al consultar).
+
+## Graphify y cobertura
+
+- Grafo consultado: mismo commit `2f0e228`, **216 nodos y 389 relaciones**, 17 comunidades.
+- Cobertura parcial: la consulta general recupera principalmente fuentes Python de Blender;
+  `graphify_file_neighbors(file="scripts/jugador/jugador.gd")` devuelve archivo no encontrado.
+  Esto NO significa que el archivo ni sus dependencias estén ausentes del proyecto.
+- Este mapa combina Graphify con el checkout actual. Los cambios de esta entrega son documentación.
+- Consultar con `repository_id="lamermapic-creator/proyectz"` y empezar por
+  `query_graph(skeleton=true, budget=1000–2000)`. Ampliar solo símbolos necesarios.
+- Comparar siempre `commitSha` con HEAD y leer archivos actuales ante resultados vacíos,
+  parciales o desactualizados. Los recuentos del grafo no equivalen a cobertura de pruebas.
+
+## Motor y entrada
+
+- Godot 4.7.2 según documentación del proyecto; `project.godot` declara 4.7 / Forward Plus.
+  Validaciones recientes ejecutadas con Godot 4.6.3: no sustituyen comprobar 4.7.2.
+- GDScript, Jolt Physics; studs (1 ≈ 0,31 m), gravedad 35; recursos gratuitos.
+- `project.godot` → `escenas/menu_principal.tscn`.
+- `scripts/ui/menu_principal.gd`: Jugar, Opciones, Controles, Salir; teclado y paneles escalables.
+- Jugar → `escenas/pruebas_movimiento.tscn`.
+- `scripts/ui/fondo_menu.gd`: cuarentena nocturna; zombis decorativos sin IA.
+- `scripts/ui/atmosfera_menu.gdshader`, `suelo_menu.gdshader`: efectos visuales del fondo.
+- `scripts/nivel/nivel_pruebas.gd`: escenario, maniquíes, zombis y motos.
+- Filtro gris suave en los Environment del nivel y fondo del menú: saturación 0,78,
+  brillo/contraste 0,98. No afecta al HUD. `scripts/ui/opciones.gd`: calidad y opciones.
+
+## Jugador, movimiento y animación
+
+- `scripts/jugador/jugador.gd`: control, posturas, estamina, cámara, salto y entrada/salida de moto.
+- `scripts/jugador/animador.gd`: marcha procedural/IK, pies, brazos, arma, torso y cabeza.
+- `scripts/jugador/rig_personaje.gd`: rig compartido y registro `RigPersonaje.MODELOS`.
+- Saltos verticales o frontales respecto a cámara; bloqueados atrás/laterales y diagonales laterales.
+- Patadas bloqueadas durante carrera. Golpe de arma/puñetazo solicitado corriendo espera frenada;
+  petición caduca a 0,7 s. Guardia con clic derecho espera bajar la velocidad.
+- Pausa de 0,16 s tras correr antes de apuntar, subir a moto o levantarla.
+- Al correr, cuerpo sigue movimiento incluso armado; cámara queda libre. Giro con aceleración/frenada.
+- Marcha lateral/posterior ajustada; mezcla caminar/correr amortiguada y alcance de pies acotado
+  delante/detrás. Persisten resbalones puntuales en giros: no dar la fluidez por totalmente resuelta.
+- Entrada progresiva al apuntado; se elimina flexión adicional de piernas al caminar apuntando.
+- Armas cortas de fuego a una mano, izquierda libre salvo recarga/tareas. Pistola permite disparar
+  durante carrera; cabeza/torso acompañan. Armas largas frenan al disparar y mantienen dos manos.
+- Rifle: anticipación del arma limitada a ±8°, margen corporal de 4°, para no forzar brazos/IK.
+
+## Armas, balística y física
+
+- `scripts/jugador/arsenal.gd`: inventario, disparo, recarga, guardia y cuerpo a cuerpo.
+- `scripts/armas/armas.gd`, `modelos_armas.gd` y resto de `scripts/armas/`: datos, modelos y efectos.
+- `Arsenal.salida_bala()` toma posición y dirección del **Muzzle real**, con dispersión del arma.
+  Eliminadas correcciones de trayectoria hacia mira/pecho; sin Muzzle visible no dispara.
+- `Animador` alinea suavemente la postura del arma con el punto de mira al estabilizar apuntado:
+  corrección de muñeca máxima 3°, pausada durante retroceso y giros rápidos. No desvía la bala.
+- `scripts/fisica/impacto_balistico.gd`: reacción localizada de articulaciones; estado transferido al ragdoll.
+- `scripts/fisica/ragdoll.gd`: cuerpos/articulaciones Jolt, impacto localizado y cadáveres alcanzables.
+  NPC/zombis sortean pérdida de apoyo, torso/brazos/caderas y 4–7 contracciones breves decrecientes.
+  La secuencia termina en reposo; otros disparos no la reinician. Límite de ragdolls activos existente.
+- `scripts/nivel/maniqui.gd`: blanco de entrenamiento, contrato de daño y recuperación.
+- `scripts/vehiculos/`: moto y modelo; dirección progresiva, agarre/derrape y freno/marcha atrás.
+
+## Ruido e IA
+
+- `scripts/ruido/ruido.gd`: `Ruido.emitir(...)` envía eventos al grupo `oyentes_ruido` mediante `oir(evento)`.
+- `scripts/zombis/director_zombis.gd`: navegación y creación de zombis.
+- `scripts/zombis/zombi.gd`: oído, visión, sospecha; deambular, investigar, buscar, perseguir,
+  atacar, caído y muerto. No deducir cambios de IA a partir de ajustes del ragdoll.
+- Contrato de objetivos: `recibir_danio`, `empujar`, `derribar`, `vivo`, `en_pie`, `centro`, `rig`.
+  Zombi/Maniqui añaden `recibir_disparo(cantidad,pieza,impulso,punto)` para balística localizada.
+
+## Modelos y fuentes generadas
+
+- `modelos/zombis/`: 12 GLB: civil, sanitario, obrero, mecanico, policia, bombero,
+  excursionista, oficinista, repartidor, paciente, granjero y vagabundo.
+- `Zombi.variante_visual`: aleatorio por defecto; permite fijar variante.
+- Dirección vigente **v7, bloques cuadrados limpios**, pocos detalles; sin partes circulares,
+  pliegues superpuestos ni realismo de piel. Cráneos cerrados en todas las variantes.
+  Sustituye la decisión antigua de tres cráneos abiertos.
+- `animaciones/blender/zombis/`: generar.py, refinado.py, rostro.py, deterioro.py;
+  validar.py y render_*.py para validación/revisión. Ver `docs/MODELOS_LIMPIOS_V7.md`.
+- `escenas/galeria_zombis.tscn` + `scripts/nivel/galeria_zombis.gd`: revisión de modelos/clips.
+  Reposo, caminar, perseguir, atacar, herido, morir. Juego conserva procedural y ragdoll.
+- NO editar a mano `scripts/jugador/movimientos.gd`, `poses_moto.gd`, `posturas_pie.gd`, `combate_cc.gd`.
+  Modificar fuentes en `animaciones/blender/` y regenerar; movimiento en `movimiento/diseno_mov.py`,
+  combate en `combate/diseno_cc.py`. Los ajustes recientes de IK no modificaron estas tablas.
+
+## Documentación y comprobaciones
+
+- Leer `CLAUDE.md` antes de modificar; actualizarlo junto con `CAMBIOS.md` en cada entrega.
+- `AUDITORIA.md`: deuda/problemas conocidos. `scripts/config/zconfig.gd`: parámetros compartidos.
+- `docs/MODELOS_ZOMBIS.md`: índice histórico; prevalece v7. `docs/MENU_PRINCIPAL.md`: menú.
+- `docs/RUIDO_Y_ZOMBIS.md`: ruido/IA/contratos. `docs/FISICA_Y_MANEJO.md`: física, moto y evidencia.
+- `tests/ejecutar_pruebas.sh <Godot>`: batería general. No todos los scripts nuevos están integrados
+  como grupos del ejecutor: comprobar su lista; también pueden ejecutarse individualmente con `-s`.
+- `tests/modelos_zombis.gd`, `menu_redisenado.gd`: modelos/contratos y navegación/tamaños/transición.
+- `tests/balistica.gd`: 97 comprobaciones en la última validación; impacto/daño/cadáver/recuperación.
+- `tests/salida_canon.gd`: 25 comprobaciones, cañón desalineado y ausencia de modelo.
+- `tests/precision_mira.gd`: error cañón/mira estabilizado, rifle/pistola/escopeta (<0,05° medido a 30/60 FPS).
+- `tests/variedad_ragdoll.gd`: ocho muertes iguales con semillas distintas, diversidad/contracciones/reposo.
+- `tests/manejo_moto.gd`: conducción. `giros_fluidos.gd`: inversión de giro a 30/60/120 FPS.
+- `tests/anticipacion_arma.gd`: límite de anticipación. `pasos_suaves.gd`: alcance/continuidad de pies.
+- `tests/recorrido.gd` con `escena_recorrido.tscn`: escenarios reales y métricas de pasos/cámara.
+- Evidencia en `docs/fisica/`: GIF de pasos, giro de brazos, caídas y reacción a disparos.
+- Intermitencias conocidas: `moto_zombi`, algunos casos de combate en suelo. Registrar fallos y
+  repeticiones; no presentar comprobaciones aisladas como una batería completa sin fallos.
+- `addons/godot_ai/`: integración del editor; presencia no confirma conexión activa.
+
+Este mapa orienta búsquedas. Consultar dependencias exactas y código actual para cada cambio.
