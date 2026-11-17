@@ -116,6 +116,7 @@ var moto_h_arma := "R"       # mano que sostiene el arma (siempre la derecha)
 var moto_pose: Array = []    # pose de Blender de este fotograma: Waist, Neck, RightShoulder, RightElbow, RightWrist
 var moto_corr_q := Quaternion.IDENTITY # pequeña corrección de la muñeca para que el cañón vaya a la mira
 var feet_aim := 0.0
+var _entrada_apuntar := 0.0
 var prone_rel := 0.0
 var w_side := {"L": 0.0, "R": 0.0}
 var step_k := 0.4
@@ -2055,6 +2056,7 @@ func update_rig(dt: float) -> void:
 
 	var pitch: float = L.pitch
 	var aiming: bool = L.aiming
+	_entrada_apuntar = minf(_entrada_apuntar + dt, 0.45) if aiming else 0.0
 	var exhausted: bool = L.exhausted and speed < 1.5
 	var sprinting: bool = speed > C.PLAYER.WalkSpeed + 2.5
 	heat = clampf(heat + (dt * 0.12 if sprinting else -dt * 0.08), 0, 1)
@@ -3080,7 +3082,7 @@ func update_rig(dt: float) -> void:
 				speed_pose = 8.0
 			elif aiming:
 				target_rel = Rbx.ang(pc, 0, 0) * Armas.pose(tool, "AIM")
-				speed_pose = 9.0
+				speed_pose = lerpf(4.0, 9.0, smoothstep(0.0, 0.45, _entrada_apuntar))
 			elif firing_recent or L.firing:
 				target_rel = Rbx.ang(pc, 0, 0) * Armas.pose(tool, "HIP")
 				speed_pose = 11.0
@@ -3322,6 +3324,8 @@ func update_rig(dt: float) -> void:
 		var pole_r := (aim_base * Rbx.cf(1.7, -0.7, -0.3)).origin if pb > 0.5 else (aim_base * Rbx.cf(1.9, -1.4, 0.9)).origin
 		if pie_k > 0.001 and pb <= 0.5:
 			pole_r = pole_r.lerp(aim_base * pie_polo_r, pie_k)
+			if aiming and not L.get("rested", false):
+				pole_r += aim_base.basis * Vector3(0, sin(breath_t) * 0.04, sin(breath_t * 0.7) * 0.03)
 		if cc_arma and cc_pose.has("pr_x"):
 			pole_r = pole_r.lerp(chest_yaw_base * Vector3(cc_pose.pr_x, cc_pose.pr_y, cc_pose.pr_z), cc_w)
 		cc_handle_cf = handle_cf
@@ -3694,6 +3698,11 @@ func update_rig(dt: float) -> void:
 	## ------------------------------------------------ aplicar torso, cuello y brazos
 	var Mn: RigPersonaje.Motor = M.Neck
 	Mw.transform = Rbx.ang(0, waistY, 0) * Rbx.ang(waistP + breath, 0, waistR)
+	# Respiración y acompañamiento leve del disparo, sin desplazar la mira.
+	if aiming and mt == null and pb < 0.5:
+		neckY += sin(breath_t * 0.55) * 0.008
+		neckR += sin(breath_t * 0.7) * 0.006
+		neckP -= exp(-maxf(0.0, now - last_shot_t) * 18.0) * 0.025
 	Mn.transform = Rbx.ang(0, neckY, 0) * Rbx.ang(neckP - breath * 0.5, 0, neckR)
 	if moto_fuego and moto_apunta_k > 0.001 and moto_pose.size() == 5:
 		# pose de Blender: el giro de la cintura y del cuello respecto a la pose de conducir (sobre lo que ya

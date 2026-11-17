@@ -1,5 +1,11 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
+## 2026-11-16 · Codex · Apuntado más fluido
+- Entrada progresiva de 0,45 s al apuntar: interpolación inicial más lenta, recupera
+  rapidez al completar la postura. Codo con respiración leve conservando agarre IK.
+- Cabeza con respiración pequeña y acompañamiento breve del disparo, sin mover cámara.
+- Compilación y arranque del nivel sin errores en Godot 4.6.3; revisión visual pendiente.
+
 ## 2026-11-16 · Codex · Carrera libre respecto a la mira
 - Al correr con Shift, incluso armado, el cuerpo gira suavemente hacia el movimiento.
   Cabeza y torso reciben ese giro en vez del yaw de cámara; la cámara queda libre.

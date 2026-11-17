@@ -1,3 +1,8 @@
+## 2026-11-16 — Entrada suave al apuntado
+
+Arma y postura entran más lentamente al apuntar; el codo respira conservando el agarre.
+La cabeza acompaña suavemente la respiración y el disparo sin modificar la mira.
+
 ## 2026-11-16 — Correr sin fijación a la mira
 
 El cuerpo armado se orienta hacia el movimiento durante la carrera. La animación recibe
