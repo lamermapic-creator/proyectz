@@ -1501,7 +1501,7 @@ func update_character(dt: float) -> void:
 		elif not sprinting and (aiming or arsenal.armado()):
 			# con arma o apuntando, el cuerpo sigue a la mira con algo de peso
 			var diff2 := Rbx.wrap_a(yaw - cy)
-			var margen := deg_to_rad(12.0) if arsenal.cfg().get("Slot", "") == "Larga" and (aiming or firing) else 0.0
+			var margen := deg_to_rad(4.0) if arsenal.cfg().get("Slot", "") == "Larga" and (aiming or firing) else 0.0
 			_girar_cuerpo_hacia(yaw - signf(diff2) * minf(absf(diff2), margen), dt, 6.0)
 		else:
 			# sin arma o corriendo: el cuerpo sigue el movimiento; los pies tienen tiempo de dar
