@@ -1,3 +1,9 @@
+## 2026-11-17 — Tumbarse rápido al correr
+
+Z durante la carrera permite tirarse cuerpo a tierra en 0,4 s, con un breve deslizamiento
+que conserva el impulso y se frena. Respeta colisiones; fuera de carrera se mantiene la
+transición normal. Comprobado en espacio libre y contra pared.
+
 ## 2026-11-17 — Facilitar disparos a corta distancia
 
 Corregidos paralaje de cámara lateral, corte de alineación a menos de 3 studs y sobrepaso

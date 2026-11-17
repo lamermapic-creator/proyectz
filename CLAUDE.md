@@ -1,5 +1,13 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
+## 2026-11-17 · Codex · Tumbarse rápido desde carrera
+- Z corriendo de pie y en suelo: transición corporal de 0,4 s y deslizamiento frenado de
+  hasta 0,45 s en dirección/velocidad reales, con tope de velocidad de sprint.
+- Movimiento por move_and_slide; sin teletransporte ni impulso vertical. Transición normal
+  de 1,35 s conservada fuera de carrera. Cancelación al salir de postura/suelo/estado válido.
+- `tests/tumbar_corriendo.gd` y variante `--pared`: postura completa a 0,45 s, avance
+  ~3,03 studs libre y ~0,95 ante pared, sin atravesarla. Godot 4.6.3.
+
 ## 2026-11-17 · Codex · Apuntado a blancos cercanos
 - Eliminado corte de convergencia a 3 studs. Cuerpo y rumbo del arma acompañan al punto
   cercano de la mira (transición 6–10 studs), compensando cámara lateral. Arma se recoge

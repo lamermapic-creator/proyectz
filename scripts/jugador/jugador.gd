@@ -36,6 +36,8 @@ var _carrera_hasta := -9.0
 var _apuntar_pedido := false
 var _frenar_combate_hasta := -9.0
 var _vel_giro_cuerpo := 0.0
+var _tumbar_rapido_hasta := -9.0
+var _vel_tumbar_rapido := Vector3.ZERO
 var _salto_pedido := false
 var _salto_t := -9.0               # último salto (para agarrarse a un borde en el aire)
 var colgado = null               # colgado de una cornisa (ver step_colgado)
@@ -258,7 +260,7 @@ func _crear_hud() -> void:
 	capa.add_child(aviso)
 	_hud["aviso"] = aviso
 	var ayuda := Label.new()
-	ayuda.text = "1-4: armas · Clic der: apuntar (arma de fuego) / guardia (arma blanca o sin arma) · Clic izq: disparar/golpear (sin arma: puñetazos) · Clic der + Espacio: bloquear (a tiempo: parada) · Clic der + doble Espacio: empujón · G: patada (en el suelo: pisotón) · R: recargar · X: apoyar arma · F: recoger / subir a la moto · Shift: correr · C: agacharse · Z: cuerpo a tierra · Espacio: saltar/sortear · Q/E: asomarse · V: hombro · H: esta ayuda · Rueda: acercar/alejar cámara · Colgado: A/D moverse (Shift: rápido), Espacio subir, S soltarse · Esc: pausa" + (" · F1: trucos · F4: estamina infinita · F5: balas infinitas · F6: ver ruido · F7: zombis sordos · F8: zombis ciegos" if OS.is_debug_build() else "")
+	ayuda.text = "1-4: armas · Clic der: apuntar (arma de fuego) / guardia (arma blanca o sin arma) · Clic izq: disparar/golpear (sin arma: puñetazos) · Clic der + Espacio: bloquear (a tiempo: parada) · Clic der + doble Espacio: empujón · G: patada (en el suelo: pisotón) · R: recargar · X: apoyar arma · F: recoger / subir a la moto · Shift: correr · C: agacharse · Z: cuerpo a tierra (corriendo: rápido) · Espacio: saltar/sortear · Q/E: asomarse · V: hombro · H: esta ayuda · Rueda: acercar/alejar cámara · Colgado: A/D moverse (Shift: rápido), Espacio subir, S soltarse · Esc: pausa" + (" · F1: trucos · F4: estamina infinita · F5: balas infinitas · F6: ver ruido · F7: zombis sordos · F8: zombis ciegos" if OS.is_debug_build() else "")
 	# ayuda de controles: oculta (H la muestra/oculta), en un recuadro que no se sale de la pantalla
 	ayuda.add_theme_font_size_override("font_size", 15)
 	ayuda.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -493,6 +495,11 @@ func set_stance(n: int) -> void:
 		global_position += adelante * desp
 		L.levanta_arriba = {"desp": desp, "t0": ahora()}
 		supine = false
+	if n != 2:
+		_tumbar_rapido_hasta = -9.0
+	if n == 2 and stance == 0 and en_suelo and L.sprinting and moto == null and ragdoll == null:
+		_tumbar_rapido_hasta = ahora() + 0.45
+		_vel_tumbar_rapido = Rbx.flat(vel_real).limit_length(C.PLAYER.SprintSpeed)
 	stance_from = stance
 	stance = n
 	stance_change_t = ahora()
@@ -1447,9 +1454,17 @@ func update_character(dt: float) -> void:
 	else:
 		air_vel = null
 		_move_override = null
+	# Z durante carrera: caída rápida y deslizamiento frenado, resuelto por move_and_slide.
+	var tumbar_rapido: bool = stance == 2 and ahora() < _tumbar_rapido_hasta and en_suelo and not L.knocked and vaulting == null and ragdoll == null
+	if tumbar_rapido:
+		var avance_t := clampf(1.0 - (_tumbar_rapido_hasta - ahora()) / 0.45, 0.0, 1.0)
+		walk_speed = _vel_tumbar_rapido.length() * (1.0 - smoothstep(0.0, 1.0, avance_t))
+		_move_override = _vel_tumbar_rapido.normalized()
+		jump_height = 0.0
 	# altura del cuerpo según la postura. Tumbarse avanza a ritmo constante (fases de la animación)
 	var p_t := 1.0 if stance == 2 else 0.0
-	prone_p = prone_p + clampf(p_t - prone_p, -dt / C.PLAYER.ProneTime, dt / C.PLAYER.ProneTime)
+	var tiempo_tumbar: float = 0.4 if tumbar_rapido else C.PLAYER.ProneTime
+	prone_p = prone_p + clampf(p_t - prone_p, -dt / tiempo_tumbar, dt / tiempo_tumbar)
 	var base_c: float = C.STANCE[1 if stance == 2 else stance].Center
 	non_prone_c += (base_c - non_prone_c) * minf(1, dt * 3.5)
 	var sp := smooth01(maxf(prone_p, getup_p))
