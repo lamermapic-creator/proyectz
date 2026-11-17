@@ -1,3 +1,8 @@
+## 2026-11-16 — Apuntado caminando y transición tras carrera
+
+Eliminada flexión adicional de piernas al caminar apuntando. Pausa de 0,16 s tras correr
+antes de apuntar, subir a la moto o levantarla.
+
 ## 2026-11-16 — Filtro gris suave
 
 Desaturación ligera de la imagen 3D del juego y fondo del menú para un ambiente más triste.

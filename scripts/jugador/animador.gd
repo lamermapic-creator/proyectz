@@ -2427,7 +2427,7 @@ func update_rig(dt: float) -> void:
 		var leanR: float = S.leanR.step(dt)
 		# postura: tensión al apuntar, agotamiento, levantarse
 		# (en guardia / bloqueando, la altura la pone la pose de Blender, CombateCC)
-		var ct := 0.22 * (1.0 - maxf(cc_guard_w, cc_block_w)) if aiming else 0.0
+		var ct := 0.22 * (1.0 - maxf(cc_guard_w, cc_block_w)) * (1.0 - smoothstep(0.1, 1.5, speed)) if aiming else 0.0
 		if exhausted:
 			ct = 0.45
 			waistP -= 0.6

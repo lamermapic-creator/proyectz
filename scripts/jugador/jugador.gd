@@ -31,6 +31,9 @@ var normal_suelo := Vector3.UP
 var move_direction := Vector3.ZERO
 var _move_override = null         # hum:Move() en el aire
 var vel_real := Vector3.ZERO      # root.AssemblyLinearVelocity
+const PAUSA_TRAS_CARRERA := 0.16
+var _carrera_hasta := -9.0
+var _apuntar_pedido := false
 var _salto_pedido := false
 var _salto_t := -9.0               # último salto (para agarrarse a un borde en el aire)
 var colgado = null               # colgado de una cornisa (ver step_colgado)
@@ -356,7 +359,10 @@ func _input(e: InputEvent) -> void:
 func _unhandled_input(e: InputEvent) -> void:
 	if e is InputEventMouseButton:
 		if e.button_index == MOUSE_BUTTON_RIGHT:
-			aiming = e.pressed
+			_apuntar_pedido = e.pressed
+			if e.pressed and L.sprinting:
+				_carrera_hasta = ahora() + PAUSA_TRAS_CARRERA
+			aiming = e.pressed and ahora() >= _carrera_hasta
 		elif e.pressed and e.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN] and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 			# rueda: acercar / alejar la cámara (no cambia la distancia al apuntar)
 			var paso := -ZOOM_PASO if e.button_index == MOUSE_BUTTON_WHEEL_UP else ZOOM_PASO
@@ -1266,7 +1272,9 @@ func update_character(dt: float) -> void:
 
 	# estamina y velocidad
 	var moving := move_direction.length() > 0.1
-	var want_sprint := Input.is_physical_key_pressed(KEY_SHIFT) and moving and not aiming and not firing
+	if _apuntar_pedido:
+		aiming = ahora() >= _carrera_hasta
+	var want_sprint := Input.is_physical_key_pressed(KEY_SHIFT) and moving and not aiming and not firing and not _apuntar_pedido
 	if arsenal.cc.accion != null and arsenal.cc.accion.tipo in ["patada", "pisoton"]:
 		want_sprint = false
 	# tumbado: Shift = reptar rápido (solo boca abajo y ya tumbado); agachado se corre agachado
@@ -1281,6 +1289,8 @@ func update_character(dt: float) -> void:
 	if exhausted and stamina > C.PLAYER.StaminaMax * C.PLAYER.ExhaustRecover:
 		exhausted = false
 	var sprinting := want_sprint and not exhausted
+	if sprinting:
+		_carrera_hasta = ahora() + PAUSA_TRAS_CARRERA
 	var crouch_sprint := sprinting and stance == 1
 	var prone_sprint := sprinting and stance == 2
 	# dirección de la carrera respecto a hacia dónde mira el cuerpo: de lado o hacia atrás se va más lento
@@ -1995,6 +2005,8 @@ func moto_cercana() -> Moto:
 
 
 func subir_moto(m: Moto) -> void:
+	if L.sprinting or ahora() < _carrera_hasta:
+		return
 	if moto != null or m == null or not m.se_puede_subir():
 		return
 	if health <= 0 or colgado != null or vaulting != null or L.knocked or L.gettingUp:
@@ -2217,6 +2229,8 @@ const LEVANTAR_AGARRE := 0.35 # s agachándose y agarrándola antes de empezar a
 
 
 func levantar_moto(m: Moto) -> void:
+	if L.sprinting or ahora() < _carrera_hasta:
+		return
 	if health <= 0 or colgado != null or vaulting != null or L.knocked or arsenal.recogiendo != null:
 		return
 	if stance == 2 or prone_p > 0.01:

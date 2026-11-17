@@ -1,5 +1,11 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
+## 2026-11-16 · Codex · Transición breve tras correr
+- Pausa de 0,16 s tras sprint antes de apuntar, subir o levantar moto. Mantener clic derecho
+  completa el apuntado al terminar la pausa y detiene sprint. Al caminar apuntando se elimina
+  la flexión adicional de tensión de forma progresiva; se mantienen postura agachada y fatiga.
+- Compilación y arranque del nivel verificados en Godot 4.6.3.
+
 ## 2026-11-16 · Codex · Ambiente ligeramente gris
 - Petición del usuario: filtro gris suave para un ambiente triste. Ajuste del Environment
   del nivel y fondo 3D del menú: saturación 0,78, brillo 0,98 y contraste 0,98.
