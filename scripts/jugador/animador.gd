@@ -2588,9 +2588,9 @@ func update_rig(dt: float) -> void:
 		var lev = L.get("levanta")
 		if lev != null:
 			var lk: float = lev.k
-			var sq_l := Rbx.smooth(lk / 0.2) * (1.0 - 0.75 * Rbx.smooth((lk - 0.22) / 0.78))
+			var sq_l := smoothstep(0.0, 0.19, lk) * (1.0 - smoothstep(0.20, 0.88, lk))
 			crouch += 1.3 * sq_l
-			waistP -= 0.7 * sq_l + 0.12
+			waistP -= 0.68 * sq_l
 			pelvis_pitch -= 0.18 * sq_l
 			neckP += 0.35 * sq_l
 		if not grounded and va == null:
@@ -3699,7 +3699,7 @@ func update_rig(dt: float) -> void:
 	## ------------------------------------------------ levantar una moto: manos en el manillar y el asiento
 	var lev2 = L.get("levanta")
 	if lev2 != null and mt == null:
-		var w_lev := Rbx.smooth(float(lev2.k) / 0.15)
+		var w_lev := smoothstep(0.04, 0.19, float(lev2.k)) * (1.0 - smoothstep(0.86, 1.0, float(lev2.k)))
 		for s in ["L", "R"]:
 			var sgn := -1.0 if s == "L" else 1.0
 			hand_ik[s] = {"pos": lev2[s], "pole": (chest_yaw_base * Rbx.cf(sgn * 1.8, -0.8, 0.5)).origin, "w": w_lev}

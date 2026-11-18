@@ -261,7 +261,7 @@ func caer(lado := 0.0) -> void:
 func levantar() -> void:
 	if not caida:
 		return
-	var de_pie := _pose_de_pie()
+	var de_pie := [_lev_hasta.origin, atan2(-_lev_hasta.basis.z.x, -_lev_hasta.basis.z.z)] if levantando else _pose_de_pie()
 	_quitar_fisica()
 	# la moto queda donde se paró, en la pata, mirando hacia donde apuntaba
 	global_transform = Transform3D(Basis(Vector3.UP, de_pie[1]), de_pie[0])
@@ -283,8 +283,31 @@ func levantar() -> void:
 	inclinacion = 0.2
 
 
+func exclusion_levantar() -> Array[RID]:
+	var rids: Array[RID] = [get_rid()]
+	if is_instance_valid(_fisica):
+		rids.append(_fisica.get_rid())
+	return rids
+
+
+func se_puede_levantar() -> bool:
+	return caida and not levantando and (_fisica == null or (_fisica.linear_velocity.length() < 1.2 and _fisica.angular_velocity.length() < 0.85))
+
+
+func cancelar_levantar() -> void:
+	if not levantando:
+		return
+	levantando = false
+	lev_k = 0.0
+	if _fisica != null:
+		_fisica.global_transform = cuerpo_cf()
+		_fisica.collision_layer = 1
+		_fisica.collision_mask = 1 | 4 | 16
+		_fisica.freeze = false
+
+
 func empezar_a_levantar() -> void:
-	if caida and not levantando:
+	if se_puede_levantar():
 		levantando = true
 		lev_k = 0.0
 		vel_h = Vector3.ZERO
@@ -296,11 +319,6 @@ func empezar_a_levantar() -> void:
 			_fisica.freeze = true
 			_fisica.collision_layer = 0 # (no empuja al que la está levantando)
 			_fisica.collision_mask = 0
-
-
-## lado hacia el que apunta la parte de arriba de la moto tumbada (donde queda el asiento)
-func lado_arriba() -> Vector3:
-	return Rbx.flat(cuerpo_cf().basis.y).normalized()
 
 
 ## el piloto sale despedido (choque fuerte, aterrizaje imposible). Cómo sale y cómo cae la moto dependen del golpe
@@ -350,6 +368,10 @@ func _caida_segun_golpe(b: RigidBody3D) -> void:
 			b.linear_velocity = vh * azar.call(0.35, 0.55) + Vector3(0, azar.call(3.0, 6.0), 0)
 			b.angular_velocity = -der * (vh.length() / BATALLA * azar.call(0.7, 1.15)) \
 				+ adel * azar.call(-1.6, 1.6) + Vector3(0, azar.call(-1.2, 1.2), 0)
+		"aterrizaje_morro":
+			# La rueda delantera recibe el golpe, la cola sigue por inercia y pasa por encima.
+			b.linear_velocity = vh * 0.58 + Vector3.UP * clampf(float(g.impacto) * 0.10, 2.0, 6.0)
+			b.angular_velocity = -der * clampf(vh.length() / BATALLA + float(g.impacto) * 0.075, 2.2, 9.0) + adel * (-caida_lado * 1.3)
 		"choque":
 			# rebota contra la pared y cae de lado, girando
 			var n: Vector3 = g.normal if (g.normal as Vector3) != Vector3.ZERO else -adel
@@ -589,6 +611,24 @@ func _mover(dt: float) -> void:
 	# --- las ruedas tantean el suelo donde van a estar
 	var h_del := _apoyo_rueda(true, e_d0, fin_d)
 	var h_tras := _apoyo_rueda(false, e_t0, fin_t)
+	# El eje delantero puede cruzar una losa entre pasos aunque el centro siga en el aire.
+	if apoyo0 == 0 and c_libre < -0.35 and fin_d.y < e_d0.y:
+		var contacto := _barrer_morro(e_d0, fin_d) if not h_del.has("y") else {}
+		if h_del.has("y") and fin_d.y <= float(h_del.y):
+			var normal: Vector3 = h_del.normal
+			var golpe_morro := (e_d0 - fin_d).dot(normal) / maxf(dt, 0.001)
+			if c_libre < _pendiente(normal) - 0.95 and golpe_morro > 12.0:
+				var fraccion := (e_d0.y - float(h_del.y)) / (e_d0.y - fin_d.y)
+				contacto = {"fraccion": clampf(fraccion, 0.0, 1.0), "normal": normal}
+		if not contacto.is_empty():
+			var fraccion: float = contacto.fraccion
+			var c_contacto := lerpf(c0, c_libre, fraccion)
+			var eje_contacto := e_d0.lerp(fin_d, fraccion)
+			cabeceo = c_contacto
+			global_position += eje_contacto - _eje_en(p0, c_contacto, true) + Vector3.UP * 0.06
+			var impacto := (e_d0 - fin_d).dot(contacto.normal) / maxf(dt, 0.001)
+			_tirar_piloto("aterrizaje_morro", maxf(CHOQUE, impacto), contacto.normal)
+			return
 	# una rueda contra algo que no puede subir (bordillo alto, pared, cuesta de más de ~60°): no avanza más
 	var frac := 1.0
 	if h_del.has("bloq"):
@@ -955,7 +995,7 @@ func _aterrizar(golpe: float, desal: float, y: float) -> void:
 		Efectos.sonido(self, "Blunt", Vector3(global_position.x, y + 0.5, global_position.z), clampf(golpe / 30.0, 0.3, 1.5), 0.6)
 		Ruido.emitir(self, global_position, Ruido.radio_aterrizaje(golpe), Ruido.ATERRIZAJE, self)
 	if piloto != null and (golpe > 58.0 or (_malo and golpe > 14.0) or (absf(desal) > 1.25 and golpe > 4.0)):
-		_tirar_piloto("aterrizaje", maxf(golpe, CHOQUE))
+		_tirar_piloto("aterrizaje_morro" if desal < -0.48 else "aterrizaje", maxf(golpe, CHOQUE), Vector3.UP)
 
 
 ## la moto como una barra entre los ejes: punto medio de los ejes (m) <-> raíz del nodo (en el suelo, entre las ruedas)
@@ -1090,6 +1130,24 @@ func _altura_obstaculo(dir: Vector3) -> float:
 		if not r.is_empty():
 			mejor = maxf(mejor, (r.position as Vector3).y - global_position.y)
 	return mejor
+
+
+func _barrer_morro(inicio: Vector3, fin: Vector3) -> Dictionary:
+	var espacio := get_world_3d().direct_space_state
+	var t := _q_rueda.transform
+	t.origin = inicio
+	_q_rueda.transform = t
+	_q_rueda.motion = fin - inicio
+	var fracciones := espacio.cast_motion(_q_rueda)
+	_q_rueda.motion = Vector3.ZERO
+	if fracciones.size() < 2 or fracciones[1] >= 1.0:
+		return {}
+	t.origin = inicio.lerp(fin, fracciones[1]) + (fin - inicio).normalized() * 0.025
+	_q_rueda.transform = t
+	var hit := espacio.get_rest_info(_q_rueda)
+	if hit.is_empty() or (hit.normal as Vector3).y < 0.42:
+		return {}
+	return {"fraccion": fracciones[0], "normal": hit.normal}
 
 
 var _cil_rueda: CylinderShape3D
@@ -1408,9 +1466,7 @@ var _fisica_quieta := 0.0
 var _lev_desde := Transform3D.IDENTITY
 var _lev_hasta := Transform3D.IDENTITY
 var _giro_fisica := 0.0
-var _fis_v_prev := Vector3.ZERO
 var _golpe_caida := {}          # el golpe que la tira (para caer según él): {tipo, v, normal, impacto}
-var _fis_w_prev := Vector3.ZERO
 
 
 func _crear_fisica() -> void:
@@ -1425,10 +1481,10 @@ func _crear_fisica() -> void:
 	b.center_of_mass = Vector3(0, 1.7, 0.1)
 	var mat := PhysicsMaterial.new()
 	mat.friction = 0.55
-	mat.bounce = 0.12
+	mat.bounce = 0.16
 	b.physics_material_override = mat
 	b.linear_damp = 0.05
-	b.angular_damp = 0.4
+	b.angular_damp = 0.22
 	b.continuous_cd = true
 	b.collision_layer = 1
 	b.collision_mask = 1 | 4 | 16
@@ -1453,11 +1509,10 @@ func _crear_fisica() -> void:
 	# la velocidad que llevaba, y un giro hacia el lado al que cae (y el de la curva)
 	var adel := adelante()
 	b.linear_velocity = vel_mundo()
-	_fis_v_prev = b.linear_velocity
 	b.angular_velocity = adel * (-caida_lado * clampf(1.2 + vel_h.length() * 0.04, 1.2, 3.0) * lerpf(0.8, 1.25, randf())) \
 		+ derecha() * lerpf(-0.6, 0.6, randf()) + Vector3(0, yaw_rate + lerpf(-0.5, 0.5, randf()), 0)
 	_caida_segun_golpe(b)
-	_fis_v_prev = b.linear_velocity
+	_v_fisica_prev = b.linear_velocity
 	_fisica_quieta = 0.0
 	_fisica_t = 0.0
 	_giro_fisica = velocidad() / ModeloMoto.R_RUEDA
@@ -1545,34 +1600,21 @@ func _paso_fisica(dt: float) -> void:
 		return
 	var b := _fisica
 	var bt := b.global_transform
-	# la moto "lógica" (para el cartel, el jugador y las pruebas) va donde está el cuerpo
-	var pie := _pose_de_pie()
-	global_transform = Transform3D(Basis(Vector3.UP, pie[1]), pie[0])
-	rumbo = pie[1]
+	# La raíz lógica sigue al rígido. La búsqueda de un sitio para enderezarla se reserva para F.
+	var direccion_plana := Rbx.flat(-bt.basis.z)
+	if direccion_plana.length_squared() > 0.04:
+		rumbo = atan2(-direccion_plana.x, -direccion_plana.z)
+	global_transform = Transform3D(Basis(Vector3.UP, rumbo), bt.origin)
 	cuerpo.global_transform = bt
-	# (+ = arriba hacia la izquierda, como al conducir)
 	inclinacion = asin(clampf(-(Basis(Vector3.UP, rumbo).inverse() * bt.basis.y).x, -1.0, 1.0))
 	caida_k = 1.0
-	# chispas al arrastrarse deprisa por el suelo
 	var v := b.linear_velocity
-	# (2026-10-28) el jugador es un cuerpo cinemático (masa infinita): si se solapa con la moto caída (al levantarse
-	# a su lado) la lanzaba por los aires a 30-80 studs/s. Un cambio de velocidad así de brusco con el jugador al lado
-	# no es un golpe de verdad: se recorta
-	if (v - _fis_v_prev).length() > 10.0:
-		for jg in get_tree().get_nodes_in_group("jugador"):
-			if ((jg as Node3D).global_position - bt.origin).length() < 8.0:
-				v = _fis_v_prev + (v - _fis_v_prev).limit_length(2.5)
-				b.linear_velocity = v
-				b.angular_velocity = b.angular_velocity.limit_length(maxf(_fis_w_prev.length(), 2.0))
-				break
-	_fis_v_prev = v
-	_fis_w_prev = b.angular_velocity
 	if v.length() > 7.0 and _cerca_del_suelo(bt):
 		_chispa_t -= dt
 		if _chispa_t <= 0.0:
 			_chispa_t = 0.05
 			var pos := bt * Vector3(0, 0.6, 0)
-			Efectos.burst(self, Vector3(pos.x, pie[0].y + 0.2, pos.z), Vector3.UP - v.normalized() * 0.6, Color(1.0, 0.75, 0.3), 6, 16.0, 0.25, 0.35, 35.0)
+			Efectos.burst(self, pos, Vector3.UP - v.normalized() * 0.6, Color(1.0, 0.75, 0.3), 6, 16.0, 0.25, 0.35, 35.0)
 	if _audio_motor.playing:
 		_audio_motor.stop()
 	if _audio_neumatico.playing:

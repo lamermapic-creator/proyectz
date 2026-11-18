@@ -1,5 +1,7 @@
 ## 2026-11-17 — Levantarse para correr
 
+- Moto: barrido de la rueda delantera al caer de morro y transferencia a cuerpo rígido en impactos fuertes, con inercia y vuelco. F levanta desde cerca cuando la moto se estabiliza, con giro suave, pies en sitio y agarres fijos.
+
 - Salto con WASD: el impulso toma el rumbo del cuerpo al pulsar Espacio. Sin movimiento, el salto es vertical. Al bajar una rampa, la sonda de la moto solo busca bordillos en caras opuestas al avance.
 
 - Moto en rampas: la retención automática se limita al terreno casi plano, el motor mantiene la fuerza disponible al rodar hacia atrás y la sonda distingue la subida continua de un bordillo.
