@@ -1,5 +1,7 @@
 ## 2026-11-17 — Levantarse para correr
 
+- Menú principal: puesto de cuarentena con luces frías y luces de trabajo cálidas, lluvia en movimiento, cámara con deriva sutil y más detalle en el escenario. La portada y los paneles entran y salen con fundido y desplazamiento.
+
 - Depuración: corregidas advertencias de GDScript en los scripts del juego y el aviso de audio de motor al terminar pruebas sin ventana.
 
 - Depuración: ambos perfiles de exportación incluyen la clave de ejecución que espera Godot 4.6. Los efectos de audio puntuales se omiten en pruebas sin ventana para evitar avisos de recursos de audio al cerrar.

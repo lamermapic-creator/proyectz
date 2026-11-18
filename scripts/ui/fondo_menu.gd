@@ -3,6 +3,7 @@ extends Node3D
 var _luz_roja: OmniLight3D
 var _actores: Array[RigPersonaje] = []
 var _tiempo := 0.0
+var _camara: Camera3D
 var _materiales := {}
 
 func _ready() -> void:
@@ -13,10 +14,15 @@ func _ready() -> void:
 	env.background_color = Color("111a20")
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color("83979f")
-	env.ambient_light_energy = 0.32
+	env.ambient_light_energy = 0.38
+	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.ssao_radius = 1.4
+	env.ssao_intensity = 1.12
+	env.glow_intensity = 0.28
 	env.fog_enabled = true
-	env.fog_light_color = Color("26383d")
-	env.fog_density = 0.018
+	env.fog_light_color = Color("354951")
+	env.fog_density = 0.026
+	env.fog_sun_scatter = 0.10
 	# Gris suave en la imagen 3D: ambiente apagado sin teñir el HUD.
 	env.adjustment_enabled = true
 	env.adjustment_saturation = 0.78
@@ -26,11 +32,12 @@ func _ready() -> void:
 	var luna := DirectionalLight3D.new()
 	luna.rotation_degrees = Vector3(-36, -38, 0)
 	luna.light_color = Color("97b4be")
-	luna.light_energy = 0.95
+	luna.light_energy = 1.25
+	luna.light_angular_distance = 0.75
 	luna.shadow_enabled = true
 	add_child(luna)
 	_luz_roja = OmniLight3D.new()
-	_luz_roja.position = Vector3(6, 5.8, 2)
+	_luz_roja.position = Vector3(10.0, 5.2, -2.2)
 	_luz_roja.light_color = Color("e34d34")
 	_luz_roja.light_energy = 3.4
 	_luz_roja.omni_range = 17
@@ -38,7 +45,7 @@ func _ready() -> void:
 	var relleno := OmniLight3D.new()
 	relleno.position = Vector3(2, 7, 5)
 	relleno.light_color = Color("9bb5b9")
-	relleno.light_energy = 1.6
+	relleno.light_energy = 2.1
 	relleno.omni_range = 18
 	add_child(relleno)
 	var suelo := _caja(Vector3(0, -0.2, -3), Vector3(70, 0.4, 90), Color("252d2e"))
@@ -83,12 +90,16 @@ func _ready() -> void:
 		actor.rotation_degrees.y = 180.0 + float(datos[2])
 		add_child(actor)
 		_actores.append(actor)
-	var camara := Camera3D.new()
-	camara.fov = 46
-	add_child(camara)
-	camara.position = Vector3(8.5, 4.5, 15.5)
-	camara.look_at(Vector3(0.5, 2.6, -1))
-	camara.current = true
+	_camara = Camera3D.new()
+	_camara.fov = 42
+	add_child(_camara)
+	_encuadrar()
+	_camara.current = true
+
+
+func _encuadrar() -> void:
+	_camara.position = Vector3(8.7 + sin(_tiempo * 0.17) * 0.34, 4.3 + sin(_tiempo * 0.21) * 0.09, 15.7)
+	_camara.look_at(Vector3(0.6, 2.65, -1.25))
 
 func _caja(pos: Vector3, tam: Vector3, color: Color) -> MeshInstance3D:
 	var obj := MeshInstance3D.new()
@@ -108,6 +119,7 @@ func _caja(pos: Vector3, tam: Vector3, color: Color) -> MeshInstance3D:
 
 func _process(dt: float) -> void:
 	_tiempo += minf(dt, 0.1)
+	_encuadrar()
 	_luz_roja.light_energy = 3.2 + sin(_tiempo * 1.4) * 0.25
 	for i in _actores.size():
 		var actor := _actores[i]
@@ -150,12 +162,28 @@ func _ampliar_puesto() -> void:
 	var foco := SpotLight3D.new()
 	foco.position = Vector3(10, 5.8, -3.9)
 	foco.light_color = Color("e2c99a")
-	foco.light_energy = 7.0
+	foco.light_energy = 8.0
+	foco.spot_attenuation = 0.85
 	foco.spot_range = 23.0
 	foco.spot_angle = 52.0
 	foco.shadow_enabled = true
 	add_child(foco)
-	foco.look_at(Vector3(4, 0, 2))
+	foco.look_at(Vector3(3, 0.15, 1.8))
+	# Pórtico desmontable y señalización mojada junto a la garita.
+	for x in [6.1, 13.3]:
+		_caja(Vector3(x, 2.9, -4.05), Vector3(0.25, 5.8, 0.27), Color("424949"))
+		_caja(Vector3(x, 0.18, -4.05), Vector3(0.65, 0.36, 0.65), Color("555756"))
+	_caja(Vector3(9.7, 5.68, -4.02), Vector3(7.3, 0.36, 0.30), Color("4f5856"))
+	var fluorescente := _caja(Vector3(9.7, 5.47, -3.93), Vector3(2.3, 0.07, 0.22), Color("fff0cd"))
+	var emisor := (fluorescente.material_override as StandardMaterial3D).duplicate() as StandardMaterial3D
+	emisor.emission_enabled = true
+	emisor.emission = Color("ffe3ae")
+	emisor.emission_energy_multiplier = 2.4
+	fluorescente.material_override = emisor
+	for x in [-8.7, 6.8, 12.6]:
+		for z in [-2.0, 2.8]:
+			_caja(Vector3(x, 0.52, z), Vector3(0.16, 1.04, 0.16), Color("55372a"))
+			_caja(Vector3(x, 0.78, z), Vector3(0.18, 0.15, 0.18), Color("bba87a"))
 	# Luminarias prácticas, no luces por cada ventana.
 	for z in [-15.0, -29.0]:
 		_caja(Vector3(-10, 5, z), Vector3(.15, 10, .15), Color("3c4546"))

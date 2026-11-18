@@ -21,6 +21,10 @@ var _portada: Control
 var _ventanas: Control
 var _descripcion: Label
 var _tema: Theme
+var _marco: PanelContainer
+var _tween_panel: Tween
+var _tween_fundido: Tween
+var _cerrando := false
 
 func _ready() -> void:
 	Opciones.cargar()
@@ -87,7 +91,7 @@ func _boton(texto: String, indice: int, accion: Callable, principal := false) ->
 	b.mouse_entered.connect(func(): b.grab_focus())
 	b.focus_entered.connect(func():
 		_descripcion.text = ["La ciudad escucha cada paso.", "Ajusta la experiencia a tu equipo.", "Aprende a moverte sin hacer ruido.", "Volver al escritorio."][indice])
-	_texto(b, "%02d" % (indice + 1), Vector2(17, 23 if principal else 12), 12, SUAVE)
+	_rect(b, Vector2(18, 13), Vector2(2, 40 if principal else 18), ROJO if principal else Color("65706b"))
 	_texto(b, "→", Vector2(359, 17 if principal else 7), 22, ROJO)
 	return b
 
@@ -129,12 +133,10 @@ func _crear_ui() -> void:
 	_portada.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_referencia.add_child(_portada)
 	_rect(_portada, Vector2(76, 70), Vector2(28, 3), ROJO)
-	_texto(_portada, "SUPERVIVENCIA  /  SIGILO", Vector2(116, 60), 12, SUAVE)
 	_texto(_portada, "PROYECTO", Vector2(70, 102), 84, TEXTO, true)
 	_texto(_portada, "Z", Vector2(71, 174), 132, ROJO, true)
 	_rect(_portada, Vector2(165, 230), Vector2(1, 52), Color("57615c"))
 	_texto(_portada, "SOBREVIVE.\nNO HAGAS RUIDO.", Vector2(183, 230), 17, TEXTO)
-	_texto(_portada, "ZONA DE EXCLUSIÓN", Vector2(971, 64), 12, SUAVE)
 	_botones = VBoxContainer.new()
 	_botones.name = "Acciones"
 	_botones.position = Vector2(76, 345)
@@ -159,9 +161,13 @@ func _crear_ui() -> void:
 	_fundido = _rect(raiz, Vector2.ZERO, Vector2.ZERO, Color.BLACK)
 	_fundido.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_fundido.mouse_filter = Control.MOUSE_FILTER_STOP
-	var tw := create_tween()
-	tw.tween_property(_fundido, "color:a", 0.0, 0.9)
-	tw.tween_callback(func(): _fundido.mouse_filter = Control.MOUSE_FILTER_IGNORE)
+	_portada.modulate.a = 0.0
+	_portada.position.x = -12.0
+	_tween_fundido = create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_tween_fundido.tween_property(_fundido, "color:a", 0.0, 0.70)
+	_tween_fundido.tween_property(_portada, "modulate:a", 1.0, 0.52)
+	_tween_fundido.tween_property(_portada, "position:x", 0.0, 0.52)
+	_tween_fundido.chain().tween_callback(func(): _fundido.mouse_filter = Control.MOUSE_FILTER_IGNORE)
 	(_botones.get_child(0) as Button).grab_focus()
 
 func _crear_ventanas() -> void:
@@ -171,6 +177,7 @@ func _crear_ventanas() -> void:
 	_referencia.add_child(_ventanas)
 	_rect(_ventanas, Vector2.ZERO, Vector2(1280, 720), Color(0.015, 0.022, 0.024, 0.94))
 	var marco := PanelContainer.new()
+	_marco = marco
 	marco.position = Vector2(220, 48)
 	marco.size = Vector2(840, 602)
 	_ventanas.add_child(marco)
@@ -187,6 +194,7 @@ func _crear_ventanas() -> void:
 	contenido.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(contenido)
 	_opciones = PanelOpciones.new()
+	_opciones.ocultar_al_cerrar = false
 	contenido.add_child(_opciones)
 	_opciones.theme = _tema
 	_opciones.cerrado.connect(_volver)
@@ -239,7 +247,7 @@ func _ajustar_ui() -> void:
 	_referencia.position = (tam - Vector2(1280, 720) * factor) * 0.5
 
 func _abrir(panel: Control) -> void:
-	if _saliendo:
+	if _saliendo or _cerrando or _ventanas.visible:
 		return
 	_portada.visible = false
 	_botones.visible = false
@@ -252,16 +260,36 @@ func _abrir(panel: Control) -> void:
 		panel.visible = true
 		(panel.find_children("*", "Button", true, false)[0] as Button).grab_focus()
 
+	_ventanas.modulate.a = 0.0
+	_marco.position.y = 63.0
+	_tween_panel = create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_tween_panel.tween_property(_ventanas, "modulate:a", 1.0, 0.24)
+	_tween_panel.tween_property(_marco, "position:y", 48.0, 0.28)
+
+
 func _volver() -> void:
-	_opciones.visible = false
-	_controles.visible = false
-	_ventanas.visible = false
-	_portada.visible = true
-	_botones.visible = true
-	(_botones.get_child(0) as Button).grab_focus()
+	if _cerrando or not _ventanas.visible:
+		return
+	_cerrando = true
+	if _tween_panel != null and _tween_panel.is_valid():
+		_tween_panel.kill()
+	_tween_panel = create_tween().set_parallel(true).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	_tween_panel.tween_property(_ventanas, "modulate:a", 0.0, 0.16)
+	_tween_panel.tween_property(_marco, "position:y", 55.0, 0.16)
+	_tween_panel.chain().tween_callback(func():
+		_opciones.visible = false
+		_controles.visible = false
+		_ventanas.visible = false
+		_portada.visible = true
+		_botones.visible = true
+		_cerrando = false
+		(_botones.get_child(0) as Button).grab_focus())
+	_portada.modulate.a = 0.0
+	_tween_panel.chain().tween_property(_portada, "modulate:a", 1.0, 0.16)
+
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not _saliendo and event.is_action_pressed("ui_cancel") and _ventanas.visible:
+	if not _saliendo and not _cerrando and event.is_action_pressed("ui_cancel") and _ventanas.visible:
 		if _opciones.visible:
 			_opciones._cerrar()
 		else:
@@ -281,6 +309,9 @@ func _transicion(accion: Callable) -> void:
 	for b in _botones.get_children():
 		(b as Button).disabled = true
 	_fundido.mouse_filter = Control.MOUSE_FILTER_STOP
-	var tw := create_tween()
-	tw.tween_property(_fundido, "color:a", 1.0, 0.55)
-	tw.tween_callback(accion)
+	if _tween_fundido != null and _tween_fundido.is_valid():
+		_tween_fundido.kill()
+	var tw := create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_property(_fundido, "color:a", 1.0, 0.46)
+	tw.tween_property(_portada, "position:x", -18.0, 0.38)
+	tw.chain().tween_callback(accion)

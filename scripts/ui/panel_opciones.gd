@@ -4,6 +4,8 @@ extends PanelContainer
 
 signal cerrado
 
+var ocultar_al_cerrar := true
+
 var _filas := VBoxContainer.new()
 
 
@@ -50,7 +52,8 @@ func abrir() -> void:
 
 func _cerrar() -> void:
 	Opciones.guardar()
-	visible = false
+	if ocultar_al_cerrar:
+		visible = false
 	cerrado.emit()
 
 
