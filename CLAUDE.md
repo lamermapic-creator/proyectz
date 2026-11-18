@@ -1,5 +1,7 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
+Versión actual de Proyecto Z: **0.6V**.
+
 - Golpes rápidos: anticipación corta, retorno del puño junto al rostro y codo que sigue el arco del arma. El tiempo del clip de Blender gobierna la animación; el cooldown regula la siguiente entrada.
 
 - Animaciones de ataque: 16 acciones CC_ editables en `animaciones/blender/combate/golpes.blend` (Blender 4.3). Seleccionar Piloto en el editor de acciones. Las curvas del grupo Controles IK se exportan ejecutando `python3 animaciones/blender/combate/a_gd_cc.py scripts/jugador/combate_cc.gd` desde la raíz. El marcador Contacto identifica el fotograma de impacto.
@@ -584,7 +586,7 @@ Freesound (sonidos), Poly Haven y ambientCG (texturas/HDRI), Quaternius y Kenney
   MenuTrucos, lo crea el Jugador solo en desarrollo): interruptores, acciones y teletransporte (`Jugador.teletransportar`,
   zonas en `MenuTrucos.ZONAS`, en metros). Si se añade una zona o mecánica nueva al nivel, añadirla ahí.
 - **Pantalla de carga:** `PantallaCarga.ir_a(get_tree(), ruta)` (`scripts/ui/pantalla_carga.gd`); la usan Jugar y "Volver al menú".
-- Ejecutable: Proyecto → Exportar → Windows Desktop, PCK embebido, sin depuración → `C:\Users\ferna\Documents\godotproyectz\versiones\v0.5\V0.5.exe` (versión actual: V0.5, desde el 2026-11-08; se cambia en un solo sitio, `application/config/version` de project.godot, y la ruta en export_presets.cfg) (un solo .exe, ~110 MB). Las plantillas de exportación 4.7.2 ya están instaladas.
+- Ejecutable: Proyecto → Exportar → Windows Desktop, PCK embebido, sin depuración → `C:\Users\ferna\Documents\godotproyectz\versiones\0.6V\0.6V.exe` (versión actual: 0.6V; se cambia en un solo sitio, `application/config/version` de project.godot, y la ruta en export_presets.cfg) (un solo .exe, ~110 MB). Las plantillas de exportación 4.7.2 ya están instaladas.
 
 ## Arreglos de jugabilidad (2026-10-24, KangooG)
 - Disparo: la bala sale del `Muzzle` en la dirección del cañón (`Arsenal.salida_bala`); al apuntar/disparar el

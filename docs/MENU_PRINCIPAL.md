@@ -1,5 +1,7 @@
 > Dirección vigente: [v7, bloques limpios sin repliegues](MODELOS_LIMPIOS_V7.md).
 
+Versión actual de Proyecto Z: **0.6V**.
+
 > Dirección vigente: [v6, todas las piezas cuadradas](CORRECCION_CUADRADA_V6.md).
 
 > Revisión visual vigente: [v5](REVISION_VISUAL_V5.md). Conserva el estilo cuadrado de v4, contratos y flujo.

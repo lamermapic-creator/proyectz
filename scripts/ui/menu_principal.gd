@@ -9,7 +9,7 @@ const TEXTO := Color("e2ded3")
 const SUAVE := Color("969f9d")
 
 static func version_texto() -> String:
-	return "V%s · prototipo" % str(ProjectSettings.get_setting("application/config/version", "?"))
+	return "%s · prototipo" % str(ProjectSettings.get_setting("application/config/version", "?"))
 
 var _botones: VBoxContainer
 var _opciones: PanelOpciones
@@ -24,7 +24,7 @@ var _tema: Theme
 
 func _ready() -> void:
 	Opciones.cargar()
-	get_window().title = "Proyecto Z · V%s" % str(ProjectSettings.get_setting("application/config/version", "?"))
+	get_window().title = "Proyecto Z · %s" % str(ProjectSettings.get_setting("application/config/version", "?"))
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	get_tree().paused = false
 	add_child(FONDO.new())

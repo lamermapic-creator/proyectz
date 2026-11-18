@@ -61,7 +61,7 @@ func _ready() -> void:
 	caja.offset_bottom = -60
 	caja.add_theme_constant_override("separation", 10)
 	_raiz.add_child(caja)
-	caja.add_child(EstiloUI.titulo("PROYECTO Z", 48))
+	caja.add_child(EstiloUI.titulo("PROYECTO Z · %s" % ProjectSettings.get_setting("application/config/version"), 48))
 	var consejo := Label.new()
 	consejo.text = "Consejo: " + str(CONSEJOS[randi() % CONSEJOS.size()])
 	consejo.add_theme_color_override("font_color", EstiloUI.TEXTO_SUAVE)

@@ -1,5 +1,7 @@
 # Proyecto Z
 
+Versión actual de Proyecto Z: **0.6V**.
+
 Juego de zombis en tercera persona, realista y de sigilo, hecho en **Godot 4.7.2** (empezó en Roblox).
 Estado: prototipo de movimiento, combate y zombis que te oyen y te ven (nivel de pruebas; aún sin mapa).
 Todo lo que haces suena y se ve: agachado y quieto cuesta descubrirte; corriendo o disparando, te descubren enseguida.

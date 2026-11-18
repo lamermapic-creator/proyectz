@@ -1,5 +1,7 @@
 # 🔍 AUDITORÍA TÉCNICA — Proyecto Z
 
+Versión actual de Proyecto Z: **0.6V**.
+
 > **Documento independiente.** No sustituye al `README.md` ni a `CLAUDE.md`: es una revisión externa del
 > proyecto tal y como estaba el **2026-10-23** (commit `7498278`), hecha como la haría un ingeniero senior
 > que ve el repositorio por primera vez. Vive en su propia rama para no mezclarse con el trabajo diario.
