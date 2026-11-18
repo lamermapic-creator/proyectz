@@ -1,5 +1,7 @@
 ## 2026-11-17 — Levantarse para correr
 
+- Sangre simulada durante los pasos de física, con gravedad, arrastre y expansión de la mancha al tocar el escenario estático. Se descartan las colisiones del jugador y la moto para evitar manchas suspendidas.
+
 - Desmembramiento de zombis: un impacto letal de machete, hacha o francotirador en una extremidad suelta la articulación y deja las piezas bajo el ragdoll, con marcas en el corte.
 
 - Daño visual: heridas por bala y cortes adheridos a las piezas del zombi, hasta cuatro por pieza. Las gotas siguen trayectorias con gravedad y dejan manchas en la primera superficie.

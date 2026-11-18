@@ -108,7 +108,7 @@ static func burst(ctx: Node, pos: Vector3, normal: Vector3, color: Color, count:
 
 
 ## mancha plana sobre una superficie (agujero de bala, charco de sangre)
-static func splat(ctx: Node, pos: Vector3, normal: Vector3, color: Color, size: float, life: float) -> void:
+static func splat(ctx: Node, pos: Vector3, normal: Vector3, color: Color, size: float, life: float, superficie: StaticBody3D = null) -> void:
 	if _decals >= 70:
 		return
 	_decals += 1
@@ -118,7 +118,7 @@ static func splat(ctx: Node, pos: Vector3, normal: Vector3, color: Color, size: 
 	var q := CylinderMesh.new()
 	q.top_radius = size * 0.5
 	q.bottom_radius = size * 0.5
-	q.height = 0.02
+	q.height = 0.004
 	q.radial_segments = 12
 	q.rings = 1
 	mi.mesh = q
@@ -131,7 +131,8 @@ static func splat(ctx: Node, pos: Vector3, normal: Vector3, color: Color, size: 
 		_vigilar()
 		_mat_cache[k] = mat
 	mi.material_override = _mat_cache[k]
-	_raiz(ctx).add_child(mi)
+	var padre: Node = superficie if superficie != null else _raiz(ctx)
+	padre.add_child(mi)
 	var n := normal.normalized()
 	var ref := Vector3.FORWARD if absf(n.dot(Vector3.FORWARD)) < 0.9 else Vector3.RIGHT
 	var x := ref.cross(n).normalized()
@@ -139,8 +140,12 @@ static func splat(ctx: Node, pos: Vector3, normal: Vector3, color: Color, size: 
 	var b := Basis(x, n, z).rotated(n, randf() * TAU)
 	# un poco irregular: ligeramente ovalada
 	b = b * Basis.from_scale(Vector3(1.0, 1.0, 0.7 + randf() * 0.5))
-	mi.global_transform = Transform3D(b, pos + n * 0.02)
+	mi.global_transform = Transform3D(b, pos + n * 0.003)
 	var tw := mi.create_tween()
+	if superficie != null:
+		var escala_final := mi.scale
+		mi.scale = escala_final * Vector3(0.3, 1.0, 0.3)
+		tw.tween_property(mi, "scale", escala_final, 0.26).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
 	tw.tween_interval(life)
 	tw.tween_property(mi, "scale", Vector3(0.01, 1.0, 0.01), 1.5)
 	mi.tree_exiting.connect(func(): _decals -= 1)
@@ -182,25 +187,64 @@ static func herida(parte: Node3D, punto: Vector3, normal: Vector3, tamano: float
 		capa.position.z = 0.01 + i * 0.006
 
 
+class GotaSangre extends MeshInstance3D:
+	static var activas := 0
+	const MAXIMAS := 128
+	var velocidad := Vector3.ZERO
+	var tiempo := 0.0
+	var diametro := 0.1
+	var excluir: Array[RID] = []
+
+	func _physics_process(dt: float) -> void:
+		tiempo += dt
+		if tiempo > 1.25:
+			queue_free()
+			return
+		var desde := global_position
+		var gravedad := Vector3.DOWN * 35.0
+		var hasta := desde + velocidad * dt + gravedad * (0.5 * dt * dt)
+		velocidad = (velocidad + gravedad * dt) * exp(-0.8 * dt)
+		var espacio := get_world_3d().direct_space_state
+		while true:
+			var rayo := PhysicsRayQueryParameters3D.create(desde, hasta, 1, excluir)
+			var golpe := espacio.intersect_ray(rayo)
+			if golpe.is_empty():
+				global_position = hasta
+				return
+			var suelo := golpe.collider as StaticBody3D
+			if suelo != null and not suelo is AnimatableBody3D:
+				var normal: Vector3 = golpe.normal
+				var presion := maxf(0.0, -normal.dot(velocidad))
+				var expansion := clampf(1.0 + presion * 0.06, 1.0, 2.4)
+				Efectos.splat(self, golpe.position, normal, Color8(59, 6, 9), diametro * expansion, 32, suelo)
+				queue_free()
+				return
+			# Jugador y moto también usan la capa 1. La gota atraviesa sus cajas de juego.
+			excluir.append(golpe.rid)
+
+
 static func blood_at(ctx: Node, pos: Vector3, normal: Vector3, fuerza := 1.0) -> void:
+	var escena := ctx.get_tree().current_scene
+	var padre: Node = escena if escena != null else ctx
 	var salida := normal.normalized()
-	burst(ctx, pos, salida, Color8(92, 8, 11), roundi(9 * fuerza), 14 * fuerza, 0.24, 0.45, 53)
-	burst(ctx, pos, salida, Color8(55, 4, 8), roundi(5 * fuerza), 7 * fuerza, 0.42, 0.55, 35)
-	# Proyecta solo unas gotas contra la primera superficie que intersecta su trayectoria.
-	var space := (ctx as Node3D).get_world_3d().direct_space_state
-	for i in 4:
-		var direccion := salida + Vector3(randf_range(-0.65, 0.65), randf_range(-0.55, 0.2), randf_range(-0.65, 0.65))
-		var velocidad := direccion.normalized() * randf_range(4.0, 10.0) * fuerza
-		var desde := pos
-		for tramo in range(1, 4):
-			var t := tramo * 0.18
-			var hasta := pos + velocidad * t + Vector3.DOWN * 17.5 * t * t
-			var q := PhysicsRayQueryParameters3D.create(desde, hasta, 1)
-			var hit := space.intersect_ray(q)
-			if not hit.is_empty():
-				splat(ctx, hit.position, hit.normal, Color8(59, 6, 9), randf_range(0.12, 0.55) * fuerza, 32)
-				break
-			desde = hasta
+	var malla := SphereMesh.new()
+	malla.radius = 0.5
+	malla.height = 1.0
+	malla.radial_segments = 6
+	malla.rings = 3
+	malla.material = _mat_unshaded(Color8(80, 8, 11))
+	for i in mini(roundi(10 * fuerza), GotaSangre.MAXIMAS - GotaSangre.activas):
+		var gota := GotaSangre.new()
+		gota.diametro = randf_range(0.045, 0.15) * fuerza
+		gota.mesh = malla
+		gota.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		gota.scale = Vector3.ONE * gota.diametro
+		var dispersion := Vector3(randf_range(-0.58, 0.58), randf_range(-0.35, 0.48), randf_range(-0.58, 0.58))
+		gota.velocidad = (salida + dispersion).normalized() * randf_range(3.0, 12.0) * fuerza
+		padre.add_child(gota)
+		GotaSangre.activas += 1
+		gota.tree_exiting.connect(func(): GotaSangre.activas -= 1)
+		gota.global_position = pos
 
 
 ## trazadora: un trazo luminoso que viaja de la boca del cañón al impacto
