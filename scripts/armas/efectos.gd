@@ -109,7 +109,7 @@ static func burst(ctx: Node, pos: Vector3, normal: Vector3, color: Color, count:
 
 ## mancha plana sobre una superficie (agujero de bala, charco de sangre)
 static func splat(ctx: Node, pos: Vector3, normal: Vector3, color: Color, size: float, life: float, superficie: StaticBody3D = null) -> void:
-	if _decals >= 70:
+	if _decals >= 140:
 		return
 	_decals += 1
 	var mi := MeshInstance3D.new()
@@ -189,7 +189,7 @@ static func herida(parte: Node3D, punto: Vector3, normal: Vector3, tamano: float
 
 class GotaSangre extends MeshInstance3D:
 	static var activas := 0
-	const MAXIMAS := 128
+	const MAXIMAS := 192
 	var velocidad := Vector3.ZERO
 	var tiempo := 0.0
 	var diametro := 0.1
@@ -233,7 +233,7 @@ static func blood_at(ctx: Node, pos: Vector3, normal: Vector3, fuerza := 1.0) ->
 	malla.radial_segments = 6
 	malla.rings = 3
 	malla.material = _mat_unshaded(Color8(80, 8, 11))
-	for i in mini(roundi(10 * fuerza), GotaSangre.MAXIMAS - GotaSangre.activas):
+	for i in mini(roundi(20 * fuerza), GotaSangre.MAXIMAS - GotaSangre.activas):
 		var gota := GotaSangre.new()
 		gota.diametro = randf_range(0.045, 0.15) * fuerza
 		gota.mesh = malla
