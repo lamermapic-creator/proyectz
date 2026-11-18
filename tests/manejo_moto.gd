@@ -87,6 +87,17 @@ func frenos() -> void:
 		await process_frame
 		m.paso(1.0 / 60.0, {"gas": 1.0, "freno": 1.0})
 	comprobar(absf(m.velocidad()) < 0.05, "el freno tiene prioridad sobre el acelerador")
+	m.vel_h = m.adelante() * 24.0
+	for i in 30:
+		await process_frame
+		m.paso(1.0 / 60.0, {"gas": 1.0, "giro": 0.75, "freno_mano": true})
+	var tras_medio_segundo := m.vel_h.length()
+	comprobar(tras_medio_segundo < 14.0, "Espacio frena al derrapar aunque W siga presionada")
+	for i in 60:
+		await process_frame
+		m.paso(1.0 / 60.0, {"gas": 1.0, "freno_mano": true})
+	comprobar(m.vel_h.length() < 0.1, "Espacio puede detener la moto por completo")
+	print("MANEJO derrape velocidad_inicial=24.0 velocidad_a_0.5s=%.2f" % tras_medio_segundo)
 	for pendiente in [-0.10, 0.10]:
 		piso.rotation.x = pendiente
 		m.global_position = Vector3(30, 0, 0)

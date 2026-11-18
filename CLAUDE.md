@@ -1,5 +1,7 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
+- El freno de mano reduce la velocidad longitudinal también en derrape y tiene prioridad sobre el acelerador y la marcha atrás.
+
 - Moto: F monta desde la posición actual dentro del alcance lateral. El montaje en carrera es más corto y levanta antes la pierna. Más agarre lateral y derrape controlado al girar con el freno de mano. El neumático suena según el deslizamiento real.
 
 - Montaje de moto: F conserva una aproximación rápida si se pulsa en carrera. El último paso frena y enlaza con apoyo, giro, inclinación y cruce de la pierna, con tiempos propios para la cadera y la orientación.

@@ -32,6 +32,7 @@ const ATRAS := 5.0             # marcha atrás (empujando con los pies)
 const AGARRE_RUEDA := 1.09     # coeficiente de agarre del neumático (acelerando, la rueda de atrás lleva ~80 % del peso)
 const BATALLA := 4.6           # distancia entre ejes
 const GRAV := 35.0
+const FRENO_MANO := 22.0       # desaceleración longitudinal de la rueda trasera en el suelo
 const AGARRE_DERRAPE := 19.0   # con el freno de mano
 const MARCHAS := [0.0, 11.0, 19.0, 28.0, 38.0, 54.0] # velocidad máxima de cada marcha
 const RUIDO_RALENTI := 26.0    # radio del ruido del motor al ralentí (studs)
@@ -385,7 +386,7 @@ func paso(dt: float, mandos: Dictionary) -> void:
 	var f_in := clampf(float(mandos.get("freno", 0.0)), 0.0, 1.0)
 	var giro_in := clampf(float(mandos.get("giro", 0.0)), -1.0, 1.0)
 	var mano: bool = mandos.get("freno_mano", false)
-	gas = Rbx.damp(gas, g_in if motor_on else 0.0, 8.0, dt)
+	gas = Rbx.damp(gas, g_in if motor_on and not mano else 0.0, 8.0, dt)
 	frenando = f_in
 	var f := adelante()
 	var r := derecha()
@@ -394,7 +395,7 @@ func paso(dt: float, mandos: Dictionary) -> void:
 	var va := absf(v_f)
 	var vf_inicial := v_f
 	var frenaba_avance := f_in > 0.05 and v_f > 0.5
-	if f_in <= 0.05 or g_in > 0.05 or frenaba_avance:
+	if mano or f_in <= 0.05 or g_in > 0.05 or frenaba_avance:
 		_espera_atras = 0.0
 
 	if caida:
@@ -415,7 +416,7 @@ func paso(dt: float, mandos: Dictionary) -> void:
 		caida_k = maxf(0.0, caida_k - dt / 0.8)
 		if not en_aire:
 			# --- motor y frenos
-			if g_in > 0.05 and motor_on:
+			if g_in > 0.05 and motor_on and not mano:
 				if v_f < -0.5:
 					v_f = minf(0.0, v_f + FRENO * g_in * dt)
 				else:
@@ -430,7 +431,7 @@ func paso(dt: float, mandos: Dictionary) -> void:
 			if f_in > 0.05:
 				if v_f > 0.5:
 					v_f = maxf(0.0, v_f - FRENO * f_in * dt)
-				elif g_in < 0.05:
+				elif g_in < 0.05 and not mano:
 					# S no cambia de sentido en el instante de detenerse.
 					if v_f > 0.1:
 						v_f = maxf(0.0, v_f - FRENO * f_in * dt)
@@ -441,8 +442,6 @@ func paso(dt: float, mandos: Dictionary) -> void:
 						_espera_atras += dt
 						var paso_atras := maxf(0.0, _espera_atras - maxf(anterior, PAUSA_ATRAS))
 						v_f = move_toward(v_f, -ATRAS * f_in, 11.0 * paso_atras)
-			if mano:
-				v_f = move_toward(v_f, 0.0, 9.0 * dt)
 			# rozamiento, aire y freno motor
 			var roce := 1.0 + 0.0025 * v_f * v_f + (2.5 if (g_in < 0.05 and motor_on) else 0.0) + (4.0 if not motor_on and piloto == null else 0.0)
 			v_f = move_toward(v_f, 0.0, roce * dt)
@@ -460,6 +459,9 @@ func paso(dt: float, mandos: Dictionary) -> void:
 				# parada sin tocar nada con alguien encima: el piloto la sujeta con el freno
 				if piloto != null and g_in < 0.05 and f_in < 0.05 and absf(v_f) < 1.2:
 					v_f = move_toward(v_f, 0.0, 30.0 * dt)
+			if mano:
+				var fuerza_freno := FRENO_MANO * (1.0 if apoyo == 2 else 0.55)
+				v_f = move_toward(v_f, 0.0, fuerza_freno * dt)
 			_paso_direccion(dt, giro_in, mano, v_f, v_l, (v_f - vf_inicial) / maxf(dt, 0.0001))
 		else:
 			yaw_rate = Rbx.damp(yaw_rate, 0.0, 1.5, dt)
