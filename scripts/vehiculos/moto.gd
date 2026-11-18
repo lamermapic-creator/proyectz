@@ -415,17 +415,13 @@ func paso(dt: float, mandos: Dictionary) -> void:
 		if not en_aire:
 			# --- motor y frenos
 			if g_in > 0.05 and motor_on and not mano:
-				if v_f < -0.5:
-					v_f = minf(0.0, v_f + FRENO * g_in * dt)
-				else:
-					# curva de par: mucho empuje abajo (arranca y sube cuestas con fuerza) que se acaba en la punta
-					var k_v := clampf(v_f / VMAX, 0.0, 1.0)
-					var empuje := ACEL * gas * (1.0 - f_in) * (1.6 - 0.9 * k_v) * (1.0 - pow(k_v, 4.0))
-					# (2026-10-29) la rueda no puede empujar más de lo que agarra: en una cuesta muy empinada patina
-					# (cuesta arriba a más de ~40° ya no gana velocidad: si no, trepaba paredes de 50° como un cohete)
-					if apoyo == 2:
-						empuje = minf(empuje, AGARRE_RUEDA * GRAV * cos(cab_suelo) * 0.8)
-					v_f += empuje * dt
+				# El motor empuja hacia delante con el par disponible incluso al rodar cuesta abajo.
+				# No clavar la velocidad en cero antes de aplicar gravedad.
+				var k_v := clampf(v_f / VMAX, 0.0, 1.0)
+				var empuje := ACEL * gas * (1.0 - f_in) * (1.6 - 0.9 * k_v) * (1.0 - pow(k_v, 4.0))
+				if apoyo == 2:
+					empuje = minf(empuje, AGARRE_RUEDA * GRAV * cos(cab_suelo) * 0.8)
+				v_f += empuje * dt
 			if f_in > 0.05:
 				if v_f > 0.5:
 					v_f = maxf(0.0, v_f - FRENO * f_in * dt)
@@ -458,7 +454,7 @@ func paso(dt: float, mandos: Dictionary) -> void:
 						# Durante la pausa el freno sujeta la pendiente; no reinicia el temporizador por deriva.
 						v_f = 0.0
 				# parada sin tocar nada con alguien encima: el piloto la sujeta con el freno
-				if piloto != null and g_in < 0.05 and f_in < 0.05 and absf(v_f) < 1.2:
+				if piloto != null and g_in < 0.05 and f_in < 0.05 and absf(v_f) < 1.2 and absf(cab_suelo) < deg_to_rad(6.0):
 					v_f = move_toward(v_f, 0.0, 30.0 * dt)
 			if mano:
 				var fuerza_freno := FRENO_MANO * (1.0 if apoyo == 2 else 0.55)
@@ -1062,7 +1058,11 @@ func _apoyo_rueda(delantera: bool, eje0: Vector3, eje1: Vector3) -> Dictionary:
 			q.exclude = _q_rueda.exclude
 			var r := get_world_3d().direct_space_state.intersect_ray(q)
 			if not r.is_empty():
-				var escalon := pc.y - (r.position as Vector3).y
+				# Descuenta la subida continua de la rampa antes de medir el salto.
+				var normal_anterior: Vector3 = r.normal
+				var recorrido := Rbx.flat(pc - (r.position as Vector3))
+				var subida_rampa := -normal_anterior.dot(recorrido) / maxf(normal_anterior.y, 0.45)
+				var escalon := pc.y - (r.position as Vector3).y - subida_rampa
 				if escalon > 0.15 * 1.8 + 0.25 and escalon > _escalon() + 0.05:
 					return {"bloq": float(i - 1) / float(n_p)}
 		y = float(h.y)

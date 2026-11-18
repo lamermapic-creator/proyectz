@@ -115,6 +115,21 @@ func frenos() -> void:
 		m._pend_del = pendiente
 		m._pend_tras = pendiente
 		m.global_position.y += ModeloMoto.R_RUEDA * (1.0 / cos(pendiente) - cos(pendiente))
+		if absf(pendiente) > 0.8:
+			var inicio := m.global_position
+			for i in 30:
+				await process_frame
+				m.paso(1.0 / 60.0, {})
+			var descenso := inicio.y - m.global_position.y
+			print("MANEJO libre pendiente=%.1f descenso=%.2f" % [rad_to_deg(pendiente), descenso])
+			comprobar(descenso > 0.5 and m.apoyo == 2, "sin freno, la moto rueda cuesta abajo desde reposo")
+			if pendiente > 0.8:
+				var altura := m.global_position.y
+				for i in 30:
+					await process_frame
+					m.paso(1.0 / 60.0, {"gas": 1.0})
+				comprobar(m.global_position.y < altura - 0.5 and m.apoyo == 2, "el acelerador no clava la moto al retroceder por falta de tracción")
+			m.vel_h = Vector3.ZERO
 		for i in 100:
 			await process_frame
 			m.paso(1.0 / 60.0, {"freno": 1.0})
