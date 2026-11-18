@@ -51,8 +51,8 @@ Cada familia tiene dos variantes OGG mono. Las mezclas recortan y combinan las g
 | Kick | Flesh_2 y Land_1 |
 | Stomp | Land_1 y BodyFall_2 |
 | Block | Blunt_1 y Step_8 |
-| Blade | Flesh_1 y Flesh_2 |
-| BatHit | Blunt_2 y Flesh_2 |
+| Blade | Recortes secos de Flesh_1 y Flesh_2 |
+| BatHit | Recortes secos de Flesh_2 y Land_1 |
 | BulletBody | Flesh_2 y Flesh_1 |
 | BulletSurface | Step_8 e Impact_1 |
 | Crash | BodyFall_1 e Impact_1 |

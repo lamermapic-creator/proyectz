@@ -1,5 +1,7 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
+- Audio: retirado el bucle sintético del derrape de moto. Las armas cuerpo a cuerpo usan contactos cortos de grabaciones CC0 y se elimina el efecto de aire al iniciar esos ataques.
+
 - Audio de impactos con dos variantes por familia para puños, patadas, pisotones, armas blancas, bloqueos, balas y choques de moto. Créditos y mezclas en [Sonidos](docs/SONIDOS.md).
 
 Versión actual de Proyecto Z: **0.6V**.

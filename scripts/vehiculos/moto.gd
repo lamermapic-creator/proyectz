@@ -111,7 +111,6 @@ var _ruido_t := 0.0
 var _golpeados := {}           # id del objetivo -> hora del último golpe
 var _reloj := 0.0
 var _audio_motor: AudioStreamPlayer3D
-var _audio_derrape: AudioStreamPlayer3D
 var _chispa_t := 0.0
 var ultimo_choque := 0.0       # (para las pruebas y el HUD)
 var atropellos := 0
@@ -148,11 +147,6 @@ func _ready() -> void:
 	_audio_motor.max_distance = 700.0
 	_audio_motor.volume_db = -4.0
 	add_child(_audio_motor)
-	_audio_derrape = AudioStreamPlayer3D.new()
-	_audio_derrape.stream = _sonido_derrape()
-	_audio_derrape.unit_size = 10.0
-	_audio_derrape.volume_db = -80.0
-	add_child(_audio_derrape)
 	_poner_en_el_suelo()
 	_visual(0.0)
 
@@ -1183,17 +1177,6 @@ func _paso_motor(dt: float, v_f: float, g_in: float) -> void:
 			Ruido.emitir(self, global_position + Vector3(0, 1.5, 0), radio, "motor", piloto if piloto != null else self)
 	elif _audio_motor.playing:
 		_audio_motor.stop()
-	# derrape (y frenazo fuerte)
-	var chirrido := 0.0
-	if not en_aire and not caida:
-		chirrido = maxf(derrapando, clampf((frenando - 0.5) * 2.0, 0.0, 1.0) * clampf(va / 30.0, 0.0, 1.0))
-	if chirrido > 0.05:
-		if not _audio_derrape.playing:
-			_audio_derrape.play()
-		_audio_derrape.volume_db = linear_to_db(chirrido) - 4.0
-		_audio_derrape.pitch_scale = 0.8 + va / 120.0
-	elif _audio_derrape.playing:
-		_audio_derrape.stop()
 
 
 ## ---------------------------------------------------------------- atropellos
@@ -1378,23 +1361,6 @@ static func _sonido_motor() -> AudioStreamWAV:
 	return _wav_bucle(out)
 
 
-static func _sonido_derrape() -> AudioStreamWAV:
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 11
-	var n_d := int(0.5 * RATE)
-	var out := PackedFloat32Array()
-	out.resize(n_d)
-	var lp := 0.0
-	var hp := 0.0
-	for i in n_d:
-		var t := float(i) / RATE
-		var r := rng.randf_range(-1.0, 1.0)
-		lp += (r - lp) * 0.35
-		hp = lp - hp * 0.2
-		out[i] = (hp * 0.55 + sin(TAU * 900.0 * t + sin(TAU * 7.0 * t) * 3.0) * 0.18)
-	return _wav_bucle(out)
-
-
 ## ---------------------------------------------------------------- caída con física
 var _fisica: RigidBody3D = null
 var _fisica_quieta := 0.0
@@ -1566,12 +1532,6 @@ func _paso_fisica(dt: float) -> void:
 			_chispa_t = 0.05
 			var pos := bt * Vector3(0, 0.6, 0)
 			Efectos.burst(self, Vector3(pos.x, pie[0].y + 0.2, pos.z), Vector3.UP - v.normalized() * 0.6, Color(1.0, 0.75, 0.3), 6, 16.0, 0.25, 0.35, 35.0)
-		if not _audio_derrape.playing:
-			_audio_derrape.play()
-		_audio_derrape.volume_db = linear_to_db(clampf(v.length() / 25.0, 0.2, 1.0)) - 2.0
-		_audio_derrape.pitch_scale = 0.55
-	elif _audio_derrape.playing:
-		_audio_derrape.stop()
 	if _audio_motor.playing:
 		_audio_motor.stop()
 	# golpes contra el suelo (ruido de chapa)

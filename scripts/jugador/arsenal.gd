@@ -907,7 +907,6 @@ func melee() -> void:
 		return
 	last_melee = now
 	J.stamina = maxf(0.0, J.stamina - w.Stamina)
-	Efectos.sonido(J, "Swing", J.global_position, 0.8, 0.9 + randf() * 0.2)
 	Ruido.emitir(J, J.global_position, C.RUIDO.GolpeAire, Ruido.GOLPE, J)
 	var base_g := Armas.base(equipado)
 	var nuevos: Array = CombateCC.GOLPES.get(base_g, [])
@@ -989,7 +988,7 @@ func _aplicar_contacto_arma(man, pieza: String, ppos: Vector3, w: Dictionary) ->
 		else:
 			man.empujar(look * float(w.Knockback) * 0.8, float(w.get("Stagger", 0.45)))
 	Efectos.blood_at(J, ppos, -look)
-	Efectos.sonido(J, "BatHit" if contundente else "Blade", ppos, 1.1, 0.9 + randf() * 0.2)
+	Efectos.sonido(J, "BatHit" if contundente else "Blade", ppos, 0.85)
 	impacto.golpe("golpe", man, pieza, ppos, clampf(dmg / 3.0, 5.0, 18.0), look)
 
 
