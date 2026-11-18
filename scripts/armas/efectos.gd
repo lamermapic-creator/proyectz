@@ -109,7 +109,7 @@ static func burst(ctx: Node, pos: Vector3, normal: Vector3, color: Color, count:
 
 ## mancha plana sobre una superficie (agujero de bala, charco de sangre)
 static func splat(ctx: Node, pos: Vector3, normal: Vector3, color: Color, size: float, life: float) -> void:
-	if _decals > 70:
+	if _decals >= 70:
 		return
 	_decals += 1
 	var mi := MeshInstance3D.new()
@@ -143,20 +143,64 @@ static func splat(ctx: Node, pos: Vector3, normal: Vector3, color: Color, size: 
 	var tw := mi.create_tween()
 	tw.tween_interval(life)
 	tw.tween_property(mi, "scale", Vector3(0.01, 1.0, 0.01), 1.5)
-	tw.tween_callback(func():
-		_decals -= 1
-		mi.queue_free())
+	mi.tree_exiting.connect(func(): _decals -= 1)
+	tw.tween_callback(mi.queue_free)
 
 
-static func blood_at(ctx: Node, pos: Vector3, normal: Vector3) -> void:
-	burst(ctx, pos, normal, Color8(95, 5, 5), 16, 22, 0.35, 0.55, 70)
-	burst(ctx, pos, normal, Color8(60, 0, 0), 6, 8, 0.8, 0.4, 20)
-	# charco en el suelo
+## Marca adherida a la pieza animada. El mismo nodo acompaña al cuerpo al pasar a ragdoll.
+static func herida(parte: Node3D, punto: Vector3, normal: Vector3, tamano: float, corte: bool) -> void:
+	var marcas := parte.get_node_or_null("Heridas") as Node3D
+	if marcas == null:
+		marcas = Node3D.new()
+		marcas.name = "Heridas"
+		parte.add_child(marcas)
+	if marcas.get_child_count() >= 4:
+		var antigua := marcas.get_child(0)
+		marcas.remove_child(antigua)
+		antigua.queue_free()
+	var mitad: Vector3 = parte.get_meta("size", Vector3.ONE) * 0.5
+	var local := parte.to_local(punto)
+	var n := (parte.global_basis.inverse() * normal).normalized()
+	var eje := n.abs().max_axis_index()
+	local = local.clamp(-mitad, mitad)
+	local[eje] = mitad[eje] * (1.0 if n[eje] >= 0.0 else -1.0)
+	n = Vector3.ZERO
+	n[eje] = signf(local[eje])
+	var superficie := Node3D.new()
+	marcas.add_child(superficie)
+	superficie.position = local
+	superficie.basis = Basis.looking_at(-n, Vector3.RIGHT if absf(n.y) > 0.9 else Vector3.UP).rotated(n, randf() * TAU)
+	for i in 3:
+		var capa := MeshInstance3D.new()
+		var malla := BoxMesh.new()
+		var k := 1.0 - i * 0.27
+		malla.size = Vector3(tamano * k, tamano * k * (0.32 if corte else 0.81), 0.008)
+		capa.mesh = malla
+		capa.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		capa.material_override = _mat_unshaded([Color8(92, 25, 24), Color8(53, 8, 9), Color8(27, 5, 7)][i])
+		superficie.add_child(capa)
+		capa.position.z = 0.01 + i * 0.006
+
+
+static func blood_at(ctx: Node, pos: Vector3, normal: Vector3, fuerza := 1.0) -> void:
+	var salida := normal.normalized()
+	burst(ctx, pos, salida, Color8(92, 8, 11), roundi(9 * fuerza), 14 * fuerza, 0.24, 0.45, 53)
+	burst(ctx, pos, salida, Color8(55, 4, 8), roundi(5 * fuerza), 7 * fuerza, 0.42, 0.55, 35)
+	# Proyecta solo unas gotas contra la primera superficie que intersecta su trayectoria.
 	var space := (ctx as Node3D).get_world_3d().direct_space_state
-	var q := PhysicsRayQueryParameters3D.create(pos, pos + Vector3(0, -12, 0), 1)
-	var g := space.intersect_ray(q)
-	if not g.is_empty():
-		splat(ctx, g.position, g.normal, Color8(55, 4, 4), 1.0 + randf() * 1.6, 25)
+	for i in 4:
+		var direccion := salida + Vector3(randf_range(-0.65, 0.65), randf_range(-0.55, 0.2), randf_range(-0.65, 0.65))
+		var velocidad := direccion.normalized() * randf_range(4.0, 10.0) * fuerza
+		var desde := pos
+		for tramo in range(1, 4):
+			var t := tramo * 0.18
+			var hasta := pos + velocidad * t + Vector3.DOWN * 17.5 * t * t
+			var q := PhysicsRayQueryParameters3D.create(desde, hasta, 1)
+			var hit := space.intersect_ray(q)
+			if not hit.is_empty():
+				splat(ctx, hit.position, hit.normal, Color8(59, 6, 9), randf_range(0.12, 0.55) * fuerza, 32)
+				break
+			desde = hasta
 
 
 ## trazadora: un trazo luminoso que viaja de la boca del cañón al impacto
@@ -380,9 +424,9 @@ static func casquillo(ctx: Node, pos: Vector3, dir: Vector3, escopeta := false, 
 
 
 ## impacto de bala según lo que se golpea
-static func impacto(ctx: Node, pos: Vector3, normal: Vector3, tipo: String) -> void:
+static func impacto(ctx: Node, pos: Vector3, normal: Vector3, tipo: String, fuerza := 1.0) -> void:
 	if tipo == "flesh":
-		blood_at(ctx, pos, normal)
+		blood_at(ctx, pos, normal, fuerza)
 		sonido(ctx, "BulletBody", pos, 0.8, 0.9 + randf() * 0.2)
 	elif tipo == "surface":
 		burst(ctx, pos, normal, Color8(150, 140, 125), 8, 14, 0.3, 0.6, 30)

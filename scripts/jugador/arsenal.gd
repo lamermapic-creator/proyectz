@@ -778,6 +778,7 @@ func shoot() -> void:
 		var res := forzado if not forzado.is_empty() else _rayo_bala(desde, dir, float(w.Range) + desde.distance_to(origin))
 		var hit_pos := origin + dir * float(w.Range)
 		var tipo := "none"
+		var fuerza := 1.0
 		var normal := Vector3.UP
 		if not res.is_empty():
 			hit_pos = res.position
@@ -795,6 +796,9 @@ func shoot() -> void:
 				# caída de daño con la distancia
 				if hit_pos.distance_to(origin) > float(w.Range) * 0.5:
 					dmg *= 0.75
+				fuerza = clampf(sqrt(dmg / 30.0), 0.45, 1.65)
+				if obj is Zombi and obj.rig.P.has(pieza):
+					Efectos.herida(obj.rig.P[pieza], hit_pos, normal, 0.20 * fuerza, false)
 				var estaba_vivo: bool = obj.vivo()
 				var killed := false
 				if obj.has_method("recibir_disparo"):
@@ -812,7 +816,7 @@ func shoot() -> void:
 		if n_balas == 1 or nb % 3 == 0:
 			Efectos.tracer(J, mz_t.origin, hit_pos)
 		if tipo != "none":
-			Efectos.impacto(J, hit_pos, normal, tipo)
+			Efectos.impacto(J, hit_pos, normal, tipo, fuerza)
 		if not forzado.is_empty():
 			break
 	if acerto:
@@ -976,8 +980,11 @@ func _aplicar_contacto_arma(man, pieza: String, ppos: Vector3, w: Dictionary) ->
 	var dmg: float = w.Damage * (w.HeadMult if crit else 1.0) * bonus
 	# (al que está en el suelo, el golpe va hacia abajo y sacude su ragdoll)
 	var imp_v: Vector3 = look * float(w.Knockback) if man.en_pie() else (look * 0.4 + Vector3.DOWN).normalized() * float(w.Knockback) * 2.5
-	var killed: bool = man.recibir_danio(dmg, pieza, imp_v)
 	var contundente: bool = str(w.get("Sound", "Flesh")) == "Blunt"
+	var fuerza := clampf(dmg / 45.0, 0.5, 1.5)
+	if man is Zombi and (not contundente or crit):
+		Efectos.herida(man.rig.P[pieza], ppos, -look, 0.35 * fuerza, not contundente)
+	var killed: bool = man.recibir_danio(dmg, pieza, imp_v)
 	Ruido.emitir(J, ppos, C.RUIDO.GolpeContundente if contundente else C.RUIDO.GolpeCarne, Ruido.GOLPE, J)
 	_confirmar(killed, crit)
 	if not killed and man.en_pie():
@@ -987,7 +994,7 @@ func _aplicar_contacto_arma(man, pieza: String, ppos: Vector3, w: Dictionary) ->
 			man.derribar(look * 38 + Vector3(0, 12, 0), 2.2)
 		else:
 			man.empujar(look * float(w.Knockback) * 0.8, float(w.get("Stagger", 0.45)))
-	Efectos.blood_at(J, ppos, -look)
+	Efectos.blood_at(J, ppos, -look, fuerza * (0.55 if contundente else 1.0))
 	Efectos.sonido(J, "BatHit" if contundente else "Blade", ppos, 0.85)
 	impacto.golpe("golpe", man, pieza, ppos, clampf(dmg / 3.0, 5.0, 18.0), look)
 
