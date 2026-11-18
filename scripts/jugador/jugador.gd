@@ -1125,12 +1125,12 @@ func _process(dt: float) -> void:
 			return
 	move_direction = _leer_movimiento() if health > 0 else Vector3.ZERO
 	if levantando_moto != null:
-		_paso_levantar(dt)
+		_paso_levantar()
 	_aproximar_escalada()
 	arsenal.dirigir()
 	update_character(dt)
 	if levantando_moto != null:
-		rotation.y = float(levantando_moto.giro) # mirando a la moto mientras la levanta
+		rotation.y = lerp_angle(float(levantando_moto.desde), float(levantando_moto.giro), Rbx.smooth((reloj - float(levantando_moto.t0)) / LEVANTAR_AGARRE))
 	arsenal.actualizar(dt)
 	humanoid_step(dt)
 	update_camera(dt)
@@ -1144,6 +1144,7 @@ var invencible := false # truco: no recibe daño
 
 ## pone al jugador de pie en "pies" (studs) mirando hacia "giro"; suelta la cornisa o el salto en curso
 func teletransportar(pies: Vector3, giro: float) -> void:
+	_cancelar_levantar_moto()
 	if ragdoll != null:
 		ragdoll.terminar(0.0)
 		ragdoll = null
@@ -1230,9 +1231,7 @@ func _morir() -> void:
 	_muerte_t = reloj
 	if moto != null:
 		expulsar_moto(moto.vel_h * 0.6 + Vector3(0, 4, 0), 0.0, "muerte")
-	if levantando_moto != null:
-		levantando_moto = null
-		L.levanta = null
+	_cancelar_levantar_moto()
 	if colgado != null:
 		soltar_cornisa()
 	if vaulting != null:
@@ -2091,7 +2090,7 @@ func moto_cercana() -> Moto:
 		if mm == null or mm.piloto != null:
 			continue
 		var d := (mm.global_position + Vector3(0, 2.0, 0) - global_position).length()
-		if d < dmin and (mm.de_lado(global_position) if mm.caida else mm.se_puede_subir() and absf(mm.velocidad()) < 0.8 and _al_alcance_moto(mm)):
+		if d < dmin and (_al_alcance_levantar(mm) if mm.caida else mm.se_puede_subir() and absf(mm.velocidad()) < 0.8 and _al_alcance_moto(mm)):
 			dmin = d
 			mejor = mm
 	return mejor
@@ -2372,7 +2371,26 @@ var levantando_moto = null # {moto, t0, dir, giro}
 const LEVANTAR_AGARRE := 0.35 # s agachándose y agarrándola antes de empezar a subirla
 
 
+func _al_alcance_levantar(m: Moto) -> bool:
+	if not m.se_puede_levantar() or not m.de_lado(global_position):
+		return false
+	var asiento := m.cuerpo_cf() * ModeloMoto.ASIENTO
+	return Rbx.flat(asiento - global_position).length() <= 3.5 and absf(asiento.y - global_position.y) < 3.4
+
+
+func _cancelar_levantar_moto() -> void:
+	if levantando_moto == null:
+		return
+	var m: Moto = levantando_moto.moto
+	if is_instance_valid(m):
+		m.cancelar_levantar()
+	levantando_moto = null
+	L.levanta = null
+
+
 func levantar_moto(m: Moto) -> void:
+	if not en_suelo or not _al_alcance_levantar(m):
+		return
 	if L.sprinting or ahora() < _carrera_hasta:
 		return
 	if health <= 0 or colgado != null or vaulting != null or L.knocked or arsenal.recogiendo != null:
@@ -2386,44 +2404,37 @@ func levantar_moto(m: Moto) -> void:
 	if arsenal.armado() or arsenal.switching != null:
 		arsenal.guardar_ya() # hacen falta las dos manos
 	arsenal.end_rest()
-	var dir := m.lado_arriba()
-	if dir.length() < 0.1:
-		dir = -m.derecha()
-	# (2026-10-28) desde el lado en que está el jugador (antes siempre por el mismo lado: el del asiento)
-	var hacia_mi := Rbx.flat(global_position - m.global_position)
-	if hacia_mi.length() > 0.3 and hacia_mi.dot(dir) < 0.0:
-		dir = -dir
+	var hacia_contacto := Rbx.flat(m.cuerpo_cf() * ModeloMoto.ASIENTO - global_position)
+	var giro := atan2(-hacia_contacto.x, -hacia_contacto.z)
+	var puno_alto := "R" if m.puno("R").origin.y > m.puno("L").origin.y else "L"
+	var asiento := m.cuerpo_cf() * (ModeloMoto.ASIENTO + Vector3(0, 0.1, 0.55))
+	var a_mano := m.puno(puno_alto).origin
+	if not raycast(global_position, (asiento + a_mano) * 0.5 - global_position, m.exclusion_levantar()).is_empty():
+		return
+	var derecha := Basis(Vector3.UP, giro).x
 	m.empezar_a_levantar()
-	levantando_moto = {"moto": m, "t0": reloj, "dir": dir, "giro": atan2(dir.x, dir.z)}
+	_vel_inercia = Vector3.ZERO
+	levantando_moto = {"moto": m, "t0": reloj, "giro": giro, "desde": rotation.y,
+		"puno": puno_alto, "puno_derecha": (a_mano - asiento).dot(derecha) > 0.0}
 	notify("Levantando la moto…")
 
 
-func _paso_levantar(dt: float) -> void:
+func _paso_levantar() -> void:
 	var lm: Dictionary = levantando_moto
 	var m: Moto = lm.moto
 	move_direction = Vector3.ZERO
-	if not is_instance_valid(m) or health <= 0:
-		levantando_moto = null
-		L.levanta = null
+	if not is_instance_valid(m) or health <= 0 or not en_suelo:
+		_cancelar_levantar_moto()
 		return
 	var t := reloj - float(lm.t0)
 	var total := LEVANTAR_AGARRE + Moto.LEVANTAR_DUR
 	var k := clampf(t / total, 0.0, 1.0)
 	m.lev_k = clampf((t - LEVANTAR_AGARRE) / Moto.LEVANTAR_DUR, 0.0, 1.0)
-	# junto al asiento, por el lado hacia el que apunta la moto tumbada; se acerca mientras sube
-	var dir: Vector3 = lm.dir
-	var sitio := m.global_position + dir * lerpf(3.3, 2.4, Rbx.smooth(m.lev_k)) + m.adelante() * -0.2
-	var p := global_position
-	var obj := Vector3(sitio.x, p.y, sitio.z)
-	global_position = p.lerp(obj, 1.0 - exp(-8.0 * dt))
-	# manos: una en el puño de arriba del manillar, la otra en la parte de atrás del asiento
-	var puno_alto: Vector3 = m.puno("L").origin
-	if m.puno("R").origin.y > puno_alto.y:
-		puno_alto = m.puno("R").origin
+	# Las manos conservan la asignación durante todo el levantamiento.
+	var puno_alto: Vector3 = m.puno(lm.puno).origin
 	var asiento: Vector3 = m.cuerpo_cf() * (ModeloMoto.ASIENTO + Vector3(0, 0.1, 0.55))
-	var der := Basis(Vector3.UP, float(lm.giro)).x
-	var mano_r := puno_alto if puno_alto.dot(der) > asiento.dot(der) else asiento
-	var mano_l := asiento if mano_r == puno_alto else puno_alto
+	var mano_r := puno_alto if lm.puno_derecha else asiento
+	var mano_l := asiento if lm.puno_derecha else puno_alto
 	L.levanta = {"k": k, "L": mano_l, "R": mano_r}
 	if k >= 1.0:
 		levantando_moto = null
@@ -2456,9 +2467,7 @@ func ragdoll_iniciar(vel: Vector3, op := {}) -> void:
 	if vaulting != null:
 		vaulting = null
 		L.vault = null
-	if levantando_moto != null:
-		levantando_moto = null
-		L.levanta = null
+	_cancelar_levantar_moto()
 	_subir_a = null
 	arsenal.ir_a_recoger = null
 	arsenal.recogiendo = null

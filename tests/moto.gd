@@ -149,7 +149,7 @@ func _inicio() -> void:
 		"levantar":
 			moto = _moto("Moto_1")
 			moto.caer(1.0)
-			var lado_x := 5.0 if OS.get_cmdline_user_args().has("--otro_lado") else -5.0
+			var lado_x := 1.15 if OS.get_cmdline_user_args().has("--otro_lado") else -2.6
 			j.teletransportar(moto.global_position + Vector3(lado_x, 0, 0.5), 0.0)
 			fin = 5.0
 		"levantar_hueco":
@@ -479,9 +479,9 @@ func _process(dt: float) -> void:
 				notas.v_contra = maxf(float(notas.get("v_contra", 0.0)), absf(moto.velocidad()))
 			notas.z_min = minf(float(notas.get("z_min", 1e9)), moto.global_position.z)
 		"levantar":
-			if _una("F_lev", t > 1.0):
+			if moto.se_puede_levantar() and _una("F_lev", t > 1.0):
 				_key(KEY_F, true)
-			if _una("F_lev2", t > 1.1):
+			if hecho.has("F_lev") and _una("F_lev2", t > 1.1):
 				_key(KEY_F, false)
 			if t > 1.6 and t < 2.0:
 				notas.anim = j.L.get("levanta") != null
