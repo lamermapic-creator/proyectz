@@ -1,5 +1,7 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
+- Contacto cuerpo a cuerpo: Arsenal cruza el segmento del arma visible con las cajas orientadas del rig durante el golpe. El puñetazo usa la mano animada.
+
 - Combate a pie: nuevas trayectorias de puño, cuchillo, machete y bate. Clic contra un caído usa un golpe descendente compartido de brazo; G conserva el pisotón.
 
 ## 2026-11-17 · Codex · Incorporarse y salir corriendo

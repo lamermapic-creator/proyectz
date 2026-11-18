@@ -931,67 +931,66 @@ func melee() -> void:
 	J.shake = minf(1.0, J.shake + 0.15)
 
 
-func _resolver_golpe(arma: String) -> void:
+# Segmentos locales del filo o cuerpo contundente, medidos sobre ModelosArmas (studs).
+const CONTACTO_ARMA := {
+	"Cuchillo": [Vector3(0, 0, -0.25), Vector3(0, 0, -0.93), 0.08],
+	"Machete": [Vector3(0, 0, -0.30), Vector3(0, 0, -1.67), 0.13],
+	"Bate": [Vector3(0, 0, -0.39), Vector3(0, 0, -2.28), 0.17],
+	"Hacha": [Vector3(0, 0.42, -1.68), Vector3(0, -0.52, -1.68), 0.13],
+	"Palanca": [Vector3(0, 0, -0.18), Vector3(0, 0, -1.65), 0.06],
+}
+
+
+func _resolver_golpe(arma: String) -> bool:
+	if modelo_mano == null or not modelo_mano.visible or not CONTACTO_ARMA.has(arma):
+		return false
+	var perfil: Array = CONTACTO_ARMA[arma]
+	var inicio := modelo_mano.to_global(perfil[0])
+	var fin := modelo_mano.to_global(perfil[1])
 	var w: Dictionary = Armas.WEAPONS[arma]
-	var root := J.root_cf()
-	var look := Rbx.look(root)
-	var hits := []
-	var pecho := root.origin + Vector3(0, 1.2, 0)
-	var alcance := float(w.Range)
+	for blanco in _cc_blancos(float(w.Range) + 1.5):
+		var man = blanco[1]
+		for pn in man.rig.P:
+			if pn == "HumanoidRootPart":
+				continue
+			var parte: Node3D = man.rig.P[pn]
+			var tam: Vector3 = parte.get_meta("size")
+			var caja := AABB(-tam * 0.5, tam).grow(perfil[2])
+			var local := parte.to_local(inicio)
+			var contacto = local if caja.has_point(local) else caja.intersects_segment(local, parte.to_local(fin))
+			if contacto == null:
+				continue
+			var punto := parte.to_global(contacto)
+			if not J.raycast(J.root_cf().origin, punto - J.root_cf().origin).is_empty():
+				continue
+			_aplicar_contacto_arma(man, pn, punto, w)
+			return true
+	return false
+
+
+func _aplicar_contacto_arma(man, pieza: String, ppos: Vector3, w: Dictionary) -> void:
+	var look := Rbx.look(J.root_cf())
+	var crit := pieza == "Head"
 	var bonus := 1.0
 	if J.moto != null:
-		# en la moto: se golpea hacia donde mira la cámara, con un poco más de alcance, y la velocidad
-		# de la moto se suma al golpe
-		var lc := Rbx.flat(Rbx.look(J.camara.global_transform))
-		if lc.length() > 0.1:
-			look = lc.normalized()
-		alcance += 1.6
-		bonus = 1.0 + clampf(absf(J.moto.velocidad()) / 60.0, 0.0, 0.7)
-		root = Transform3D(root.basis, root.origin - Vector3(0, 1.0, 0))
-	# blancos: maniquíes y zombis (grupo "objetivos", ver "contrato de objetivo" en docs/RUIDO_Y_ZOMBIS.md)
-	for man in J.get_tree().get_nodes_in_group("objetivos"):
-		if not (man.vivo() and man.en_pie()):
-			continue # (los del suelo, abajo)
-		var off: Vector3 = man.centro() - root.origin
-		var flat := Vector3(off.x, 0, off.z)
-		var cono := 0.0 if J.moto != null else 0.35 # (en la moto, también lo que ya está a tu lado)
-		if flat.length() < alcance and absf(off.y) < 5 and (flat.length() < 2 or flat.normalized().dot(look) > cono):
-			# nada de golpear a través de paredes (AUDITORIA.md §7.1)
-			if not J.raycast(pecho, man.centro() + Vector3(0, 0.6, 0) - pecho).is_empty():
-				continue
-			hits.append([flat.length(), man])
-	# (2026-11-08, 8) los que están en el suelo (también los cadáveres), con la distancia a su pieza más cercana; van
-	# detrás de los que están de pie
-	var mira_abajo := J.camara != null and Rbx.look(J.camara.global_transform).y < CC_MIRA_SUELO
-	if J.moto == null and (hits.is_empty() or mira_abajo):
-		for b in _cc_blancos(alcance + 0.8):
-			if not (b[1].vivo() and b[1].en_pie()):
-				# (mirando al suelo, los del suelo primero)
-				hits.append([float(b[0]) + (-100.0 if mira_abajo else 100.0), b[1]])
-	hits.sort_custom(func(a, b): return a[0] < b[0])
-	for i in mini(2, hits.size()):
-		var man = hits[i][1]
-		var crit := randf() < 0.25
-		var dmg: float = w.Damage * (w.HeadMult if crit else 1.0) * (0.5 if i == 1 else 1.0) * bonus
-		var pieza := "Head" if crit else "UpperTorso"
-		var ppos: Vector3 = (man.rig.P[pieza] as Node3D).global_position
-		# (al que está en el suelo, el golpe va hacia abajo y sacude su ragdoll)
-		var imp_v: Vector3 = look * float(w.Knockback) if man.en_pie() else (look * 0.4 + Vector3.DOWN).normalized() * float(w.Knockback) * 2.5
-		var killed: bool = man.recibir_danio(dmg, pieza, imp_v)
-		var contundente: bool = str(w.get("Sound", "Flesh")) == "Blunt"
-		Ruido.emitir(J, ppos, C.RUIDO.GolpeContundente if contundente else C.RUIDO.GolpeCarne, Ruido.GOLPE, J)
-		_confirmar(killed, crit)
-		if not killed and man.en_pie():
-			var p_derribo := float(w.get("Derriba", 0.0))
-			if p_derribo > 0.0 and (crit or randf() < p_derribo):
-				# batazo: lo derriba y luego se levanta
-				man.derribar(look * 38 + Vector3(0, 12, 0), 2.2)
-			else:
-				man.empujar(look * float(w.Knockback) * 0.8, float(w.get("Stagger", 0.45)))
-		Efectos.blood_at(J, ppos, -look)
-		Efectos.sonido(J, "Blunt" if contundente else "Flesh", ppos, 1.1, 0.9 + randf() * 0.2)
-		if i == 0:
-			impacto.golpe("golpe", man, pieza, ppos, clampf(dmg / 3.0, 5.0, 18.0), look)
+		bonus += clampf(absf(J.moto.velocidad()) / 60.0, 0.0, 0.7)
+	var dmg: float = w.Damage * (w.HeadMult if crit else 1.0) * bonus
+	# (al que está en el suelo, el golpe va hacia abajo y sacude su ragdoll)
+	var imp_v: Vector3 = look * float(w.Knockback) if man.en_pie() else (look * 0.4 + Vector3.DOWN).normalized() * float(w.Knockback) * 2.5
+	var killed: bool = man.recibir_danio(dmg, pieza, imp_v)
+	var contundente: bool = str(w.get("Sound", "Flesh")) == "Blunt"
+	Ruido.emitir(J, ppos, C.RUIDO.GolpeContundente if contundente else C.RUIDO.GolpeCarne, Ruido.GOLPE, J)
+	_confirmar(killed, crit)
+	if not killed and man.en_pie():
+		var p_derribo := float(w.get("Derriba", 0.0))
+		if p_derribo > 0.0 and (crit or randf() < p_derribo):
+			# batazo: lo derriba y luego se levanta
+			man.derribar(look * 38 + Vector3(0, 12, 0), 2.2)
+		else:
+			man.empujar(look * float(w.Knockback) * 0.8, float(w.get("Stagger", 0.45)))
+	Efectos.blood_at(J, ppos, -look)
+	Efectos.sonido(J, "Blunt" if contundente else "Flesh", ppos, 1.1, 0.9 + randf() * 0.2)
+	impacto.golpe("golpe", man, pieza, ppos, clampf(dmg / 3.0, 5.0, 18.0), look)
 
 
 ## ---------------------------------------------------------------- combate cuerpo a cuerpo (2026-11-08, KangooG)
@@ -1266,8 +1265,8 @@ func _cc_paso(dt: float) -> void:
 	impacto.paso(now)
 	# impactos: desde un poco antes del momento del golpe hasta un poco después, en cuanto el pie / la mano toca
 	for g in cc_golpes.duplicate():
-		var ventana := 0.0 if g[1] == "golpe" else 0.16
-		if now >= float(g[0]) - (0.0 if g[1] == "golpe" else 0.05):
+		var ventana := 0.16
+		if now >= float(g[0]) - 0.05:
 			var sigue: bool = cc.accion != null and cc.accion.tipo == g[1]
 			if not sigue:
 				cc_golpes.erase(g)
@@ -1331,7 +1330,7 @@ func _cc_resolver(tipo: String, d: Dictionary) -> bool:
 	if tipo == "golpe":
 		# golpe con arma blanca de los nuevos (CombateCC.GOLPES): el daño, como el de siempre
 		if equipado == d.arma:
-			_resolver_golpe(d.arma)
+			return _resolver_golpe(d.arma)
 		return true
 	return _cc_impacto(tipo, d)
 
@@ -1395,6 +1394,8 @@ func _cc_impacto(tipo: String, d: Dictionary) -> bool:
 	var miembros: Array = []
 	if tipo == "patada" or tipo == "pisoton":
 		miembros = ["LeftFoot" if str(d.get("lado", "R")) == "L" else "RightFoot"]
+	elif tipo == "puno":
+		miembros = ["LeftHand" if d.get("lado") == "L" else "RightHand"]
 	else:
 		miembros = ["RightHand", "LeftHand"]
 	var origen := J.root_cf().origin
@@ -1414,7 +1415,7 @@ func _cc_impacto(tipo: String, d: Dictionary) -> bool:
 	var man = null
 	var pieza := ""
 	# contacto de verdad: la distancia del pie / la mano a la caja de cada pieza (radio del pie o del puño + margen)
-	var dist := 0.6 if tipo == "pisoton" else (0.55 if tipo == "patada" else 0.45)
+	var dist := 0.6 if tipo == "pisoton" else (0.55 if tipo == "patada" else (0.24 if tipo == "puno" else 0.45))
 	var al_suelo: bool = tipo == "pisoton" or impacto.va_al_suelo()
 	for b in _cc_blancos(float(d.get("alcance", CC_PATADA.alcance)) + 1.5):
 		var o = b[1]
