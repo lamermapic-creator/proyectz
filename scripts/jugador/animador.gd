@@ -1044,7 +1044,7 @@ func _mirar_escalera(origen: Vector3, dir_w: Vector3, body_gy: float) -> void:
 			esp.append(float(bordes[i + 1]) - float(bordes[i]))
 		if ok:
 			esp.sort()
-			var m: float = esp[esp.size() / 2]
+			var m: float = esp[floori(esp.size() / 2.0)]
 			if m >= 0.5 and m <= 2.2 and float(esp[0]) > m * 0.7 and float(esp[esp.size() - 1]) < m * 1.35:
 				fondo = m
 	var now := ahora()
@@ -1159,26 +1159,26 @@ func _marcha_animada(root_cf: Transform3D, frame: Transform3D, vel_h: Vector3, s
 	var dphi := anim_sentido * v_fase * dt / zan
 	gait01 = fposmod(gait01 + dphi, 1.0)
 	for k in ["L", "R"]:
-		var fk: Dictionary = feet[k]
+		var pie_actual: Dictionary = feet[k]
 		var psi_obj := fposmod(gait01 - (0.25 if k == "L" else 0.75), 1.0)
-		if not fk.has("ap_paso"):
-			_pie_en_fase(fk, psi_obj, fr)
+		if not pie_actual.has("ap_paso"):
+			_pie_en_fase(pie_actual, psi_obj, fr)
 			continue
-		var psi_f: float = (1.0 - fr) + float(fk.ap_x) * fr if fk.ap_paso else float(fk.ap_x) * (1.0 - fr)
+		var psi_f: float = (1.0 - fr) + float(pie_actual.ap_x) * fr if pie_actual.ap_paso else float(pie_actual.ap_x) * (1.0 - fr)
 		var e := wrapf(psi_obj - psi_f, -0.5, 0.5)
 		# el pie apoyado avanza exactamente con el cuerpo (si no, se queda atrás estirando la pierna); el ajuste para
 		# ir a la par de la fase global solo se hace en el aire (paso un poco más rápido o más lento)
-		var corr := absf(dphi) * clampf(e * 3.0, -0.35, 0.6) if fk.ap_paso else 0.0
+		var corr := absf(dphi) * clampf(e * 3.0, -0.35, 0.6) if pie_actual.ap_paso else 0.0
 		# pie apoyado que se quedó demasiado atrás (frenada, giro): despega ya
-		if not fk.ap_paso and fk.get("anim_lock") != null and anim_w >= 1.0:
-			var hip_g := frame * Vector3(fk.side * hip_x, 0.0, 0.0)
-			var lk: Vector3 = fk.anim_lock
+		if not pie_actual.ap_paso and pie_actual.get("anim_lock") != null and anim_w >= 1.0:
+			var hip_g := frame * Vector3(pie_actual.side * hip_x, 0.0, 0.0)
+			var lk: Vector3 = pie_actual.anim_lock
 			var desfase := Rbx.flat(lk - hip_g)
 			var alcance := leg_len * lerpf(0.80, 0.52, _cambio_ritmo if esc_fondo <= 0.0 else 0.0)
 			if desfase.length() > alcance and desfase.dot(vel_dir) < 0.0:
-				fk.ap_paso = true
-				fk.ap_x = 0.0 if anim_sentido > 0.0 else 1.0
-		_avanza_pie(fk, dphi + corr, fr)
+				pie_actual.ap_paso = true
+				pie_actual.ap_x = 0.0 if anim_sentido > 0.0 else 1.0
+		_avanza_pie(pie_actual, dphi + corr, fr)
 	ritmo_periodo = zan / maxf(v_fase, 0.1)
 	reloj_activo = true
 	ultimo_pie = ""
@@ -1272,7 +1272,9 @@ func _marcha_animada(root_cf: Transform3D, frame: Transform3D, vel_h: Vector3, s
 		f.pos = pos
 		f.roll = roll
 		f.u = pa[4] if en_paso else null
-		f.swing = {"anim": true} if en_paso else null
+		f.swing = null
+		if en_paso:
+			f.swing = {"anim": true}
 		f.yaw = body_yaw
 		f.swingYaw = null
 		f.overreach = false
@@ -1800,17 +1802,17 @@ func _paso_cc(now: float, dt: float) -> void:
 		return
 	var u := clampf((now - float(ac.t0)) / float(ac.dur), 0.0, 1.0)
 	var a: Dictionary = ar.cc_anim(ac)
-	var P := CombateCC.pose(a, u)
+	var pose_golpe := CombateCC.pose(a, u)
 	var e := _cc_env(u)
 	cc_rapido = true
 	var brazos_accion := false
-	for k in P:
+	for k in pose_golpe:
 		if k == "avance" or k.begins_with("pie_") or k.begins_with("ro_"):
 			continue
 		var es_brazo: bool = k.begins_with("m") or k.begins_with("p") and not k.begins_with("pel") or k.begins_with("a_")
 		if es_brazo and (ac.tipo == "patada" or ac.tipo == "pisoton") and cc_clase != "manos":
 			continue # con arma, la patada no mueve los brazos
-		var v: float = P[k]
+		var v: float = pose_golpe[k]
 		if k in CC_CUERPO:
 			cc_pose[k] = lerpf(float(cc_pose.get(k, 0.0)), v, e)
 		else:
@@ -1820,8 +1822,8 @@ func _paso_cc(now: float, dt: float) -> void:
 		cc_w = lerpf(base_w, 1.0, e)
 	if ac.tipo == "patada" or ac.tipo == "pisoton":
 		for k in ["pie_x", "pie_y", "pie_z", "pie_inc", "ro_x", "ro_y", "ro_z"]:
-			cc_pose[k] = P[k]
-		cc_kick = {"lado": str(a.lado), "w": clampf(float(P.pie_w), 0.0, 1.0)}
+			cc_pose[k] = pose_golpe[k]
+		cc_kick = {"lado": str(a.lado), "w": clampf(float(pose_golpe.pie_w), 0.0, 1.0)}
 	# ajuste al blanco (ImpactoCC): la cadera baja y el tronco se inclina hacia él (p. ej. si está en el suelo)
 	ar.impacto.sumar_cuerpo(cc_pose)
 
@@ -2240,7 +2242,6 @@ func update_rig(dt: float) -> void:
 		##  0.00-0.40  se agacha y apoya una rodilla en el suelo
 		##  0.30-0.70  se inclina hacia delante y pone las manos en el suelo
 		##  0.55-1.00  estira las piernas hacia atrás y se tumba boca abajo
-		var lean := Rbx.smooth(clampf((pb - 0.2) / 0.5, 0, 1))
 		var lay := Rbx.smooth(clampf((pb - 0.45) / 0.55, 0, 1))
 		var gy: float = ground(root_cf.origin)[0]
 		var pelvis_stand_y := root_cf.origin.y - 0.08
@@ -2869,8 +2870,8 @@ func update_rig(dt: float) -> void:
 				set_end(Lg, lower, Rbx.cfp(target) * yaw_cf * Rbx.ang(-0.3, 0, 0))
 			elif s == kick_s and kick_w > 0.001:
 				# el pie que patea: la planta por delante (pie_inc), mezclado con el pie apoyado
-				var pie_k := Rbx.cfp(target) * yaw_cf * Rbx.ang(float(cc_pose.pie_inc) * kick_w, 0, 0) * Rbx.cfp(-ankle_in_foot[s])
-				set_end(Lg, lower, foot_cf(f, yaw).interpolate_with(pie_k, kick_w))
+				var pose_patada := Rbx.cfp(target) * yaw_cf * Rbx.ang(float(cc_pose.pie_inc) * kick_w, 0, 0) * Rbx.cfp(-ankle_in_foot[s])
+				set_end(Lg, lower, foot_cf(f, yaw).interpolate_with(pose_patada, kick_w))
 			else:
 				set_end(Lg, lower, foot_cf(f, yaw))
 			# justo después de levantarse: mezclar desde la pose de tumbado (sin saltos);
@@ -2989,8 +2990,6 @@ func update_rig(dt: float) -> void:
 	var arm_a := {"L": 0.0, "R": 0.0}
 	var run_arm := 0.0
 	for s in ["L", "R"]:
-		var f: Dictionary = feet[s]
-		var rel := Rbx.to_obj(root_cf, f.cur if f.get("cur") != null else f.pos)
 		# corriendo (de pie o agachado) los brazos bombean: codo doblado, mano adelante a la altura
 		# del pecho y atrás hasta la cadera, cruzando un poco por delante del cuerpo
 		var run_k := clampf((speed - (4.2 if crouch_b > 0.5 else 7.0)) / 4.0, 0, 1)
@@ -3098,7 +3097,9 @@ func update_rig(dt: float) -> void:
 		cancelar_recarga()
 		melee_st = null
 		# arma nueva en la mano: animación de sacarla de donde se lleva
-		draw_st = {"t0": now, "tool": tool, "start": null} if tool != "" else null
+		draw_st = null
+		if tool != "":
+			draw_st = {"t0": now, "tool": tool, "start": null}
 	var kick: float = S.kick.step(dt)
 	var kick_rot: float = S.kickRot.step(dt)
 	var melee_lean := 0.0

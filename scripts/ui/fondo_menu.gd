@@ -169,7 +169,7 @@ func _ampliar_puesto() -> void:
 	# Cajas de suministro, palés y sacos alrededor del control.
 	for i in range(6):
 		var x := 11.5 + float(i % 3) * .9
-		var y := .45 + float(i / 3) * .85
+		var y := .45 + floorf(i / 3.0) * .85
 		_caja(Vector3(x, y, -1.8), Vector3(.8, .8, .9), Color("615e4b"))
 		_caja(Vector3(x, y, -1.34), Vector3(.08, .8, .015), Color("302f29"))
 	var azar := RandomNumberGenerator.new()

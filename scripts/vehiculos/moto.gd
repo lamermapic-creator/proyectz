@@ -226,7 +226,7 @@ func subir(j: Node) -> void:
 	aparcada = false
 	motor_on = true
 	if not _audio_motor.playing:
-		_audio_motor.play()
+		_audio_motor.reproducir()
 	Efectos.sonido(self, "Draw", global_position, 0.6, 0.5)
 
 
@@ -374,8 +374,8 @@ func _caida_segun_golpe(b: RigidBody3D) -> void:
 			b.angular_velocity = -der * clampf(vh.length() / BATALLA + float(g.impacto) * 0.075, 2.2, 9.0) + adel * (-caida_lado * 1.3)
 		"choque":
 			# rebota contra la pared y cae de lado, girando
-			var n: Vector3 = g.normal if (g.normal as Vector3) != Vector3.ZERO else -adel
-			var rebote: Vector3 = vh - n * vh.dot(n) * float(azar.call(1.15, 1.35))
+			var normal_pared: Vector3 = g.normal if (g.normal as Vector3) != Vector3.ZERO else -adel
+			var rebote: Vector3 = vh - normal_pared * vh.dot(normal_pared) * float(azar.call(1.15, 1.35))
 			b.linear_velocity = rebote * azar.call(0.25, 0.45) + Vector3(0, azar.call(1.0, 3.0), 0)
 			b.angular_velocity = adel * (-caida_lado * azar.call(1.5, 3.5)) + der * azar.call(-2.0, 2.0) \
 				+ Vector3(0, azar.call(-2.5, 2.5) * clampf(vh.length() / 30.0, 0.3, 1.0), 0)
@@ -412,7 +412,6 @@ func paso(dt: float, mandos: Dictionary) -> void:
 	var r := derecha()
 	var v_f := vel_h.dot(f)
 	var v_l := vel_h.dot(r)
-	var va := absf(v_f)
 	var vf_inicial := v_f
 	var frenaba_avance := f_in > 0.05 and v_f > 0.5
 	if mano or f_in <= 0.05 or g_in > 0.05 or frenaba_avance:
@@ -626,8 +625,8 @@ func _mover(dt: float) -> void:
 			var eje_contacto := e_d0.lerp(fin_d, fraccion)
 			cabeceo = c_contacto
 			global_position += eje_contacto - _eje_en(p0, c_contacto, true) + Vector3.UP * 0.06
-			var impacto := (e_d0 - fin_d).dot(contacto.normal) / maxf(dt, 0.001)
-			_tirar_piloto("aterrizaje_morro", maxf(CHOQUE, impacto), contacto.normal)
+			var impacto_morro := (e_d0 - fin_d).dot(contacto.normal) / maxf(dt, 0.001)
+			_tirar_piloto("aterrizaje_morro", maxf(CHOQUE, impacto_morro), contacto.normal)
 			return
 	# una rueda contra algo que no puede subir (bordillo alto, pared, cuesta de más de ~60°): no avanza más
 	var frac := 1.0
@@ -924,9 +923,9 @@ func _paso_suspension(dt: float, vf: float) -> void:
 	else:
 		# frenar hunde la horquilla; acelerar agacha la parte de atrás
 		_acel_long = lerpf(_acel_long, (vf - _vf_prev) / dt, 1.0 - exp(-10.0 * dt))
-		var tr := clampf(_acel_long * 0.011, -0.32, 0.32)
-		obj_d -= tr
-		obj_t += tr * 0.6
+		var transferencia := clampf(_acel_long * 0.011, -0.32, 0.32)
+		obj_d -= transferencia
+		obj_t += transferencia * 0.6
 		# tumbada en una curva, la fuerza aprieta las dos
 		var g_lat := 1.0 / maxf(0.5, cos(inclinacion)) - 1.0
 		obj_d += g_lat * 0.18
@@ -1235,7 +1234,7 @@ func _paso_motor(dt: float, v_f: float, g_in: float) -> void:
 	rpm = Rbx.damp(rpm, rpm_obj, 5.0 if rpm_obj > rpm else 3.0, dt)
 	if motor_on:
 		if not _audio_motor.playing:
-			_audio_motor.play()
+			_audio_motor.reproducir()
 		_audio_motor.pitch_scale = 0.6 + rpm * 1.05
 		_audio_motor.nivel_fuente_db = -10.0 + gas * 5.0 + rpm * 2.0
 		_ruido_t -= dt
@@ -1253,7 +1252,7 @@ func _paso_motor(dt: float, v_f: float, g_in: float) -> void:
 	if _nivel_neumatico > 0.015:
 		_audio_neumatico.nivel_fuente_db = linear_to_db(_nivel_neumatico) - 9.0
 		if not _audio_neumatico.playing:
-			_audio_neumatico.play()
+			_audio_neumatico.reproducir()
 	elif _audio_neumatico.playing:
 		_audio_neumatico.stop()
 

@@ -26,7 +26,7 @@ func _ready() -> void:
 		var id: String = Zombi.VARIANTES_VISUALES[i]
 		var modelo := load(RigPersonaje.MODELOS["zombi_" + id]) as PackedScene
 		var inst := modelo.instantiate() as Node3D
-		inst.position = Vector3((i % 4 - 1.5) * 4.5, 3.1, (i / 4 - 1) * 7.0)
+		inst.position = Vector3((i % 4 - 1.5) * 4.5, 3.1, (floori(i / 4.0) - 1) * 7.0)
 		add_child(inst)
 		var ap := inst.find_child("AnimationPlayer", true, false) as AnimationPlayer
 		if ap:

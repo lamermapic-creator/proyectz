@@ -1201,7 +1201,9 @@ func recibir_danio(cantidad: float, desde: Vector3 = Vector3.ZERO) -> void:
 	_danio_t = reloj
 	shake = minf(1.0, shake + 0.45)
 	if hud_danio:
-		var origen = desde if (desde != Vector3.ZERO and Rbx.flat(desde - global_position).length() > 0.6) else null
+		var origen = null
+		if desde != Vector3.ZERO and Rbx.flat(desde - global_position).length() > 0.6:
+			origen = desde
 		hud_danio.golpe(cantidad, global_position, origen)
 	var dir := Rbx.flat(global_position - desde)
 	if dir.length() > 0.01:
@@ -1602,7 +1604,9 @@ func _actualizar_formas() -> void:
 		_cil_piernas.radius = 0.7
 		forma_piernas.shape = _cil_piernas
 	var prone_shape := root_size.y < STAND_SIZE.y - 0.01
-	var want: Shape3D = _caja_tumbado if prone_shape else _capsula
+	var want: Shape3D = _capsula
+	if prone_shape:
+		want = _caja_tumbado
 	if forma_cuerpo.shape != want:
 		forma_cuerpo.shape = want
 	# la cápsula llega desde la cintura hasta la cabeza (el centro del cuerpo + 1.6 studs)
@@ -2252,15 +2256,15 @@ func bajar_moto(inmediato := false) -> void:
 		return
 	if not inmediato and absf(m.velocidad()) <= 0.8 and not m.en_aire:
 		var pie := _sitio_moto(m, -1.0)
-		var lado := -1.0
+		var lado_salida := -1.0
 		if not _salida_moto_libre(m, pie):
-			lado = 1.0
-			pie = _sitio_moto(m, lado)
+			lado_salida = 1.0
+			pie = _sitio_moto(m, lado_salida)
 		if not _salida_moto_libre(m, pie):
 			notify("No hay espacio para bajar")
 			return
 		m.vel_h = Vector3.ZERO
-		_moto_lado = lado
+		_moto_lado = lado_salida
 		_moto_desde = Transform3D(Basis(Vector3.UP, m.rumbo), pie + Vector3.UP * center_cur)
 		_moto_bajar_t = reloj
 		return

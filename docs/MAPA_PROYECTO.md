@@ -1,5 +1,7 @@
 # Mapa de Proyecto Z
 
+- Depuración: corregidas advertencias de GDScript en los scripts del juego y el aviso de audio de motor al terminar pruebas sin ventana.
+
 - Depuración: ambos perfiles de exportación incluyen la clave de ejecución que espera Godot 4.6. Los efectos de audio puntuales se omiten en pruebas sin ventana para evitar avisos de recursos de audio al cerrar.
 
 - Locomoción: al cambiar de ritmo, el pie atrasado adelanta el despegue y la pierna mantiene más flexión. La compensación de cadera usa un muelle estable con fotogramas largos.

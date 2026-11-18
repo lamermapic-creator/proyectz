@@ -433,14 +433,14 @@ func _cuanto_ve() -> float:
 	var en_cono := ang <= float(C.ZOMBI.VistaAngulo) and d <= alcance
 	if not en_cono and d > periferica:
 		return 0.0
-	var visible := _fraccion_visible(j, ojos)
-	if visible <= 0.0:
+	var fraccion_visible := _fraccion_visible(j, ojos)
+	if fraccion_visible <= 0.0:
 		return 0.0
 	var k_dist := 0.3 + 1.4 * clampf(1.0 - d / maxf(alcance, 0.1), 0.0, 1.0)
 	var k_ang := (0.6 + 0.4 * (1.0 - ang / float(C.ZOMBI.VistaAngulo))) if en_cono else 0.5
 	var rapidez_j := Rbx.flat(j.get("vel_real")).length()
 	var k_mov := 0.7 if rapidez_j < 0.5 else 1.0 + minf(rapidez_j / 14.0, 1.0) * 0.8 # quieto se ve menos
-	return float(C.ZOMBI.VistaRapidez) * visible * k_dist * k_ang * k_mov * (1.0 + 0.8 * alerta)
+	return float(C.ZOMBI.VistaRapidez) * fraccion_visible * k_dist * k_ang * k_mov * (1.0 + 0.8 * alerta)
 
 
 ## parte del jugador a la vista (0..1): rayos a su cabeza, pecho y cadera (las piezas reales del muñeco, así
@@ -1105,7 +1105,7 @@ func _grunir(fuerte: bool) -> void:
 	_voz.stream = _voz_sintetica(_rng.randi() % 3)
 	_voz.pitch_scale = _rng.randf_range(0.85, 1.1)
 	_voz.nivel_fuente_db = 4.0 if fuerte else -6.0
-	_voz.play()
+	_voz.reproducir()
 
 
 static var _voces: Array[AudioStreamWAV] = []

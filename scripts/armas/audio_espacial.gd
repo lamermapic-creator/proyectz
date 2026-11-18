@@ -10,6 +10,11 @@ var _corte := 20500.0
 var _espera := 0.0
 
 
+func reproducir() -> void:
+	if DisplayServer.get_name() != "headless":
+		play()
+
+
 func _physics_process(dt: float) -> void:
 	if not playing or DisplayServer.get_name() == "headless":
 		return

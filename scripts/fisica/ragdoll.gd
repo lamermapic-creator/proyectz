@@ -332,7 +332,6 @@ func _crear_union_6dof(mn: String, def: Array, t_pa: Transform3D, centro: Dictio
 	_jl[mn] = t_pa.basis.orthonormalized().inverse() * base
 	_rc[mn] = t_pa.basis.orthonormalized().inverse() * (centro[m.part1] as Transform3D).basis.orthonormalized()
 	var g := Generic6DOFJoint3D.new()
-	var ejes := ["x", "y", "z"]
 	for i in 3:
 		var l: float = lim[i]
 		_set_eje(g, i, "lim", l)

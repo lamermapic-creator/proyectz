@@ -776,34 +776,34 @@ func shoot() -> void:
 			var ap := randf() * TAU
 			dir = Rbx.look(Rbx.look_at(Vector3.ZERO, eje0) * Rbx.ang(cos(ap) * rp, sin(ap) * rp, 0))
 		var res := forzado if not forzado.is_empty() else _rayo_bala(desde, dir, float(w.Range) + desde.distance_to(origin))
-		var hit_pos := origin + dir * float(w.Range)
-		var tipo := "none"
-		var fuerza := 1.0
+		var punto_bala := origin + dir * float(w.Range)
+		var tipo_superficie := "none"
+		var intensidad := 1.0
 		var normal := Vector3.UP
 		if not res.is_empty():
-			hit_pos = res.position
+			punto_bala = res.position
 			normal = res.normal
 			if normal.length() < 0.1: # el rayo empezó dentro (blanco pegado al arma)
 				normal = -dir
-			tipo = "surface"
+			tipo_superficie = "surface"
 			var col: Object = res.collider
 			# zonas de impacto de un blanco (maniquí o zombi): ver "contrato de objetivo" en docs/RUIDO_Y_ZOMBIS.md
 			if col and col.has_meta("objetivo"):
-				tipo = "flesh"
+				tipo_superficie = "flesh"
 				var obj = col.get_meta("objetivo")
 				var pieza: String = res.pieza if res.has("pieza") else col.get_meta("pieza")
 				var dmg: float = w.Damage * Maniqui.mult_pieza(pieza, w)
 				# caída de daño con la distancia
-				if hit_pos.distance_to(origin) > float(w.Range) * 0.5:
+				if punto_bala.distance_to(origin) > float(w.Range) * 0.5:
 					dmg *= 0.75
-				fuerza = clampf(sqrt(dmg / 30.0), 0.45, 1.65)
+				intensidad = clampf(sqrt(dmg / 30.0), 0.45, 1.65)
 				if obj is Zombi and obj.rig.P.has(pieza):
-					Efectos.herida(obj.rig.P[pieza], hit_pos, normal, 0.20 * fuerza, false)
+					Efectos.herida(obj.rig.P[pieza], punto_bala, normal, 0.20 * intensidad, false)
 				var estaba_vivo: bool = obj.vivo()
 				var killed := false
 				if obj.has_method("recibir_disparo"):
-					var factor := 0.75 if hit_pos.distance_to(origin) > float(w.Range) * 0.5 else 1.0
-					killed = obj.recibir_disparo(dmg, pieza, dir * ImpactoBalistico.impulso(equipado) * factor, hit_pos)
+					var factor := 0.75 if punto_bala.distance_to(origin) > float(w.Range) * 0.5 else 1.0
+					killed = obj.recibir_disparo(dmg, pieza, dir * ImpactoBalistico.impulso(equipado) * factor, punto_bala)
 				elif estaba_vivo:
 					killed = obj.recibir_danio(dmg, pieza, dir * (45.0 if n_balas == 1 else 12.0))
 				if killed and equipado == "Francotirador" and obj is Zombi:
@@ -813,12 +813,12 @@ func shoot() -> void:
 					mato = mato or killed
 					cabeza = cabeza or pieza == "Head"
 			elif impacto_superficie == Vector3.INF:
-				impacto_superficie = hit_pos
+				impacto_superficie = punto_bala
 		# trazadoras: todas las balas; de los perdigones, solo algunas
 		if n_balas == 1 or nb % 3 == 0:
-			Efectos.tracer(J, mz_t.origin, hit_pos)
-		if tipo != "none":
-			Efectos.impacto(J, hit_pos, normal, tipo, fuerza)
+			Efectos.tracer(J, mz_t.origin, punto_bala)
+		if tipo_superficie != "none":
+			Efectos.impacto(J, punto_bala, normal, tipo_superficie, intensidad)
 		if not forzado.is_empty():
 			break
 	if acerto:
@@ -1110,7 +1110,7 @@ func _cc_variante(tipo: String, n: int) -> int:
 	return v
 
 
-func _cc_empezar(tipo: String, coste: float, espera: float) -> bool:
+func _cc_empezar(_tipo: String, coste: float, espera: float) -> bool:
 	var now := ahora()
 	if now < _cc_listo_t or cc.accion != null or now - last_melee < 0.35:
 		return false
@@ -1327,13 +1327,13 @@ func cc_blanco(alcance: float) -> Array:
 	if todos.is_empty():
 		return []
 	var de_pie := todos.filter(func(b): return b[1].vivo() and b[1].en_pie())
-	var suelo := todos.filter(func(b): return not (b[1].vivo() and b[1].en_pie()))
+	var caidos := todos.filter(func(b): return not (b[1].vivo() and b[1].en_pie()))
 	var mira_abajo := J.camara != null and Rbx.look(J.camara.global_transform).y < CC_MIRA_SUELO
-	if mira_abajo and not suelo.is_empty():
-		return suelo[0]
+	if mira_abajo and not caidos.is_empty():
+		return caidos[0]
 	if not de_pie.is_empty():
 		return de_pie[0]
-	return suelo[0]
+	return caidos[0]
 
 
 func _cc_resolver(tipo: String, d: Dictionary) -> bool:
@@ -1399,7 +1399,6 @@ func _cc_vel_miembro(n: String, dir: Vector3) -> float:
 
 func _cc_impacto(tipo: String, d: Dictionary) -> bool:
 	var look := Rbx.flat(Rbx.look(J.root_cf())).normalized()
-	var ac = cc.accion
 	# qué golpea: el pie de la patada; si no, la mano (o el arma) más adelantada
 	var miembros: Array = []
 	if tipo == "patada" or tipo == "pisoton":
@@ -1460,7 +1459,6 @@ func _cc_impacto(tipo: String, d: Dictionary) -> bool:
 	v_golpe = minf(v_golpe, float(CC_VEL_MAX.get(clave, 20.0)))
 	var dv := clampf(float(CC_MASA_GOLPE.get(clave, 0.3)) * CC_MASA_JUGADOR * (v_golpe + v_suya) / CC_MASA_BLANCO, 0.0, 20.0)
 	var ppos: Vector3 = (man.rig.P[pieza] as Node3D).global_position
-	var fuerte := tipo == "patada" or tipo == "pisoton"
 	# la sensación del golpe: parón, el miembro se detiene y rebota, la pieza se hunde, cámara (ImpactoCC)
 	var dir_imp := (look * 0.35 + Vector3.DOWN).normalized() if tipo == "pisoton" else look
 	impacto.golpe(tipo, man, pieza, punto, dv, dir_imp)
