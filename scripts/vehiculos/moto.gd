@@ -819,12 +819,12 @@ func _mover(dt: float) -> void:
 	if impacto > 3.0:
 		_contacto_t = _reloj
 	if golpe_nuevo:
+		Efectos.sonido(self, "Crash", global_position + adelante() * 2.5 + Vector3(0, 1.5, 0), clampf(impacto / 25.0, 0.3, 1.4), 0.7)
 		var bajo := impacto >= CHOQUE and _altura_obstaculo(-n_choque if n_choque != Vector3.ZERO else adelante()) < OBST_BAJO
 		if impacto >= (CHOQUE_BAJO if bajo else CHOQUE) and piloto != null:
 			_tirar_piloto("choque_bajo" if bajo else "choque", impacto, n_choque)
 		else:
 			vel_h *= clampf(1.0 - impacto / 70.0, 0.4, 0.95)
-			Efectos.sonido(self, "Blunt", global_position + adelante() * 2.5 + Vector3(0, 1.5, 0), clampf(impacto / 25.0, 0.3, 1.4), 0.7)
 			Ruido.emitir(self, global_position, 10.0 + impacto, Ruido.GOLPE, self)
 			if piloto != null and "shake" in piloto:
 				piloto.shake = minf(1.0, piloto.shake + impacto / 30.0)

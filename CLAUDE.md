@@ -1,5 +1,7 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
+- Audio de impactos con dos variantes por familia para puños, patadas, pisotones, armas blancas, bloqueos, balas y choques de moto. Créditos y mezclas en [Sonidos](docs/SONIDOS.md).
+
 Versión actual de Proyecto Z: **0.6V**.
 
 - Golpes rápidos: anticipación corta, retorno del puño junto al rostro y codo que sigue el arco del arma. El tiempo del clip de Blender gobierna la animación; el cooldown regula la siguiente entrada.

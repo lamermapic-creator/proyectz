@@ -989,7 +989,7 @@ func _aplicar_contacto_arma(man, pieza: String, ppos: Vector3, w: Dictionary) ->
 		else:
 			man.empujar(look * float(w.Knockback) * 0.8, float(w.get("Stagger", 0.45)))
 	Efectos.blood_at(J, ppos, -look)
-	Efectos.sonido(J, "Blunt" if contundente else "Flesh", ppos, 1.1, 0.9 + randf() * 0.2)
+	Efectos.sonido(J, "BatHit" if contundente else "Blade", ppos, 1.1, 0.9 + randf() * 0.2)
 	impacto.golpe("golpe", man, pieza, ppos, clampf(dmg / 3.0, 5.0, 18.0), look)
 
 
@@ -1455,7 +1455,8 @@ func _cc_impacto(tipo: String, d: Dictionary) -> bool:
 	var dir_imp := (look * 0.35 + Vector3.DOWN).normalized() if tipo == "pisoton" else look
 	impacto.golpe(tipo, man, pieza, punto, dv, dir_imp)
 	Ruido.emitir(J, ppos, C.RUIDO.GolpeContundente, Ruido.GOLPE, J)
-	Efectos.sonido(J, "Blunt", ppos, 1.0 if fuerte else 0.75, 0.8 + randf() * 0.2)
+	var sonido_contacto: String = {"puno": "Punch", "patada": "Kick", "pisoton": "Stomp"}.get(tipo, "BatHit" if clave == "empujon_arma" else "Punch")
+	Efectos.sonido(J, sonido_contacto, punto, clampf(0.45 + dv * 0.035, 0.5, 1.15))
 	# retroceso para el jugador (empujar a alguien también te echa un poco atrás)
 	J.empuje -= look * minf(dv * CC_MASA_BLANCO / CC_MASA_JUGADOR * 0.12, 2.5)
 	# daño (patadas, puñetazos, empujón con el arma)
@@ -1508,7 +1509,7 @@ func cc_bloquear(cantidad: float, desde: Vector3) -> float:
 	if now - float(cc.bloqueo_t0) <= CC_PARADA:
 		# PARADA: a tiempo, no pasa nada y el zombi se queda vendido
 		J.notify("¡Parada!")
-		Efectos.sonido(J, "Blunt", J.global_position + Vector3(0, 1.5, 0), 0.9, 1.25)
+		Efectos.sonido(J, "Block", J.global_position + Vector3(0, 1.5, 0), 0.9, 1.25)
 		if atacante != null:
 			atacante.empujar(-a_mi.normalized() * 26.0, 1.4)
 		cc.bloqueo_t0 = -9.0
@@ -1522,7 +1523,7 @@ func cc_bloquear(cantidad: float, desde: Vector3) -> float:
 		return 0.75
 	if not J.estamina_infinita:
 		J.stamina -= gasto
-	Efectos.sonido(J, "Blunt", J.global_position + Vector3(0, 1.5, 0), 0.7, 0.9)
+	Efectos.sonido(J, "Block", J.global_position + Vector3(0, 1.5, 0), 0.7, 0.9)
 	return CC_BLOQUEO_DANIO
 
 

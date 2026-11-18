@@ -39,3 +39,20 @@ variantes basta con poner `Tipo_<n+1>.ogg` en la carpeta. Si un tipo no tiene ar
 | Land_2.ogg | [Jump Landing](https://freesound.org/s/172960/) | qubodup |
 | BodyFall_1.ogg | [Body fall](https://freesound.org/s/417994/) | DylanTheFish |
 | BodyFall_2.ogg | [BODY FALL - V HVY - DIRT](https://freesound.org/s/504626/) | leonelmail |
+
+
+## Impactos de 0.6V
+
+Cada familia tiene dos variantes OGG mono. Las mezclas recortan y combinan las grabaciones CC0 de la tabla. El audio se reproduce en el punto del contacto y, en los ataques físicos, el volumen sigue la fuerza del impacto.
+
+| Familia | Grabaciones base |
+|---|---|
+| Punch | Blunt_1 y Flesh_2 |
+| Kick | Flesh_2 y Land_1 |
+| Stomp | Land_1 y BodyFall_2 |
+| Block | Blunt_1 y Step_8 |
+| Blade | Flesh_1 y Flesh_2 |
+| BatHit | Blunt_2 y Flesh_2 |
+| BulletBody | Flesh_2 y Flesh_1 |
+| BulletSurface | Step_8 e Impact_1 |
+| Crash | BodyFall_1 e Impact_1 |

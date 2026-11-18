@@ -1189,6 +1189,8 @@ func recibir_danio(cantidad: float, desde: Vector3 = Vector3.ZERO) -> void:
 		return
 	# bloqueando de frente (Arsenal.cc_bloquear): pasa solo una parte; parado a tiempo, nada
 	var parte := arsenal.cc_bloquear(cantidad, desde) if arsenal != null else 1.0
+	if desde != Vector3.ZERO and is_equal_approx(parte, 1.0):
+		Efectos.sonido(self, "Punch", global_position + Vector3.UP, 0.9)
 	var bloqueado := parte < 1.0
 	if parte <= 0.0:
 		var an0 := get_node_or_null("Animador") as Animador

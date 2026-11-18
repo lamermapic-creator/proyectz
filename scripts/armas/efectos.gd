@@ -383,12 +383,12 @@ static func casquillo(ctx: Node, pos: Vector3, dir: Vector3, escopeta := false, 
 static func impacto(ctx: Node, pos: Vector3, normal: Vector3, tipo: String) -> void:
 	if tipo == "flesh":
 		blood_at(ctx, pos, normal)
-		sonido(ctx, "Flesh", pos, 0.8, 0.9 + randf() * 0.2)
+		sonido(ctx, "BulletBody", pos, 0.8, 0.9 + randf() * 0.2)
 	elif tipo == "surface":
 		burst(ctx, pos, normal, Color8(150, 140, 125), 8, 14, 0.3, 0.6, 30)
 		burst(ctx, pos, normal, Color8(255, 200, 120), 3, 30, 0.08, 0.15, 0)
 		splat(ctx, pos, normal, Color8(20, 20, 20), 0.28, 20)
-		sonido(ctx, "Ricochet" if randf() < 0.35 else "Impact", pos, 0.45, 0.9 + randf() * 0.2)
+		sonido(ctx, "Ricochet" if randf() < 0.35 else "BulletSurface", pos, 0.45, 0.9 + randf() * 0.2)
 
 
 ## ---------------------------------------------------------------- sonidos sintetizados
@@ -522,6 +522,8 @@ static func precargar() -> void:
 		if _grabados(tipo).is_empty() and not _sonidos.has(tipo):
 			_vigilar()
 			_sonidos[tipo] = _generar(tipo)
+	for tipo in BASE_IMPACTO:
+		_grabados(tipo)
 	_limitador_master()
 	# y las texturas del fogonazo y del humo (se generan por código)
 	_textura_destello()
@@ -540,6 +542,13 @@ static func _limitador_master() -> void:
 	AudioServer.add_bus_effect(0, lim)
 
 
+const BASE_IMPACTO := {
+	"Punch": "Blunt", "Kick": "Blunt", "Stomp": "BodyFall", "Block": "Blunt",
+	"Blade": "Flesh", "BatHit": "Blunt", "BulletBody": "Flesh",
+	"BulletSurface": "Impact", "Crash": "Impact",
+}
+
+
 static func _stream(tipo: String) -> Array:
 	# sin ventana (pruebas --headless) no se oye nada: se usa el sintetizado, que no deja archivos .ogg
 	# reproduciéndose al salir (el servidor de audio "dummy" no los suelta → "resources still in use at exit")
@@ -550,6 +559,7 @@ static func _stream(tipo: String) -> Array:
 			i = (i + 1) % g.size()
 		_ultima[tipo] = i
 		return [g[i], true]
+	tipo = BASE_IMPACTO.get(tipo, tipo)
 	if not _sonidos.has(tipo):
 		_vigilar()
 		_sonidos[tipo] = _generar(tipo)
