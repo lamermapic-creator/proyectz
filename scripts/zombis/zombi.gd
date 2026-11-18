@@ -197,6 +197,11 @@ func recibir_disparo(cantidad: float, pieza: String, impulso: Vector3, punto: Ve
 	return muerto
 
 
+func separar_extremidad(pieza: String, direccion: Vector3) -> void:
+	if not vivo() and is_instance_valid(_ragdoll):
+		_ragdoll.separar(pieza, direccion)
+
+
 func recibir_danio(cantidad: float, pieza: String, impulso: Vector3) -> bool:
 	if _bala.is_empty() and _ragdoll != null and is_instance_valid(_ragdoll):
 		# en el suelo (o muerto): el golpe sacude el cuerpo

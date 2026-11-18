@@ -560,6 +560,54 @@ func morir(por_disparo := false) -> void:
 		cambiar("morir", 1.2 if comportamiento in ["retorcerse", "impacto"] else 0.0)
 
 
+var _separadas := {}
+
+
+## Suelta la rama completa del rig: los cuerpos y las uniones internas siguen simulándose.
+func separar(pieza: String, direccion: Vector3) -> void:
+	if vivo or _mezcla >= 0.0 or pieza in ["Head", "UpperTorso", "LowerTorso"]:
+		return
+	for mn in ART:
+		var motor: RigPersonaje.Motor = rig.M[mn]
+		if motor.part1 != pieza or _separadas.has(mn):
+			continue
+		var union := get_node_or_null("J_" + mn) as Joint3D
+		if union == null:
+			return
+		_separadas[mn] = true
+		_desprender.call_deferred(union, motor, direccion.normalized())
+		return
+
+
+func _desprender(union: Joint3D, motor: RigPersonaje.Motor, direccion: Vector3) -> void:
+	if _mezcla >= 0.0 or cuerpos.is_empty():
+		return
+	_uniones.erase(union)
+	remove_child(union)
+	union.queue_free()
+	var padre: RigidBody3D = cuerpos[motor.part0]
+	var miembro: RigidBody3D = cuerpos[motor.part1]
+	miembro.remove_collision_exception_with(padre)
+	if _congelado:
+		_descongelar()
+	var parte: Node3D = rig.P[motor.part1]
+	var base: Node3D = rig.P[motor.part0]
+	var punto := (parte.global_transform * motor.c1).origin
+	var hacia_base := (base.global_position - parte.global_position).normalized()
+	var tam: Vector3 = parte.get_meta("size")
+	var ancho := minf(tam.x, tam.z) * 0.85
+	Efectos.herida(parte, punto, hacia_base, ancho, false)
+	Efectos.herida(base, punto, -hacia_base, ancho, false)
+	Efectos.blood_at(self, punto, direccion, 1.15)
+	var impulso := (direccion * 1.9 - hacia_base * 1.4 + Vector3.UP * 0.6) * miembro.mass
+	# La primera fase coloca y suelta los cuerpos. Da el impulso una vez arrancada.
+	if _fase == 0:
+		await get_tree().physics_frame
+		await get_tree().physics_frame
+	if is_instance_valid(miembro) and not miembro.is_queued_for_deletion():
+		miembro.apply_central_impulse(impulso)
+
+
 ## ---------------------------------------------------------------- simulación
 func _physics_process(dt: float) -> void:
 	if _mezcla >= 0.0 or _congelado:
@@ -621,6 +669,8 @@ func _physics_process(dt: float) -> void:
 	var err_suma := 0.0
 	var err_peso := 0.0
 	for mn in ART:
+		if _separadas.has(mn):
+			continue
 		var def: Array = ART[mn]
 		var f_g: float = float(fuerzas.get(mn, fuerzas.get(def[4], 0.1)))
 		if con_tono:

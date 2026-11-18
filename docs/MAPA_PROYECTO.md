@@ -1,5 +1,7 @@
 # Mapa de Proyecto Z
 
+- Desmembramiento de zombis: un impacto letal de machete, hacha o francotirador en una extremidad suelta la articulación y deja las piezas bajo el ragdoll, con marcas en el corte.
+
 - Daño visual: heridas por bala y cortes adheridos a las piezas del zombi, hasta cuatro por pieza. Las gotas siguen trayectorias con gravedad y dejan manchas en la primera superficie.
 
 - Audio: retirado el bucle sintético del derrape de moto. Las armas cuerpo a cuerpo usan contactos cortos de grabaciones CC0 y se elimina el efecto de aire al iniciar esos ataques.

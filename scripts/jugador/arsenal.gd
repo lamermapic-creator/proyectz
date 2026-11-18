@@ -806,6 +806,8 @@ func shoot() -> void:
 					killed = obj.recibir_disparo(dmg, pieza, dir * ImpactoBalistico.impulso(equipado) * factor, hit_pos)
 				elif estaba_vivo:
 					killed = obj.recibir_danio(dmg, pieza, dir * (45.0 if n_balas == 1 else 12.0))
+				if killed and equipado == "Francotirador" and obj is Zombi:
+					obj.separar_extremidad(pieza, dir)
 				if estaba_vivo:
 					acerto = true
 					mato = mato or killed
@@ -985,6 +987,8 @@ func _aplicar_contacto_arma(man, pieza: String, ppos: Vector3, w: Dictionary) ->
 	if man is Zombi and (not contundente or crit):
 		Efectos.herida(man.rig.P[pieza], ppos, -look, 0.35 * fuerza, not contundente)
 	var killed: bool = man.recibir_danio(dmg, pieza, imp_v)
+	if killed and man is Zombi and equipado in ["Machete", "Hacha"]:
+		man.separar_extremidad(pieza, look)
 	Ruido.emitir(J, ppos, C.RUIDO.GolpeContundente if contundente else C.RUIDO.GolpeCarne, Ruido.GOLPE, J)
 	_confirmar(killed, crit)
 	if not killed and man.en_pie():
