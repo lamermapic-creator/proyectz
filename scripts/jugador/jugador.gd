@@ -42,6 +42,8 @@ var _levantarse_carrera_hasta := -9.0
 var _tumbar_rapido_hasta := -9.0
 var _vel_tumbar_rapido := Vector3.ZERO
 var _salto_pedido := false
+var _direccion_salto := Vector3.ZERO
+var _salto_recto := false
 var _salto_t := -9.0               # último salto (para agarrarse a un borde en el aire)
 var colgado = null               # colgado de una cornisa (ver step_colgado)
 var _soltado_t := -9.0
@@ -713,15 +715,10 @@ func step_vault(dt: float) -> void:
 			arsenal.sacar_tras_trepar()
 
 
-## Salto vertical o frontal respecto a la cámara; también bloquea las diagonales laterales.
-func _direccion_salto_permitida(direccion: Vector3) -> bool:
-	return direccion.length() <= 0.1 or direccion.normalized().dot(Vector3(-sin(yaw), 0, -cos(yaw))) >= 0.9
-
-
 func jump_or_vault() -> void:
 	if health <= 0 or vaulting != null or L.knocked or L.gettingUp:
 		return
-	if not en_suelo or ahora() - jump_prep_t < 0.3 or not _direccion_salto_permitida(_leer_movimiento()):
+	if not en_suelo or ahora() - jump_prep_t < 0.3:
 		return
 	var v = find_vault()
 	if v != null and start_vault(v):
@@ -734,6 +731,7 @@ func jump_or_vault() -> void:
 	if jump_height <= 0:
 		return
 	var hs := Vector3(vel_real.x, 0, vel_real.z).length()
+	_direccion_salto = Rbx.flat(Rbx.look(root_cf())).normalized() if _leer_movimiento().length() > 0.1 else Vector3.ZERO
 	jump_prep_t = ahora()
 	_salto_t = ahora()
 	if hs < 3:
@@ -746,7 +744,7 @@ func jump_or_vault() -> void:
 
 
 func _impulso_salto() -> void:
-	if en_suelo and vaulting == null and jump_height > 0 and _direccion_salto_permitida(_leer_movimiento()):
+	if en_suelo and vaulting == null and jump_height > 0:
 		_salto_pedido = true
 
 
@@ -1465,12 +1463,14 @@ func update_character(dt: float) -> void:
 		# chocó con algo (pared): la inercia se pierde
 		if hv.length() < (air_vel as Vector3).length() * 0.5:
 			air_vel = hv
-		air_vel += move_direction * C.WORLD.AirControl * dt
+		if not _salto_recto:
+			air_vel += move_direction * C.WORLD.AirControl * dt
 		if (air_vel as Vector3).length() > air_cap:
 			air_vel = (air_vel as Vector3).normalized() * air_cap
 		walk_speed = (air_vel as Vector3).length()
 		_move_override = (air_vel as Vector3).normalized() if walk_speed > 0.05 else Vector3.ZERO
 	else:
+		_salto_recto = false
 		air_vel = null
 		_move_override = null
 	# Z durante carrera: caída rápida y deslizamiento frenado, resuelto por move_and_slide.
@@ -1752,15 +1752,15 @@ func humanoid_step(dt: float) -> void:
 		_aire_t = 0.0
 	if _salto_pedido:
 		_salto_pedido = false
-		if en_suelo and jump_height > 0 and _direccion_salto_permitida(mov):
+		if en_suelo and jump_height > 0:
 			v.y = sqrt(2.0 * g * jump_height)
 			en_suelo = false
-			# distancia FIJA: si te mueves, el salto siempre recorre JumpDistance studs en la dirección
-			# en la que vas (da igual si andas o corres). Sin moverte, salto vertical.
-			if mov.length() > 0.1:
+			# Conserva el rumbo del cuerpo al pulsar Espacio, aunque se mueva la cámara.
+			_salto_recto = true
+			if _direccion_salto.length_squared() > 0.1:
 				var t_aire := 2.0 * v.y / g
 				var hs: float = C.PLAYER.JumpDistance / t_aire
-				horiz = Vector3(mov.x, 0, mov.z).normalized() * hs
+				horiz = _direccion_salto * hs
 				air_vel = horiz
 				air_cap = hs
 			else:

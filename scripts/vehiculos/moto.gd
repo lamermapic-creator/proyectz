@@ -1052,7 +1052,9 @@ func _apoyo_rueda(delantera: bool, eje0: Vector3, eje1: Vector3) -> Dictionary:
 		# mucho más bajo: entonces solo se sube si el escalón no pasa de _escalon() (antes, deprisa, la rueda "subía"
 		# por el canto bloques de 40 cm)
 		var pc: Vector3 = h.pos
-		if pc.y > y - ModeloMoto.R_RUEDA + 0.2:
+		# Solo un obstáculo que se opone al avance puede ser un escalón.
+		# En bajada el rayo puede pasar bajo la rampa y leer el suelo del nivel.
+		if (h.normal as Vector3).dot(dir) < -0.01 and pc.y > y - ModeloMoto.R_RUEDA + 0.2:
 			var atras := pc - dir * 0.15
 			var q := PhysicsRayQueryParameters3D.create(atras + Vector3(0, 0.05, 0), atras - Vector3(0, 3.0, 0), 1)
 			q.exclude = _q_rueda.exclude

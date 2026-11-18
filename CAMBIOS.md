@@ -1,5 +1,7 @@
 ## 2026-11-17 — Levantarse para correr
 
+- Salto con WASD: el impulso toma el rumbo del cuerpo al pulsar Espacio. Sin movimiento, el salto es vertical. Al bajar una rampa, la sonda de la moto solo busca bordillos en caras opuestas al avance.
+
 - Moto en rampas: la retención automática se limita al terreno casi plano, el motor mantiene la fuerza disponible al rodar hacia atrás y la sonda distingue la subida continua de un bordillo.
 
 - Choques de moto: el piloto conserva la velocidad del impacto y entra en ragdoll en el aire. La marcha atrás compensa la pendiente y la salida en parado comprueba el arco sobre la ladera. El audio 3D atenúa por distancia y altura, amortigua detrás de paredes y pisos y refuerza el roce de neumáticos al derrapar.
