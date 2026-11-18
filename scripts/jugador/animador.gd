@@ -135,6 +135,8 @@ var gait_amp := 0.0
 # ciclos de la marcha hechos en Blender (Movimientos, 2026-11-02): mezcla andar / correr / agachado y amplitud
 var mez_run := 0.0     # 0 andar, 1 correr (según la velocidad, como run01 de los pasos)
 var _mezcla_paso_carrera := 0.0
+var _ritmo_previo := 0.0
+var _cambio_ritmo := 0.0
 var mez_pie_run := 0.0 # lo mismo, para la forma del paso (sin suavizar: el de update_feet)
 var amp_ciclo := 0.0   # 0 quieto, 1 a la velocidad para la que está hecho el ciclo
 var gait01 := 0.0       # reloj de la marcha (0..1): marca cuándo despega y apoya cada pie (ver update_feet)
@@ -624,6 +626,10 @@ func _factor_carrera_direccion(vel: Vector3, base: Transform3D) -> float:
 
 
 func update_feet(root_cf: Transform3D, vel: Vector3, speed: float, dt: float, grounded: bool) -> void:
+	var variacion := absf(speed - _ritmo_previo) / maxf(dt, 0.001)
+	_ritmo_previo = speed
+	var ajuste := smoothstep(5.0, 30.0, variacion) if grounded else 0.0
+	_cambio_ritmo = maxf(ajuste, Rbx.damp(_cambio_ritmo, 0.0, 9.0, dt))
 	var body_yaw := Rbx.yaw_of(root_cf)
 	var yaw_cf := Rbx.ang(0, body_yaw, 0)
 	var vel_h := Vector3(vel.x, 0, vel.z)
@@ -1167,7 +1173,9 @@ func _marcha_animada(root_cf: Transform3D, frame: Transform3D, vel_h: Vector3, s
 		if not fk.ap_paso and fk.get("anim_lock") != null and anim_w >= 1.0:
 			var hip_g := frame * Vector3(fk.side * hip_x, 0.0, 0.0)
 			var lk: Vector3 = fk.anim_lock
-			if Vector2(lk.x - hip_g.x, lk.z - hip_g.z).length() > leg_len * 0.80 and Vector3(lk.x - hip_g.x, 0.0, lk.z - hip_g.z).dot(vel_dir) < 0.0:
+			var desfase := Rbx.flat(lk - hip_g)
+			var alcance := leg_len * lerpf(0.80, 0.52, _cambio_ritmo if esc_fondo <= 0.0 else 0.0)
+			if desfase.length() > alcance and desfase.dot(vel_dir) < 0.0:
 				fk.ap_paso = true
 				fk.ap_x = 0.0 if anim_sentido > 0.0 else 1.0
 		_avanza_pie(fk, dphi + corr, fr)
@@ -1230,6 +1238,8 @@ func _marcha_animada(root_cf: Transform3D, frame: Transform3D, vel_h: Vector3, s
 			var u: float = pa[4]
 			# lo que el pie se apartó de la animación mientras estaba apoyado se recupera en la primera mitad del paso
 			var off_p: Vector3 = f.get("anim_off", Vector3.ZERO)
+			if esc_fondo <= 0.0:
+				off_p = off_p.limit_length(lerpf(leg_len, leg_len * 0.46, _cambio_ritmo))
 			p += off_p * (1.0 - Rbx.smooth(u / 0.6))
 			var t_rest := (1.0 - u) * fr * ritmo_periodo
 			var aterriza := frame * _tobillo_anim(k, dd * delante, eje, desp_x, estrecha) + vel_h * t_rest + fyaw * Vector3(0, 0, -0.2)
@@ -2556,7 +2566,7 @@ func update_rig(dt: float) -> void:
 			var fu: float = f.u if f.get("u") != null else 0.0
 			if grounded and (f.swing == null or fu > 0.8):
 				var hip := (yaw_only * Rbx.cf(f.side * hip_x, hip_y + bob - crouch, 0)).origin
-				var reach := leg_len * 0.994
+				var reach := leg_len * lerpf(0.994, 0.965, _cambio_ritmo if esc_fondo <= 0.0 else 0.0)
 				var dh := Vector2(hip.x - ankle.x, hip.z - ankle.z).length()
 				var dy := hip.y - ankle.y
 				if dh * dh + dy * dy > reach * reach:
@@ -2565,8 +2575,12 @@ func update_rig(dt: float) -> void:
 		# corriendo daba un golpe en cada apoyo)
 		var obj_d := clampf(need, 0, 0.6)
 		var w_d := 32.0 if obj_d > pelvis_drop else 11.0
-		pelvis_drop_v += (w_d * w_d * (obj_d - pelvis_drop) - 2.0 * w_d * pelvis_drop_v) * dt
-		pelvis_drop += pelvis_drop_v * dt
+		# Solución del muelle para todo el paso, estable también si cae el FPS.
+		var error := pelvis_drop - obj_d
+		var impulso := pelvis_drop_v + w_d * error
+		var amortiguacion := exp(-w_d * dt)
+		pelvis_drop = obj_d + (error + impulso * dt) * amortiguacion
+		pelvis_drop_v = (pelvis_drop_v - w_d * impulso * dt) * amortiguacion
 		if pelvis_drop < 0.0:
 			pelvis_drop = 0.0
 			pelvis_drop_v = maxf(pelvis_drop_v, 0.0)
@@ -2823,7 +2837,8 @@ func update_rig(dt: float) -> void:
 			# de lado): la rodilla se dobla y solo se estira al final para apoyar el talón
 			if grounded and va == null and pb < 0.01 and f.swing != null and f.get("u") != null and s != kick_s:
 				var hip_w := (pelvis_cf * Lg.top.c0).origin
-				var lim := leg_len * lerpf(0.86, 0.99, Rbx.smooth((f.u - 0.6) / 0.4))
+				var final_paso := lerpf(0.99, 0.965, _cambio_ritmo if esc_fondo <= 0.0 else 0.0)
+				var lim := leg_len * lerpf(0.86, final_paso, Rbx.smooth((f.u - 0.6) / 0.4))
 				var off := target - hip_w
 				if off.length() > lim:
 					target = hip_w + off.normalized() * lim

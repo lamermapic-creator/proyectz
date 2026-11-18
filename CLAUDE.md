@@ -1,5 +1,7 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
+- Locomoción: al cambiar de ritmo, el pie atrasado adelanta el despegue y la pierna mantiene más flexión. La compensación de cadera usa un muelle estable con fotogramas largos.
+
 - Moto: barrido de la rueda delantera al caer de morro y transferencia a cuerpo rígido en impactos fuertes, con inercia y vuelco. F levanta desde cerca cuando la moto se estabiliza, con giro suave, pies en sitio y agarres fijos.
 
 - Salto con WASD: el impulso toma el rumbo del cuerpo al pulsar Espacio. Sin movimiento, el salto es vertical. Al bajar una rampa, la sonda de la moto solo busca bordillos en caras opuestas al avance.
