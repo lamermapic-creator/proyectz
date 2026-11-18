@@ -2077,7 +2077,7 @@ func _pedir_montar(m: Moto) -> void:
 func _sitio_moto(m: Moto, lado: float) -> Vector3:
 	var pie := m.asiento_cf().origin + Rbx.flat(m.derecha()).normalized() * (lado * 2.5)
 	var piso := raycast(pie + Vector3.UP * 2.0, Vector3.DOWN * 8.0, [m.get_rid()])
-	if piso.is_empty() or (piso.normal as Vector3).y < 0.65:
+	if piso.is_empty() or (piso.normal as Vector3).y < 0.43:
 		return Vector3.INF
 	return piso.position
 
@@ -2145,7 +2145,7 @@ func _paso_moto(dt: float) -> void:
 		moto = null
 		_fin_moto(null)
 		return
-	var mandos := {}
+	var mandos := {"freno_mano": true} if _moto_bajar_t >= 0.0 else {}
 	if health > 0 and not free_mouse and _moto_bajar_t < 0.0 and reloj - _moto_t0 >= _moto_subir_dur:
 		var g := 1.0 if Input.is_physical_key_pressed(KEY_W) else 0.0
 		var f := 1.0 if Input.is_physical_key_pressed(KEY_S) else 0.0
@@ -2177,7 +2177,8 @@ func _paso_moto(dt: float) -> void:
 			desde.origin += m.adelante() * (sin(PI * cruce) * 0.24)
 			desde.origin.y += sin(PI * cruce) * (0.75 if _moto_montaje_rapido else 0.56) - sin(PI * clampf(k / 0.28, 0.0, 1.0)) * 0.16
 		else:
-			desde.origin.y += sin(PI * k) * 0.48
+			var desnivel := absf(_moto_desde.origin.y - objetivo.origin.y)
+			desde.origin.y += sin(PI * k) * (0.48 + desnivel * 0.45)
 		global_transform = desde
 	else:
 		global_transform = objetivo
@@ -2300,7 +2301,13 @@ func _salida_moto_libre(m: Moto, pie: Vector3) -> bool:
 		return false
 	var desde := m.asiento_cf().origin
 	var hasta := pie + Vector3.UP * center_cur
-	return raycast(desde, hasta - desde).is_empty() and raycast(hasta, Vector3.UP * 2.5).is_empty()
+	# En una ladera el trayecto primero sube, luego pasa la pierna y aterriza.
+	var altura := maxf(desde.y, hasta.y) + 0.55
+	var sobre_asiento := Vector3(desde.x, altura, desde.z)
+	var sobre_pie := Vector3(hasta.x, altura, hasta.z)
+	return raycast(desde, sobre_asiento - desde).is_empty() \
+		and raycast(sobre_asiento, sobre_pie - sobre_asiento).is_empty() \
+		and raycast(hasta, Vector3.UP * maxf(2.5, altura - hasta.y)).is_empty()
 
 
 ## la moto tira al piloto (choque, mal aterrizaje): sale despedido con "imp" y recibe "danio"
@@ -2308,22 +2315,24 @@ func expulsar_moto(imp: Vector3, danio: float, motivo := "") -> void:
 	var m := moto
 	if m == null:
 		return
-	var asiento := m.asiento_cf().origin
+	var pose_asiento := global_transform
 	moto = null
 	_fin_moto(m)
-	global_position = asiento + Vector3(0, 0.6, 0)
+	global_transform = pose_asiento
+	global_position += Vector3.UP * 0.42
 	_soltado_t = reloj # sale despedido: no se agarra a ningún borde
 	shake = 1.0
 	# sale despedido con el ragdoll activo: vuela, se protege con los brazos y rueda por el suelo
 	var plano := Rbx.flat(imp)
 	var giro := Vector3.UP.cross(plano.normalized()) * clampf(plano.length() * 0.15, 1.0, 6.0) if plano.length() > 0.5 else Vector3.ZERO
-	ragdoll_iniciar(imp, {"comportamiento": "caer", "giro": giro, "duracion": 1.6})
+	ragdoll_iniciar(imp, {"comportamiento": "caida_libre", "giro": giro, "duracion": 1.8})
 	# (2026-10-28) sale volando por encima de su moto: no se engancha en ella (antes chocaba con el manillar y caía a
 	# un metro, fuera cual fuera la velocidad)
 	if ragdoll != null:
 		var fis = m.get("_fisica")
 		if fis != null:
-			ragdoll.ignorar(fis, 0.7)
+			ragdoll.ignorar(fis, 0.48)
+		ragdoll.ignorar(m, 0.48)
 	if motivo != "muerte":
 		notify("¡Te has caído de la moto!")
 	if danio > 0.0:

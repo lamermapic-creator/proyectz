@@ -118,7 +118,8 @@ var _desvio_t := 0.0
 var _rodeos := 0
 var _cono: MeshInstance3D = null # cono de visión (solo depuración, F6)
 var _forma: CollisionShape3D
-var _voz: AudioStreamPlayer3D
+const AudioEspacial := preload("res://scripts/armas/audio_espacial.gd")
+var _voz: AudioEspacial
 var _etiqueta: Label3D
 var S := {
 	"hitPitch": Rbx.Muelle.new(2.4, 0.3), "hitYaw": Rbx.Muelle.new(2.4, 0.3), "hitHead": Rbx.Muelle.new(3.2, 0.3),
@@ -154,7 +155,7 @@ func _ready() -> void:
 	add_child(rig)
 	_aspecto()
 	_cuerpo_de_impacto()
-	_voz = AudioStreamPlayer3D.new()
+	_voz = AudioEspacial.new()
 	_voz.unit_size = 12.0
 	_voz.max_distance = 400.0
 	_voz.position = Vector3(0, 2.0, 0)
@@ -1103,7 +1104,7 @@ func _grunir(fuerte: bool) -> void:
 		Ruido.emitir(self, global_position + Vector3(0, 1.9, 0), C.RUIDO.Grunido, Ruido.GRUNIDO, self)
 	_voz.stream = _voz_sintetica(_rng.randi() % 3)
 	_voz.pitch_scale = _rng.randf_range(0.85, 1.1)
-	_voz.volume_db = 4.0 if fuerte else -6.0
+	_voz.nivel_fuente_db = 4.0 if fuerte else -6.0
 	_voz.play()
 
 

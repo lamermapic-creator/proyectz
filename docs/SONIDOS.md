@@ -56,3 +56,8 @@ Cada familia tiene dos variantes OGG mono. Las mezclas recortan y combinan las g
 | BulletBody | Flesh_2 y Flesh_1 |
 | BulletSurface | Step_8 e Impact_1 |
 | Crash | BodyFall_1 e Impact_1 |
+
+
+## Propagación en el nivel
+
+Godot atenúa los emisores 3D según su distancia a la cámara, incluida la diferencia de altura. Los efectos, voces y sonidos de moto comprueban si hay una superficie estática entre el emisor y la cámara. Una pared resta hasta 11 dB y baja el corte a 1450 Hz. Un piso o techo resta hasta 16 dB y baja el corte a 850 Hz. El roce del neumático aumenta según el deslizamiento y la velocidad. Los impactos conservan la intensidad de la colisión que los produce.

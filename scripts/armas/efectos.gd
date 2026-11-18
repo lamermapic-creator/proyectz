@@ -669,20 +669,21 @@ static func sonido(ctx: Node, tipo: String, pos, vol := 1.0, tono := 1.0) -> voi
 		p2.play()
 		p2.finished.connect(p2.queue_free)
 		return
-	var p := AudioStreamPlayer3D.new()
+	var p := preload("res://scripts/armas/audio_espacial.gd").new()
 	p.add_to_group("efectos_audio")
 	p.stream = sel[0]
 	# (2026-10-27) antes +6 dB y hasta +3 dB más por la distancia: los .ogg ya vienen casi a 0 dBFS, así que todo
 	# saturaba (sobre todo las ráfagas del rifle). Ahora -4 dB, sin ganancia extra de cerca y un limitador en Master.
-	p.volume_db = linear_to_db(vol) - 4.0
+	p.nivel_fuente_db = linear_to_db(vol) - 4.0
+	p.volume_db = p.nivel_fuente_db
 	p.max_db = 0.0
 	p.pitch_scale = tono
-	p.unit_size = 12.0 # escala en studs
-	p.max_distance = 600.0
+	p.unit_size = 4.5 # cerca: pasos, golpes y superficies
+	p.max_distance = 130.0
 	# los disparos se oyen de lejos (y no se cortan en seco al alejarse)
 	if tipo in ["Pistol", "Revolver", "Rifle", "SMG", "Shotgun", "Sniper"]:
-		p.unit_size = 40.0
-		p.max_distance = 1400.0
+		p.unit_size = 26.0
+		p.max_distance = 650.0
 	raiz.add_child(p)
 	p.global_position = pos
 	p.play()

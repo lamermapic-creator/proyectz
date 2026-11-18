@@ -98,7 +98,7 @@ func frenos() -> void:
 		m.paso(1.0 / 60.0, {"gas": 1.0, "freno_mano": true})
 	comprobar(m.vel_h.length() < 0.1, "Espacio puede detener la moto por completo")
 	print("MANEJO derrape velocidad_inicial=24.0 velocidad_a_0.5s=%.2f" % tras_medio_segundo)
-	for pendiente in [-0.10, 0.10]:
+	for pendiente in [-0.10, 0.10, -0.87, 0.87]:
 		piso.rotation.x = pendiente
 		m.global_position = Vector3(30, 0, 0)
 		m.rumbo = 0.0
@@ -109,6 +109,12 @@ func frenos() -> void:
 		m.apoyo = 2
 		m.en_aire = false
 		m._poner_en_el_suelo()
+		# Arranca con ambos ejes apoyados, como una moto que acaba de parar en la rampa.
+		m.cabeceo = pendiente
+		m.cab_suelo = pendiente
+		m._pend_del = pendiente
+		m._pend_tras = pendiente
+		m.global_position.y += ModeloMoto.R_RUEDA * (1.0 / cos(pendiente) - cos(pendiente))
 		for i in 100:
 			await process_frame
 			m.paso(1.0 / 60.0, {"freno": 1.0})

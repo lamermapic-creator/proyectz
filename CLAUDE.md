@@ -1,5 +1,7 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
+- Choques de moto: el piloto conserva la velocidad del impacto y entra en ragdoll en el aire. La marcha atrás compensa la pendiente y la salida en parado comprueba el arco sobre la ladera. El audio 3D atenúa por distancia y altura, amortigua detrás de paredes y pisos y refuerza el roce de neumáticos al derrapar.
+
 - El freno de mano reduce la velocidad longitudinal también en derrape y tiene prioridad sobre el acelerador y la marcha atrás.
 
 - Moto: F monta desde la posición actual dentro del alcance lateral. El montaje en carrera es más corto y levanta antes la pierna. Más agarre lateral y derrape controlado al girar con el freno de mano. El neumático suena según el deslizamiento real.

@@ -110,8 +110,9 @@ var _giro_ruedas := 0.0
 var _ruido_t := 0.0
 var _golpeados := {}           # id del objetivo -> hora del último golpe
 var _reloj := 0.0
-var _audio_motor: AudioStreamPlayer3D
-var _audio_neumatico: AudioStreamPlayer3D
+const AudioEspacial := preload("res://scripts/armas/audio_espacial.gd")
+var _audio_motor: AudioEspacial
+var _audio_neumatico: AudioEspacial
 var _nivel_neumatico := 0.0
 var _chispa_t := 0.0
 var ultimo_choque := 0.0       # (para las pruebas y el HUD)
@@ -143,13 +144,13 @@ func _ready() -> void:
 		cr.position = Vector3(0, ModeloMoto.R_RUEDA, z)
 		add_child(cr)
 		_formas.append([cr, cr.transform])
-	_audio_motor = AudioStreamPlayer3D.new()
+	_audio_motor = AudioEspacial.new()
 	_audio_motor.stream = _sonido_motor()
 	_audio_motor.unit_size = 14.0
 	_audio_motor.max_distance = 700.0
-	_audio_motor.volume_db = -4.0
+	_audio_motor.nivel_fuente_db = -4.0
 	add_child(_audio_motor)
-	_audio_neumatico = AudioStreamPlayer3D.new()
+	_audio_neumatico = AudioEspacial.new()
 	_audio_neumatico.stream = _sonido_neumatico()
 	_audio_neumatico.unit_size = 7.0
 	add_child(_audio_neumatico)
@@ -322,11 +323,8 @@ func _tirar_piloto(motivo: String, impacto: float, normal := Vector3.ZERO) -> vo
 			# por encima del manillar y del obstáculo: casi toda la velocidad que llevaba, y hacia arriba
 			imp = vh * 0.9 + Vector3(0, 6.0 + vh.length() * 0.16, 0)
 		"choque":
-			# contra una pared alta: lo que iba hacia ella se frena (se estrella y cae al pie); lo de lado sigue
-			imp = vh * 0.85 + Vector3(0, 4.0 + impacto * 0.08, 0)
-			if normal != Vector3.ZERO:
-				var hacia := minf(0.0, imp.dot(normal))
-				imp -= normal * hacia * 0.85
+			# El piloto mantiene su trayectoria inicial. La pared lo frena al tocar el ragdoll.
+			imp = vh * 0.88 + Vector3.UP * clampf(3.8 + impacto * 0.16, 4.0, 12.0)
 		_:
 			# aterrizaje imposible: sigue hacia donde iba
 			imp = v * 0.8 + Vector3(0, 5.0 + impacto * 0.1, 0)
@@ -451,8 +449,11 @@ func paso(dt: float, mandos: Dictionary) -> void:
 				if apoyo == 2:
 					# (empujando hacia atrás con los pies, el piloto aguanta casi todo el peso: si no, con la rueda de
 					# delante metida en un hueco no había forma de sacarla marcha atrás)
-					var k_g := 0.25 if (piloto != null and f_in > 0.05 and g_in < 0.05 and v_f < 0.6) else 1.0
+					var empujando_atras := piloto != null and f_in > 0.05 and g_in < 0.05 and v_f <= 0.1
+					var k_g := 0.08 if empujando_atras else 1.0
 					v_f -= GRAV * sin(cab_suelo) * dt * k_g
+					if empujando_atras:
+						v_f = clampf(v_f, -ATRAS, 0.0)
 					if f_in > 0.05 and g_in < 0.05 and _espera_atras > 0.0 and _espera_atras <= PAUSA_ATRAS:
 						# Durante la pausa el freno sujeta la pendiente; no reinicia el temporizador por deriva.
 						v_f = 0.0
@@ -816,7 +817,7 @@ func _mover(dt: float) -> void:
 			var a_mov := atan2(-vel_h.x, -vel_h.z)
 			if absf(Rbx.wrap_a(a_mov - rumbo)) < PI * 0.5:
 				rumbo = Rbx.wrap_a(rumbo + Rbx.wrap_a(a_mov - rumbo) * minf(1.0, 5.0 * dt))
-	var golpe_nuevo := impacto > 3.0 and _reloj - _contacto_t > 0.35
+	var golpe_nuevo := impacto > 3.0 and (_reloj - _contacto_t > 0.35 or (piloto != null and impacto >= CHOQUE))
 	if impacto > 3.0:
 		_contacto_t = _reloj
 	if golpe_nuevo:
@@ -1176,7 +1177,7 @@ func _paso_motor(dt: float, v_f: float, g_in: float) -> void:
 		if not _audio_motor.playing:
 			_audio_motor.play()
 		_audio_motor.pitch_scale = 0.6 + rpm * 1.05
-		_audio_motor.volume_db = -10.0 + gas * 5.0 + rpm * 2.0
+		_audio_motor.nivel_fuente_db = -10.0 + gas * 5.0 + rpm * 2.0
 		_ruido_t -= dt
 		if _ruido_t <= 0.0:
 			_ruido_t = 0.35
@@ -1187,10 +1188,10 @@ func _paso_motor(dt: float, v_f: float, g_in: float) -> void:
 
 	var rozamiento := 0.0
 	if piloto != null and not en_aire and not caida:
-		rozamiento = smoothstep(0.5, 6.0, absf(vel_h.dot(derecha()))) * smoothstep(4.0, 18.0, va)
+		rozamiento = maxf(smoothstep(0.35, 4.0, absf(vel_h.dot(derecha()))), derrapando * 0.65) * smoothstep(4.0, 18.0, va)
 	_nivel_neumatico = Rbx.damp(_nivel_neumatico, rozamiento, 14.0, dt)
 	if _nivel_neumatico > 0.015:
-		_audio_neumatico.volume_db = linear_to_db(_nivel_neumatico) - 13.0
+		_audio_neumatico.nivel_fuente_db = linear_to_db(_nivel_neumatico) - 9.0
 		if not _audio_neumatico.playing:
 			_audio_neumatico.play()
 	elif _audio_neumatico.playing:
