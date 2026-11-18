@@ -22,6 +22,7 @@ var grupo := false     # --grupo: además del caído, dos zombis DE PIE delante:
 var mira_abajo := false   # --mira_abajo: (con --grupo) la cámara mira al suelo: entonces sí, al caído
 var de_pie := []
 var al_suelo := 0
+var impactos_suelo_incorrectos := 0
 var a_de_pie := 0
 var cam_lado: Camera3D = null   # --lado: cámara de lado para grabar (--write-movie)
 
@@ -136,8 +137,10 @@ func _process(dt: float) -> void:
 	if not ul.is_empty() and float(ul.t) != ult_paron_t:
 		ult_paron_t = float(ul.t)
 		parones += 1
+		if ul.get("suelo", false) and ul.tipo != "pisoton":
+			impactos_suelo_incorrectos += 1
 		print("SUELO paron=%.3f detencion=%.3f escala=%.2f" % [float(ul.paron), float(ul.detencion), Engine.time_scale])
-		if golpe == "cuchillo" or golpe == "bate":
+		if ul.tipo == "golpe" and (golpe == "cuchillo" or golpe == "bate"):
 			impactos += 1
 			if ul.get("suelo", false):
 				al_suelo += 1
@@ -147,7 +150,7 @@ func _process(dt: float) -> void:
 		var danio: float = vida0 - obj.health
 		print("SUELO golpe=%s impactos=%d/%d parones=%d baja_cabeza=%.2f danio=%.0f escala_final=%.2f" % [golpe, impactos, hechos, parones, baja_max, danio, Engine.time_scale])
 		var ok := impactos >= int(ceil(hechos * 0.6)) and (danio > 0.0 or muerto) and parones > 0 and Engine.time_scale > 0.99 \
-			and baja_max > (0.5 if golpe == "pisoton" else 0.9)
+			and baja_max > 0.5 and al_suelo > 0
 		if grupo:
 			print("SUELO grupo: al_suelo=%d a_de_pie=%d baja_cabeza=%.2f" % [al_suelo, a_de_pie, baja_max])
 			if mira_abajo:
@@ -155,5 +158,6 @@ func _process(dt: float) -> void:
 			else:
 				# (los de pie están algo a los lados: no todas las patadas llegan; lo que importa es que NINGUNA va al suelo)
 				ok = a_de_pie >= 2 and al_suelo == 0 and (golpe == "pisoton" or baja_max < 0.6)
+		ok = ok and impactos_suelo_incorrectos == 0
 		print("OK suelo_" + golpe if ok else "MAL suelo_%s" % golpe)
 		get_tree().quit()

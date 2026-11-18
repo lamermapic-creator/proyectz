@@ -902,6 +902,9 @@ func melee() -> void:
 	var now := ahora()
 	if now - last_melee < w.Cooldown:
 		return
+	if J.moto == null and cc_puede() and _blanco_para_pisoton():
+		pisoton()
+		return
 	if J.stamina < w.Stamina * 0.5 and not J.estamina_infinita:
 		J.notify("Estás agotado")
 		return
@@ -909,29 +912,13 @@ func melee() -> void:
 	J.stamina = maxf(0.0, J.stamina - w.Stamina)
 	Efectos.sonido(J, "Swing", J.global_position, 0.8, 0.9 + randf() * 0.2)
 	Ruido.emitir(J, J.global_position, C.RUIDO.GolpeAire, Ruido.GOLPE, J)
-	# VARIEDAD (2026-11-08, 2): el golpe de siempre o uno de los nuevos de Blender (CombateCC.GOLPES), al azar sin
-	# repetir. En la moto, tumbado o en el aire, siempre el de siempre
 	var base_g := Armas.base(equipado)
 	var nuevos: Array = CombateCC.GOLPES.get(base_g, [])
-	var vg := 0
-	# (2026-11-08, 11) al que está en el suelo, SIEMPRE la misma: la de suelo de su clase (CombateCC.SUELO)
-	if J.moto == null and cc_puede():
-		var bl := cc_blanco(float(w.Range) + 1.5)
-		var clase_s := cc_clase()
-		if not bl.is_empty() and not bl[1].en_pie() and CombateCC.SUELO.has(clase_s):
-			var asu: Dictionary = CombateCC.SUELO[clase_s]
-			var dur_s: float = maxf(float(w.Cooldown), float(asu.dur))
-			cc.accion = {"tipo": "golpe", "clase": clase_s, "suelo": clase_s, "var": 0, "t0": now, "dur": dur_s,
-				"avance_prev": 0.0, "extra": _cc_extra(float(w.Range) * 0.55) * 0.5}
-			cc_golpes.append([now + dur_s * float(asu.golpe), "golpe", {"arma": equipado}])
-			impacto.preparar(cc.accion, asu)
-			return
 	if J.moto == null and not nuevos.is_empty() and cc_puede():
-		vg = _cc_variante("golpe_" + equipado, nuevos.size() + 1)
-	if vg > 0:
-		var ag: Dictionary = nuevos[vg - 1]
+		var vg := _cc_variante("golpe_" + equipado, nuevos.size())
+		var ag: Dictionary = nuevos[vg]
 		var dur_g: float = maxf(float(w.Cooldown), float(ag.dur) * 0.9)
-		cc.accion = {"tipo": "golpe", "clase": cc_clase(), "base": base_g, "var": vg - 1, "t0": now, "dur": dur_g,
+		cc.accion = {"tipo": "golpe", "clase": cc_clase(), "base": base_g, "var": vg, "t0": now, "dur": dur_g,
 			"avance_prev": 0.0, "extra": _cc_extra(float(w.Range) * 0.55) * 0.5}
 		cc_golpes.append([now + dur_g * float(ag.golpe), "golpe", {"arma": equipado}])
 		J.shake = minf(1.0, J.shake + 0.15)
@@ -1040,8 +1027,6 @@ var _puno_pedido := -9.0          # clic durante un puñetazo: el siguiente sale
 
 ## animación (CombateCC) de una acción en curso
 func cc_anim(ac: Dictionary) -> Dictionary:
-	if ac.has("suelo"):
-		return CombateCC.SUELO[ac.suelo]
 	match str(ac.tipo):
 		"empujon":
 			return CombateCC.EMPUJON[ac.clase][ac["var"]]
@@ -1149,6 +1134,11 @@ func empujon() -> void:
 	Efectos.sonido(J, "Swing", J.global_position, 0.6, 0.75 + randf() * 0.15)
 
 
+func _blanco_para_pisoton() -> bool:
+	var bl := cc_blanco(CC_PISOTON.alcance)
+	return not bl.is_empty() and not bl[1].en_pie()
+
+
 func patada() -> void:
 	# Comprobar también la entrada actual: G puede llegar antes de actualizar L.sprinting.
 	if J.L.sprinting or (Input.is_physical_key_pressed(KEY_SHIFT) and J._leer_movimiento().length() > 0.1 and not J.aiming and not J.firing and not J.exhausted):
@@ -1156,8 +1146,7 @@ func patada() -> void:
 	if not cc_puede(true):
 		return
 	# con el blanco en el suelo delante, pisotón
-	var bl := cc_blanco(CC_PISOTON.alcance)
-	if not bl.is_empty() and not bl[1].en_pie():
+	if _blanco_para_pisoton():
 		pisoton()
 		return
 	if not _cc_empezar("patada", CC_PATADA.estamina, CC_PATADA.espera):
@@ -1198,21 +1187,10 @@ func punetazo() -> void:
 		if cc.accion.tipo == "puno":
 			_puno_pedido = now
 		return
-	if not _cc_empezar("puno", CC_PUNO.estamina, CC_PUNO.espera):
+	if _blanco_para_pisoton():
+		pisoton()
 		return
-	# (2026-11-08, 11) al que está en el suelo, siempre el mismo: agachado, hacia abajo (CombateCC.SUELO.manos)
-	var bl := cc_blanco(float(CC_PUNO.alcance) + 1.0)
-	if not bl.is_empty() and not bl[1].en_pie():
-		var asu: Dictionary = CombateCC.SUELO.manos
-		cc.accion = {"tipo": "puno", "clase": "manos", "suelo": "manos", "var": 0, "t0": now, "dur": float(asu.dur),
-			"avance_prev": 0.0, "extra": _cc_extra(float(CC_PUNO.alcance)) * 0.5}
-		var ds := asu.duplicate()
-		ds["alcance"] = CC_PUNO.alcance
-		cc_golpes.append([now + float(asu.dur) * float(asu.golpe), "puno", ds])
-		impacto.preparar(cc.accion, asu)
-		last_melee = now
-		_puno_t = -9.0 # (al volver a uno de pie, empieza por el directo)
-		Efectos.sonido(J, "Swing", J.global_position, 0.5, 0.9 + randf() * 0.15)
+	if not _cc_empezar("puno", CC_PUNO.estamina, CC_PUNO.espera):
 		return
 	if now - _puno_t > float(CC_PUNO.seguido):
 		_puno_n = 0
