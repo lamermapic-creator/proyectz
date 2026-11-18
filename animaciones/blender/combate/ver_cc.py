@@ -11,11 +11,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import diseno_cc as DC
 from mathutils import Matrix, Vector
 
-args = sys.argv[sys.argv.index("--") + 1:]
-lista = args[0].split(";")
-vistas = [tuple(float(x) for x in v.split(",")) for v in args[1].split(";")]
-carpeta = args[2]
-
 esc = bpy.context.scene
 arm = bpy.data.objects["Piloto"]
 DR = json.loads(esc["datos_rig"])
@@ -174,40 +169,46 @@ def pose_de(txt):
 	raise ValueError(txt)
 
 
-# escena: Workbench, suelo y cámara
-esc.render.engine = 'BLENDER_WORKBENCH'
-esc.display.shading.light = 'STUDIO'
-esc.display.shading.color_type = 'MATERIAL'
-esc.display.shading.show_shadows = True
-esc.display.shading.show_cavity = True
-esc.render.resolution_x, esc.render.resolution_y = 420, 520
-esc.render.resolution_percentage = 100
-if "Suelo" not in bpy.data.objects:
-	bpy.ops.mesh.primitive_plane_add(size=200, location=(0, 0, 0))
-	bpy.context.active_object.name = "Suelo"
-bpy.data.objects["Suelo"].location.z = (arm.matrix_world @ Vector((0, SUELO_Y, 0))).z
-if "Cam" not in bpy.data.objects:
-	cam_d = bpy.data.cameras.new("Cam")
-	cam_d.lens = 40
-	cam_o = bpy.data.objects.new("Cam", cam_d)
-	esc.collection.objects.link(cam_o)
-	esc.camera = cam_o
-cam = bpy.data.objects["Cam"]
-fwd = arm.matrix_world.to_3x3() @ Vector((0, 0, -1))
-yaw = math.atan2(fwd.y, fwd.x)
-foco = arm.matrix_world @ Vector((0, -0.6, -0.5))
-os.makedirs(carpeta, exist_ok=True)
-n = 0
-for txt in lista:
-	for c in pose_de(txt):
-		poner(c)
-		for i, (az, alt, dist) in enumerate(vistas):
-			# az en grados alrededor del cuerpo (0 = desde su derecha, 90 = desde delante)
-			a = math.radians(az) + yaw
-			d = Vector((math.cos(a), math.sin(a), alt)).normalized()
-			cam.location = foco + d * dist
-			cam.rotation_euler = (foco - cam.location).to_track_quat('-Z', 'Y').to_euler()
-			esc.render.filepath = os.path.join(carpeta, "cc_%02d_%d.png" % (n, i))
-			bpy.ops.render.render(write_still=True)
-		n += 1
-print("HECHO", carpeta, n)
+if __name__ == "__main__":
+	args = sys.argv[sys.argv.index("--") + 1:]
+	lista = args[0].split(";")
+	vistas = [tuple(float(x) for x in v.split(",")) for v in args[1].split(";")]
+	carpeta = args[2]
+
+	# escena: Workbench, suelo y cámara
+	esc.render.engine = 'BLENDER_WORKBENCH'
+	esc.display.shading.light = 'STUDIO'
+	esc.display.shading.color_type = 'MATERIAL'
+	esc.display.shading.show_shadows = True
+	esc.display.shading.show_cavity = True
+	esc.render.resolution_x, esc.render.resolution_y = 420, 520
+	esc.render.resolution_percentage = 100
+	if "Suelo" not in bpy.data.objects:
+		bpy.ops.mesh.primitive_plane_add(size=200, location=(0, 0, 0))
+		bpy.context.active_object.name = "Suelo"
+	bpy.data.objects["Suelo"].location.z = (arm.matrix_world @ Vector((0, SUELO_Y, 0))).z
+	if "Cam" not in bpy.data.objects:
+		cam_d = bpy.data.cameras.new("Cam")
+		cam_d.lens = 40
+		cam_o = bpy.data.objects.new("Cam", cam_d)
+		esc.collection.objects.link(cam_o)
+		esc.camera = cam_o
+	cam = bpy.data.objects["Cam"]
+	fwd = arm.matrix_world.to_3x3() @ Vector((0, 0, -1))
+	yaw = math.atan2(fwd.y, fwd.x)
+	foco = arm.matrix_world @ Vector((0, -0.6, -0.5))
+	os.makedirs(carpeta, exist_ok=True)
+	n = 0
+	for txt in lista:
+		for c in pose_de(txt):
+			poner(c)
+			for i, (az, alt, dist) in enumerate(vistas):
+				# az en grados alrededor del cuerpo (0 = desde su derecha, 90 = desde delante)
+				a = math.radians(az) + yaw
+				d = Vector((math.cos(a), math.sin(a), alt)).normalized()
+				cam.location = foco + d * dist
+				cam.rotation_euler = (foco - cam.location).to_track_quat('-Z', 'Y').to_euler()
+				esc.render.filepath = os.path.join(carpeta, "cc_%02d_%d.png" % (n, i))
+				bpy.ops.render.render(write_still=True)
+			n += 1
+	print("HECHO", carpeta, n)

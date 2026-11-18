@@ -1,11 +1,21 @@
 # Muestrea el diseño del combate cuerpo a cuerpo (diseno_cc.py, el mismo que se ve en Blender con ver_cc.py) y escribe
 # scripts/jugador/combate_cc.gd (CombateCC).
 # Uso: python3 a_gd_cc.py ../../../scripts/jugador/combate_cc.gd
-import sys, os
+import sys, os, json, subprocess, tempfile
+from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import diseno_cc as DC
 
 N = 40   # muestras por acción (u de 0 a 1, incluidos los dos extremos)
+
+
+# Las curvas editables del .blend son la fuente de los ataques de clic.
+carpeta = Path(__file__).resolve().parent
+with tempfile.TemporaryDirectory() as temporal:
+	destino = Path(temporal) / "curvas.json"
+	subprocess.run(["blender", "-b", "-t", "2", str(carpeta / "golpes.blend"),
+		"--python-exit-code", "1", "-P", str(carpeta / "clips_blender.py"), "--", str(destino)], check=True)
+	curvas = json.loads(destino.read_text())
 
 
 def f5(x):
@@ -20,7 +30,7 @@ def pose_fija(d):
 	return "{" + ", ".join('"%s": %s' % (k, f5(v)) for k, v in d.items()) + "}"
 
 
-def accion(a, sangria):
+def accion(a, sangria, clip=None):
 	s = sangria
 	L = [s + "{"]
 	L.append(s + '\t"dur": %s, "golpe": %s,' % (f5(a["dur"]), f5(a["golpe"])))
@@ -34,7 +44,7 @@ def accion(a, sangria):
 			L.append(s + '\t"%s": %s,' % (k, f5(a[k])))
 	L.append(s + '\t"canales": {')
 	for k in DC.canales(a["claves"]):
-		L.append(s + '\t\t"%s": %s,' % (k, fmt([DC.muestra(a, k, i / (N - 1)) for i in range(N)])))
+		L.append(s + '\t\t"%s": %s,' % (k, fmt(curvas[clip][k] if clip else [DC.muestra(a, k, i / (N - 1)) for i in range(N)])))
 	L.append(s + "\t},")
 	L.append(s + "},")
 	return L
@@ -71,14 +81,14 @@ L.append("")
 L.append("const GOLPES := {")
 for c, lista in DC.GOLPES.items():
 	L.append('\t"%s": [' % c)
-	for a in lista:
-		L += accion(a, "\t\t")
+	for i, a in enumerate(lista):
+		L += accion(a, "\t\t", f"{c}_{i+1}")
 	L.append("\t],")
 L.append("}")
 L.append("")
 L.append("const PUNOS := [")
 for a in DC.PUNOS:
-	L += accion(a, "\t")
+	L += accion(a, "\t", a["nombre"])
 L.append("]")
 L.append("")
 L.append("const PATADA := [")
@@ -86,7 +96,7 @@ for a in DC.PATADA:
 	L += accion(a, "\t")
 L.append("]")
 L.append("")
-L.append("const SUELO := " + "\n".join(accion(DC.SUELO, ""))[:-1])
+L.append("const SUELO := " + "\n".join(accion(DC.SUELO, "", "Suelo"))[:-1])
 L.append("const PISOTON := [")
 for a in DC.PISOTON:
 	L += accion(a, "\t")

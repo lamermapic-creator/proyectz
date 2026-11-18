@@ -1,5 +1,7 @@
 ## 2026-11-17 — Levantarse para correr
 
+- Animaciones de ataque: 16 acciones CC_ editables en `animaciones/blender/combate/golpes.blend` (Blender 4.3). Seleccionar Piloto en el editor de acciones. Las curvas del grupo Controles IK se exportan ejecutando `python3 animaciones/blender/combate/a_gd_cc.py scripts/jugador/combate_cc.gd` desde la raíz. El marcador Contacto identifica el fotograma de impacto.
+
 - Contacto cuerpo a cuerpo: Arsenal cruza el segmento del arma visible con las cajas orientadas del rig durante el golpe. El puñetazo usa la mano animada.
 
 - Combate a pie: nuevas trayectorias de puño, cuchillo, machete y bate. Clic contra un caído usa un golpe descendente compartido de brazo; G conserva el pisotón.
