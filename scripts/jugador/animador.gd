@@ -2216,11 +2216,11 @@ func update_rig(dt: float) -> void:
 				# Parte de ambos pies de pie. El interior cruza primero; el exterior se apoya hasta sentarse.
 				var suelo: Vector3 = (mt.pie_suelo as Vector3) + Vector3.UP * 0.32 + cpo.basis.x * (sgn * hip_x)
 				if sgn != float(mt.get("lado", -1.0)):
-					var cruce := smoothstep(0.04, 0.82, k_sub)
+					var cruce := smoothstep(0.0 if mt.get("montaje_rapido", false) else 0.04, 0.82, k_sub)
 					t_m = suelo.lerp(t_m, cruce)
 					t_m += cpo.basis.y * (sin(PI * cruce) * 2.15) + cpo.basis.z * (sin(PI * cruce) * 0.65)
 				else:
-					t_m = suelo.lerp(t_m, smoothstep(0.30, 1.0, k_sub))
+					t_m = suelo.lerp(t_m, smoothstep(0.17 if mt.get("montaje_rapido", false) else 0.30, 1.0, k_sub))
 			leg_targets[s] = t_m
 			leg_targets["pole" + s] = (pelvis_cf * Rbx.cf(sgn * (hip_x + 0.9), 0.4, -5.0)).origin
 		pelvis_drop = 0.0

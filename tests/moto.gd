@@ -116,7 +116,7 @@ func _inicio() -> void:
 			j.teletransportar(_al_lado(-1.0), 0.0)
 			fin = {"conducir": 11.0, "derrape": 9.0, "bajar": 11.0, "golpear": 9.0, "disparar": 9.0, "lento": 8.0}[modo]
 			if modo == "bajar":
-				j.teletransportar(_al_lado(-1.0, 6.7 if montar_corriendo else 5.2),
+				j.teletransportar(_al_lado(-1.0, 4.7 if montar_corriendo else 2.6),
 					moto.rumbo - PI / 2.0 if montar_corriendo else 0.0)
 			if modo in ["golpear", "disparar"]:
 				# un muñeco junto al camino (a la derecha), algo más adelante
@@ -436,6 +436,12 @@ func _process(dt: float) -> void:
 		incl_max = maxf(incl_max, absf(rad_to_deg(moto.inclinacion)))
 	# subir a la moto
 	if modo == "bajar" and montar_corriendo:
+		if _una("f_lejos", t > 0.13):
+			_key(KEY_F, true)
+		if _una("f_lejos_soltar", t > 0.18):
+			_key(KEY_F, false)
+		if _una("comprobar_lejos", t > 0.29):
+			notas.fuera_alcance = j.moto == null and Rbx.flat(j.vel_real).length() < 0.1
 		_key(KEY_SHIFT, t > 0.33 and t < 0.85)
 	if not modo in ["vitrina", "levantar", "exportar_pie"] and _una("subir", t > 0.6):
 		if modo == "bajar" and montar_corriendo:
@@ -633,7 +639,7 @@ func _process(dt: float) -> void:
 		"bajar":
 			_key(KEY_W, (montar_corriendo and t > 0.33 and t < 0.85) or (t > 7.4 and t < 9.2))
 			if _una("montaje_inicial", t > 2.8):
-				notas.montado = j.moto == moto
+				notas.montado = j.moto == moto and (not montar_corriendo or j._moto_montaje_rapido)
 			if _una("bajar1", t > 3.4):
 				_key(KEY_F, true)
 			if _una("bajar1b", t > 3.5):
@@ -932,7 +938,7 @@ func _veredicto() -> void:
 		"derrape":
 			if moto.caida or moto.piloto == null: fallos.append("se cae al derrapar")
 		"bajar":
-			for k in ["montado", "bajado", "resubido", "saltado"] + (["corria"] if montar_corriendo else []):
+			for k in ["montado", "bajado", "resubido", "saltado"] + (["corria", "fuera_alcance"] if montar_corriendo else []):
 				if not notas.get(k, false): fallos.append("falla: " + k)
 	if not modo in ["vitrina", "levantar", "levantar_hueco"] and not monta:
 		fallos.append("no se sube")

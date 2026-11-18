@@ -29,11 +29,10 @@ const OBST_BAJO := 1.4          # (studs, ~43 cm) más bajo que esto, el piloto 
 const ESCALON_RAPIDO := 0.78    # deprisa, algo más (~24 cm). (2026-10-29) Antes despacio solo subía 14 cm y deprisa 19: tras
 								# chocar con un bloque de 20 cm a medias (una rueda arriba y otra abajo) ya no podía subirlo nunca
 const ATRAS := 5.0             # marcha atrás (empujando con los pies)
-const AGARRE_RUEDA := 0.95     # coeficiente de agarre del neumático (acelerando, la rueda de atrás lleva ~80 % del peso)
+const AGARRE_RUEDA := 1.09     # coeficiente de agarre del neumático (acelerando, la rueda de atrás lleva ~80 % del peso)
 const BATALLA := 4.6           # distancia entre ejes
 const GRAV := 35.0
-const AGARRE := 160.0          # cuánto se frena el deslizamiento lateral (studs/s²)
-const AGARRE_DERRAPE := 9.0   # con el freno de mano
+const AGARRE_DERRAPE := 19.0   # con el freno de mano
 const MARCHAS := [0.0, 11.0, 19.0, 28.0, 38.0, 54.0] # velocidad máxima de cada marcha
 const RUIDO_RALENTI := 26.0    # radio del ruido del motor al ralentí (studs)
 const RUIDO_MAX := 95.0        # a tope de vueltas
@@ -111,6 +110,8 @@ var _ruido_t := 0.0
 var _golpeados := {}           # id del objetivo -> hora del último golpe
 var _reloj := 0.0
 var _audio_motor: AudioStreamPlayer3D
+var _audio_neumatico: AudioStreamPlayer3D
+var _nivel_neumatico := 0.0
 var _chispa_t := 0.0
 var ultimo_choque := 0.0       # (para las pruebas y el HUD)
 var atropellos := 0
@@ -147,6 +148,10 @@ func _ready() -> void:
 	_audio_motor.max_distance = 700.0
 	_audio_motor.volume_db = -4.0
 	add_child(_audio_motor)
+	_audio_neumatico = AudioStreamPlayer3D.new()
+	_audio_neumatico.stream = _sonido_neumatico()
+	_audio_neumatico.unit_size = 7.0
+	add_child(_audio_neumatico)
 	_poner_en_el_suelo()
 	_visual(0.0)
 
@@ -508,12 +513,12 @@ func _paso_direccion(dt: float, giro_in: float, mano: bool, v_f: float, v_l: flo
 	direccion = Rbx.damp(direccion, -giro_in * lim, 7.0, dt)
 	# El ángulo medio integra el giro de este paso, en vez de usar solo el valor final.
 	var media := (antes + direccion) * 0.5
-	derrapando = Rbx.damp(derrapando, 1.0 if (mano and va > 10.0) else 0.0, 6.0, dt)
+	derrapando = Rbx.damp(derrapando, smoothstep(8.0, 22.0, va) if mano and absf(giro_in) > 0.15 else 0.0, 10.0, dt)
 	var agarre := AGARRE_RUEDA * GRAV * maxf(0.2, cos(cab_suelo)) * (1.0 if apoyo == 2 else 0.65)
 	var uso_long := minf(absf(acel), agarre * 0.92)
 	var lateral := sqrt(maxf(0.0, agarre * agarre - uso_long * uso_long))
-	var objetivo := v_f * tan(media) / BATALLA * (1.0 + 0.9 * derrapando)
-	var max_giro := lateral / maxf(va, 1.0) * (1.0 + 0.35 * derrapando)
+	var objetivo := v_f * tan(media) / BATALLA * (1.0 + 0.24 * derrapando)
+	var max_giro := lateral / maxf(va, 1.0) * (1.0 + 0.10 * derrapando)
 	objetivo = clampf(objetivo, -max_giro, max_giro)
 	var giro_antes := yaw_rate
 	yaw_rate = move_toward(yaw_rate, objetivo, 2.8 * dt)
@@ -522,8 +527,8 @@ func _paso_direccion(dt: float, giro_in: float, mano: bool, v_f: float, v_l: flo
 	var delta := (giro_antes + yaw_rate) * 0.5 * dt
 	var vel := adelante() * v_f + derecha() * v_l
 	rumbo = Rbx.wrap_a(rumbo + delta)
-	vel = vel.rotated(Vector3.UP, delta * lerpf(1.0, 0.18, derrapando))
-	var lat := move_toward(vel.dot(derecha()), 0.0, lerpf(lateral, AGARRE_DERRAPE, derrapando) * dt)
+	vel = vel.rotated(Vector3.UP, delta * lerpf(1.0, 0.65, derrapando))
+	var lat := move_toward(vel.dot(derecha()), 0.0, lerpf(lateral, minf(lateral, AGARRE_DERRAPE), derrapando) * dt)
 	vel_h = adelante() * vel.dot(adelante()) + derecha() * lat
 
 
@@ -1178,6 +1183,17 @@ func _paso_motor(dt: float, v_f: float, g_in: float) -> void:
 	elif _audio_motor.playing:
 		_audio_motor.stop()
 
+	var rozamiento := 0.0
+	if piloto != null and not en_aire and not caida:
+		rozamiento = smoothstep(0.5, 6.0, absf(vel_h.dot(derecha()))) * smoothstep(4.0, 18.0, va)
+	_nivel_neumatico = Rbx.damp(_nivel_neumatico, rozamiento, 14.0, dt)
+	if _nivel_neumatico > 0.015:
+		_audio_neumatico.volume_db = linear_to_db(_nivel_neumatico) - 13.0
+		if not _audio_neumatico.playing:
+			_audio_neumatico.play()
+	elif _audio_neumatico.playing:
+		_audio_neumatico.stop()
+
 
 ## ---------------------------------------------------------------- atropellos
 func _atropellar() -> void:
@@ -1263,8 +1279,8 @@ func _visual(dt: float) -> void:
 	var cartel: Label3D = n.cartel
 	var mostrar := false
 	if piloto == null and not levantando and is_inside_tree():
-		var j := get_tree().get_first_node_in_group("jugador") as Node3D
-		if j and j.get("moto") == null and (j.global_position - global_position).length() < ALCANCE_SUBIR and de_lado(j.global_position):
+		var j := get_tree().get_first_node_in_group("jugador") as Jugador
+		if j and j.moto == null and j.moto_cercana() == self:
 			mostrar = true
 			cartel.text = "[F] Levantar la moto" if caida else "[F] Subir a la moto"
 	cartel.visible = mostrar
@@ -1318,6 +1334,26 @@ func _neumatico(neu, sup: Dictionary) -> void:
 
 ## ---------------------------------------------------------------- sonidos sintetizados (bucles)
 const RATE := 22050
+
+
+static var _bucle_neumatico: AudioStreamWAV
+
+
+static func _sonido_neumatico() -> AudioStreamWAV:
+	if _bucle_neumatico != null:
+		return _bucle_neumatico
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 71
+	var datos := PackedFloat32Array()
+	var grave := 0.0
+	var medio := 0.0
+	for i in RATE:
+		var ruido := rng.randf_range(-1.0, 1.0)
+		grave = lerpf(grave, ruido, 0.038)
+		medio = lerpf(medio, ruido, 0.28)
+		datos.append((medio - grave) * 1.8)
+	_bucle_neumatico = _wav_bucle(datos)
+	return _bucle_neumatico
 
 
 static func _wav_bucle(datos: PackedFloat32Array) -> AudioStreamWAV:
@@ -1534,6 +1570,8 @@ func _paso_fisica(dt: float) -> void:
 			Efectos.burst(self, Vector3(pos.x, pie[0].y + 0.2, pos.z), Vector3.UP - v.normalized() * 0.6, Color(1.0, 0.75, 0.3), 6, 16.0, 0.25, 0.35, 35.0)
 	if _audio_motor.playing:
 		_audio_motor.stop()
+	if _audio_neumatico.playing:
+		_audio_neumatico.stop()
 	# golpes contra el suelo (ruido de chapa)
 	var dv := (v - _v_fisica_prev).length()
 	if dv > 6.0 and _reloj - _contacto_t > 0.2:

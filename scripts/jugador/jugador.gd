@@ -1129,9 +1129,6 @@ func _process(dt: float) -> void:
 	if levantando_moto != null:
 		_paso_levantar(dt)
 	_aproximar_escalada()
-	_aproximar_moto()
-	if moto != null:
-		return
 	arsenal.dirigir()
 	update_character(dt)
 	if levantando_moto != null:
@@ -1155,7 +1152,6 @@ func teletransportar(pies: Vector3, giro: float) -> void:
 		L.knocked = false
 		collision_layer = 1
 		collision_mask = 1 | 4
-	_moto_pendiente = null
 	if moto != null:
 		bajar_moto(true)
 	if colgado != null:
@@ -1319,8 +1315,6 @@ func update_character(dt: float) -> void:
 	if _apuntar_pedido:
 		aiming = ahora() >= _carrera_hasta and (arsenal.cfg().get("Kind", "") == "Gun" or Rbx.flat(vel_real).length() <= C.PLAYER.WalkSpeed * 1.1)
 	var want_sprint: bool = Input.is_physical_key_pressed(KEY_SHIFT) and moving and not aiming and not _apuntar_pedido and ahora() >= _frenar_combate_hasta and (not firing or arsenal.cfg().get("Slot", "") == "Corta")
-	if is_instance_valid(_moto_pendiente):
-		want_sprint = _moto_aproximacion_rapida and move_direction.length() > 0.85
 	if arsenal.cc.accion != null and arsenal.cc.accion.tipo in ["patada", "pisoton"]:
 		want_sprint = false
 	# tumbado: Shift = reptar rápido (solo boca abajo y ya tumbado); agachado se corre agachado
@@ -1545,7 +1539,7 @@ func update_character(dt: float) -> void:
 				var lado_m := 0.35 if arsenal.recogiendo.mano == "R" else -0.35
 				var ty := atan2(-dv.x, -dv.z) + lado_m
 				rotation = Vector3(0, cy + Rbx.wrap_a(ty - cy) * minf(1, dt * 8), 0)
-		elif not is_instance_valid(_moto_pendiente) and not sprinting and (aiming or arsenal.armado()):
+		elif not sprinting and (aiming or arsenal.armado()):
 			# con arma o apuntando, el cuerpo sigue a la mira con algo de peso
 			var yaw_apuntado := yaw
 			if aiming and arsenal.cfg().get("Kind", "") == "Gun":
@@ -2058,24 +2052,26 @@ const MOTO_SUBIR_DUR := 0.72 # s que tarda en pasar la pierna y sentarse
 
 
 const MOTO_BAJAR_DUR := 0.68
-var _moto_pendiente: Moto
-var _moto_pedido_t := 0.0
-var _moto_aproximacion_rapida := false
+var _moto_subir_dur := MOTO_SUBIR_DUR
+var _moto_montaje_rapido := false
 var _moto_lado := -1.0
 var _moto_bajar_t := -1.0
 
 
+func _al_alcance_moto(m: Moto) -> bool:
+	var asiento := m.asiento_cf().origin
+	var delta := global_position - asiento
+	var lateral := absf(delta.dot(Rbx.flat(m.derecha()).normalized()))
+	return lateral >= 1.2 and lateral <= 3.3 and absf(delta.dot(Rbx.flat(m.adelante()).normalized())) < 1.6 and absf(delta.y) < 1.4
+
+
 func _pedir_montar(m: Moto) -> void:
-	if not m.se_puede_subir() or not en_suelo or stance == 2 or levantando_moto != null:
+	if not en_suelo or levantando_moto != null or not _al_alcance_moto(m):
 		return
-	_moto_pendiente = m
-	_moto_pedido_t = reloj
-	_moto_aproximacion_rapida = L.sprinting or (Input.is_physical_key_pressed(KEY_SHIFT) and Rbx.flat(vel_real).length() > C.PLAYER.WalkSpeed)
-	_moto_lado = 1.0 if (global_position - m.global_position).dot(m.derecha()) > 0.0 else -1.0
-	if stance == 1:
-		set_stance(0)
-	arsenal.ir_a_recoger = null
-	arsenal.end_rest()
+	var tramo := m.asiento_cf().origin - global_position
+	if not raycast(global_position, tramo, [m.get_rid()]).is_empty():
+		return
+	subir_moto(m, true)
 
 
 func _sitio_moto(m: Moto, lado: float) -> Vector3:
@@ -2084,35 +2080,6 @@ func _sitio_moto(m: Moto, lado: float) -> Vector3:
 	if piso.is_empty() or (piso.normal as Vector3).y < 0.65:
 		return Vector3.INF
 	return piso.position
-
-
-func _aproximar_moto() -> void:
-	var m := _moto_pendiente
-	if not is_instance_valid(m):
-		return
-	if not m.se_puede_subir() or absf(m.velocidad()) > 0.8 or not en_suelo or stance != 0 or health <= 0 \
-			or colgado != null or vaulting != null or reloj - _moto_pedido_t > 3.5 or (move_direction.length() > 0.1 and not _moto_aproximacion_rapida):
-		_moto_pendiente = null
-		return
-	var pie := _sitio_moto(m, _moto_lado)
-	if pie == Vector3.INF:
-		_moto_pendiente = null
-		return
-	var meta := pie
-	var lateral := Rbx.flat(m.derecha()).normalized()
-	var lado_actual := (global_position - m.global_position).dot(lateral) * _moto_lado
-	if lado_actual < 2.2 and not m.de_lado(global_position):
-		meta = global_position + lateral * _moto_lado * (2.5 - lado_actual)
-	var delta := Rbx.flat(meta - global_position)
-	if _moto_aproximacion_rapida and delta.length() > 0.6 and move_direction.dot(delta.normalized()) < -0.45:
-		_moto_pendiente = null
-		return
-	var distancia := delta.length()
-	move_direction = delta.normalized() * smoothstep(0.23, 1.5, distancia)
-	if distancia < 0.48 and Rbx.flat(vel_real).length() < 3.0:
-		subir_moto(m)
-		if moto != null:
-			_moto_pendiente = null
 
 
 ## la moto más cercana a la que se puede subir (o levantar), o null
@@ -2124,14 +2091,14 @@ func moto_cercana() -> Moto:
 		if mm == null or mm.piloto != null:
 			continue
 		var d := (mm.global_position + Vector3(0, 2.0, 0) - global_position).length()
-		if d < dmin and (mm.de_lado(global_position) if mm.caida else mm.se_puede_subir() and absf(mm.velocidad()) < 0.8):
+		if d < dmin and (mm.de_lado(global_position) if mm.caida else mm.se_puede_subir() and absf(mm.velocidad()) < 0.8 and _al_alcance_moto(mm)):
 			dmin = d
 			mejor = mm
 	return mejor
 
 
-func subir_moto(m: Moto) -> void:
-	if _moto_pendiente != m and (L.sprinting or ahora() < _carrera_hasta):
+func subir_moto(m: Moto, desde_f := false) -> void:
+	if not desde_f and (L.sprinting or ahora() < _carrera_hasta):
 		return
 	if moto != null or m == null or not m.se_puede_subir():
 		return
@@ -2154,6 +2121,8 @@ func subir_moto(m: Moto) -> void:
 	air_vel = null
 	_move_override = null
 	_moto_bajar_t = -1.0
+	_moto_montaje_rapido = desde_f and L.sprinting
+	_moto_subir_dur = 0.52 if _moto_montaje_rapido else MOTO_SUBIR_DUR
 	_moto_lado = 1.0 if (global_position - m.global_position).dot(m.derecha()) > 0.0 else -1.0
 	moto = m
 	m.subir(self)
@@ -2163,6 +2132,7 @@ func subir_moto(m: Moto) -> void:
 	_moto_desde = global_transform
 	_moto_v_prev = 0.0
 	_moto_raton_t = -9.0
+	_vel_inercia = Vector3.ZERO
 	velocity = Vector3.ZERO
 	L.moto = _estado_moto(0.0)
 	notify("MOTO: W gas · S freno · A/D girar · Espacio derrapar · F bajar · L luces")
@@ -2176,7 +2146,7 @@ func _paso_moto(dt: float) -> void:
 		_fin_moto(null)
 		return
 	var mandos := {}
-	if health > 0 and not free_mouse and _moto_bajar_t < 0.0 and reloj - _moto_t0 >= MOTO_SUBIR_DUR:
+	if health > 0 and not free_mouse and _moto_bajar_t < 0.0 and reloj - _moto_t0 >= _moto_subir_dur:
 		var g := 1.0 if Input.is_physical_key_pressed(KEY_W) else 0.0
 		var f := 1.0 if Input.is_physical_key_pressed(KEY_S) else 0.0
 		var giro := 0.0
@@ -2188,7 +2158,7 @@ func _paso_moto(dt: float) -> void:
 		return # se ha caído en este paso (expulsar_moto ya lo ha colocado)
 	# el cuerpo va sentado (al subir, pasa de donde estaba al asiento)
 	var objetivo := m.asiento_cf()
-	var k := Rbx.smooth((reloj - _moto_t0) / MOTO_SUBIR_DUR)
+	var k := Rbx.smooth((reloj - _moto_t0) / _moto_subir_dur)
 	if _moto_bajar_t >= 0.0:
 		k = 1.0 - Rbx.smooth((reloj - _moto_bajar_t) / MOTO_BAJAR_DUR)
 		if k <= 0.0:
@@ -2200,12 +2170,12 @@ func _paso_moto(dt: float) -> void:
 		var desde := _moto_desde.interpolate_with(objetivo, k)
 		if _moto_bajar_t < 0.0:
 			# Primero carga el pie de apoyo, luego cruza la cadera mientras gira hacia el manillar.
-			var cruce := smoothstep(0.10, 0.86, k)
+			var cruce := smoothstep(0.0 if _moto_montaje_rapido else 0.10, 0.86, k)
 			var giro := smoothstep(0.03, 0.62, k)
 			desde.basis = _moto_desde.basis.slerp(objetivo.basis, giro)
 			desde.origin = _moto_desde.origin.lerp(objetivo.origin, cruce)
 			desde.origin += m.adelante() * (sin(PI * cruce) * 0.24)
-			desde.origin.y += sin(PI * cruce) * 0.56 - sin(PI * clampf(k / 0.28, 0.0, 1.0)) * 0.16
+			desde.origin.y += sin(PI * cruce) * (0.75 if _moto_montaje_rapido else 0.56) - sin(PI * clampf(k / 0.28, 0.0, 1.0)) * 0.16
 		else:
 			desde.origin.y += sin(PI * k) * 0.48
 		global_transform = desde
@@ -2258,7 +2228,7 @@ func _estado_moto(k_subir: float) -> Dictionary:
 		pie = gs.position
 	return {
 		"cuerpo": cpo, "vel": m.velocidad(), "acel": _moto_acel, "incl": m.inclinacion,
-		"aire": m.en_aire, "direccion": m.direccion, "subir": k_subir, "lado": _moto_lado,
+		"aire": m.en_aire, "direccion": m.direccion, "subir": k_subir, "lado": _moto_lado, "montaje_rapido": _moto_montaje_rapido and _moto_bajar_t < 0.0,
 		"punoL": m.puno("L"), "punoR": m.puno("R"),
 		"estriboL": m.estribo("L"), "estriboR": m.estribo("R"),
 		"pie_suelo": pie, "parada": _moto_parada,
@@ -2278,7 +2248,7 @@ func bajar_moto(inmediato := false) -> void:
 	var m := moto
 	if m == null:
 		return
-	if not inmediato and (_moto_bajar_t >= 0.0 or reloj - _moto_t0 < MOTO_SUBIR_DUR):
+	if not inmediato and (_moto_bajar_t >= 0.0 or reloj - _moto_t0 < _moto_subir_dur):
 		return
 	if not inmediato and absf(m.velocidad()) <= 0.8 and not m.en_aire:
 		var pie := _sitio_moto(m, -1.0)
@@ -2371,6 +2341,7 @@ func _lanzar(vel: Vector3) -> void:
 
 ## de vuelta a pie: colisiones, cuerpo derecho y los pies vuelven a apoyarse
 func _fin_moto(m: Moto) -> void:
+	_vel_inercia = Vector3.ZERO
 	_moto_bajar_t = -1.0
 	collision_layer = 1
 	collision_mask = 1 | 4
