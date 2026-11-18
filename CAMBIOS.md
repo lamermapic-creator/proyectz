@@ -1,5 +1,7 @@
 ## 2026-11-17 — Levantarse para correr
 
+- Combate a pie: puños y armas blancas con preparación y recuperación reajustadas, menor torsión del tronco y un pisotón derecho compartido contra blancos caídos al alcance.
+
 Tumbado, pulsa Shift y una dirección para incorporarte y salir corriendo, con aceleración
 progresiva. Respeta techos bajos. Mantener Shift al lanzarte cuerpo a tierra no cancela
 la caída: para levantarte, suéltalo y púlsalo de nuevo. Carrera agachada conservada.
