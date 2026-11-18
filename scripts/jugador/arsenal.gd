@@ -917,7 +917,7 @@ func melee() -> void:
 		var bajo := _blanco_caido()
 		if bajo:
 			ag = CombateCC.SUELO
-		var dur_g: float = maxf(float(w.Cooldown), float(ag.dur) * 0.9)
+		var dur_g: float = float(ag.dur)
 		cc.accion = {"tipo": "golpe", "clase": cc_clase(), "base": base_g, "bajo": bajo, "var": vg, "t0": now, "dur": dur_g,
 			"avance_prev": 0.0, "extra": _cc_extra(float(w.Range) * 0.55) * 0.5}
 		cc_golpes.append([now + dur_g * float(ag.golpe), "golpe", {"arma": equipado}])

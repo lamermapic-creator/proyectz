@@ -384,22 +384,22 @@ def golpe_arma(lista, dur, poses, dos_manos=False):
 	"""Carga, entrada, contacto y salida; la empuñadura dibuja un arco continuo."""
 	libre = {} if dos_manos else _IZQ_GUARDA
 	claves = [(0, une(lista, libre, cuerpo(), {"avance": 0}))]
-	for t, (p, frente, giro), avance in zip((0.26, 0.39, 0.49, 0.64), poses, (0, 0.10, 0.22, 0.24)):
+	for t, (p, frente, giro), avance in zip((0.19, 0.30, 0.40, 0.56), poses, (0, 0.10, 0.22, 0.24)):
 		c = cuerpo(cin=(giro, -0.10, -0.04*giro), cue=(-0.42*giro, 0.06, 0),
 			cad=(0.12*giro, -0.18, -avance), pel=(0, 0.33*giro, 0))
 		claves.append((t, une(arma(p, frente, (0, 0, -1) if dos_manos else (0, 1, 0),
-			(1.55, -0.85, 0.12)), libre, c, {"avance": avance})))
+			(1.27 + 0.22*p[0], -0.83 + 0.32*p[1], 0.24 + 0.20*p[2])), libre, c, {"avance": avance})))
 	claves.append((1, une(lista, libre, cuerpo(), {"avance": 0.24})))
-	return _accion(dur, 0.49, claves)
+	return _accion(dur * 0.81, 0.40, claves)
 
 
 def arco_arma(lista, dur, altura, amplitud, reverso=False, dos_manos=False):
 	s = -1 if reverso else 1
 	return golpe_arma(lista, dur, [
-		((0.48 + s*amplitud, altura, -0.60), (s*0.63, 0.73, 0.25), -s*0.46),
+		((0.45 + s*amplitud*0.80, altura, -0.60), (s*0.63, 0.73, 0.25), -s*0.46),
 		((0.45 + s*0.42, altura*0.85, -1.08), (s*0.48, 0.50, -0.70), -s*0.12),
 		((0.34, 0.20, -1.58), (-s*0.18, 0.24, -0.95), s*0.30),
-		((0.36 - s*amplitud, -0.13, -1.04), (-s*0.88, -0.20, -0.42), s*0.47),
+		((0.34 - s*amplitud*0.85, -0.13, -1.04), (-s*0.88, -0.20, -0.42), s*0.47),
 	], dos_manos)
 
 
@@ -430,7 +430,7 @@ def puno(nombre, lado, dur, puntos, danio, empuje, tambaleo, pieza="Head"):
 	s = 1 if lado == "R" else -1
 	otra = "L" if lado == "R" else "R"
 	claves = [(0, une(G["manos"], {"avance": 0}))]
-	for t, (x, y, z), giro, avance in zip((0.19, 0.33, 0.44, 0.61),
+	for t, (x, y, z), giro, avance in zip((0.16, 0.27, 0.38, 0.57),
 			puntos, (-0.24, -0.05, 0.38, 0.22), (0, 0.05, 0.19, 0.20)):
 		brazo = mano(lado, (s*x, y, z), (s*(1.15+x*0.42), -0.92, -0.28),
 			(0, 0.12, -1), (s*0.15, 1, 0.12), 0.72)
@@ -439,13 +439,13 @@ def puno(nombre, lado, dur, puntos, danio, empuje, tambaleo, pieza="Head"):
 			cad=(s*giro*0.23, -0.21, -avance), pel=(0, s*giro*0.43, 0))
 		claves.append((t, une(c, brazo, guardia, {"avance": avance})))
 	claves.append((1, une(G["manos"], {"avance": 0.2})))
-	return _accion(dur, 0.44, claves, nombre=nombre, lado=lado, danio=danio,
+	return _accion(dur * 0.84, 0.38, claves, nombre=nombre, lado=lado, danio=danio,
 		empuje=empuje, tambaleo=tambaleo, pieza=pieza)
 
 
-RECTO = [(0.52, 0.56, -0.95), (0.40, 0.63, -1.57), (0.22, 0.68, -2.40), (0.32, 0.59, -1.68)]
-GANCHO = [(0.78, 0.32, -0.94), (0.96, 0.48, -1.40), (0.18, 0.66, -2.08), (-0.12, 0.61, -1.53)]
-ASCENDENTE = [(0.60, -0.37, -0.81), (0.53, -0.08, -1.45), (0.28, 0.62, -2.19), (0.24, 0.79, -1.61)]
+RECTO = [(0.44, 0.67, -1.14), (0.38, 0.69, -1.55), (0.25, 0.70, -2.19), (0.39, 0.68, -1.38)]
+GANCHO = [(0.66, 0.46, -1.04), (0.88, 0.58, -1.38), (0.26, 0.63, -1.98), (-0.05, 0.65, -1.46)]
+ASCENDENTE = [(0.55, -0.10, -0.99), (0.53, -0.08, -1.45), (0.28, 0.62, -2.19), (0.31, 0.75, -1.36)]
 PUNOS = [
 	puno("directo", "L", 0.40, RECTO, 8, 10, 0.35),
 	puno("cruzado", "R", 0.49, RECTO, 11, 16, 0.5),
@@ -461,15 +461,15 @@ def golpe_bajo():
 	claves = []
 	for t, p, frente, giro, baja, avance in [
 		(0, (0.60, 0.16, -0.95), (0, 0.32, -1), 0, 0, 0),
-		(0.28, (0.72, 0.70, -0.65), (0.20, 0.72, -0.62), -0.24, -1.12, 0.06),
-		(0.49, (0.24, -1.53, -1.72), (0, -0.95, -0.30), 0.30, -2.05, 0.22),
+		(0.22, (0.65, 0.58, -0.65), (0.20, 0.72, -0.62), -0.24, -1.12, 0.06),
+		(0.43, (0.24, -1.53, -1.72), (0, -0.95, -0.30), 0.30, -2.05, 0.22),
 		(0.62, (0.23, -1.38, -1.59), (0, -0.90, -0.42), 0.23, -1.91, 0.23),
 		(1, (0.60, 0.16, -0.95), (0, 0.32, -1), 0, 0, 0.23),
 	]:
 		claves.append((t, une(mano("R", p, (1.43,-0.56,0.12)), arma(p, frente, (0,0,-1)),
 			_IZQ_GUARDA, cuerpo(cin=(giro, baja*0.34, 0), cad=(0,baja,-avance),
 			cue=(-0.5*giro,baja*0.14,0)), {"avance": avance})))
-	return _accion(0.78, 0.49, claves, lado="R", danio=12, empuje=0, tambaleo=0, pieza="UpperTorso")
+	return _accion(0.66, 0.43, claves, lado="R", danio=12, empuje=0, tambaleo=0, pieza="UpperTorso")
 
 
 SUELO = golpe_bajo()
