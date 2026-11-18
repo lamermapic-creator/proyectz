@@ -2201,7 +2201,10 @@ func update_rig(dt: float) -> void:
 		var acel_m: float = mt.acel
 		waistP -= (0.42 + 0.3 * tuck - clampf(acel_m * 0.006, -0.15, 0.12) - moto_de_pie * 0.4) * smoothstep(0.15, 0.85, k_sub)
 		neckP += (0.36 + 0.3 * tuck) * smoothstep(0.15, 0.85, k_sub)
-		waistR -= incl_m * 0.12
+		var carga_lateral := sin(PI * smoothstep(0.0, 0.8, k_sub)) * float(mt.get("lado", -1.0))
+		waistR -= incl_m * 0.12 + carga_lateral * 0.24
+		waistP -= absf(carga_lateral) * 0.18
+		neckR += carga_lateral * 0.11
 		neckR -= incl_m * 0.5
 		neckY += float(mt.direccion) * 0.7
 		for s in ["L", "R"]:

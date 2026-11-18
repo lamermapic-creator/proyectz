@@ -1,5 +1,7 @@
 # Mapa de Proyecto Z
 
+- Montaje de moto: F conserva una aproximación rápida si se pulsa en carrera. El último paso frena y enlaza con apoyo, giro, inclinación y cruce de la pierna, con tiempos propios para la cadera y la orientación.
+
 - Moto: F hace caminar al personaje hasta un costado de la moto disponible. El montaje y la salida en parado pasan la pierna sobre el asiento y usan apoyo en el suelo. Si la moto avanza o retrocede, el salto conserva su inercia.
 
 - Sangre: 20 gotas por impacto de intensidad base, con un máximo de 192 gotas activas y 140 manchas simultáneas.

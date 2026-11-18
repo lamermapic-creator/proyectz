@@ -6,6 +6,7 @@ extends Node
 var j: Jugador
 var t := 0.0
 var modo := "conducir"
+var montar_corriendo := OS.get_cmdline_user_args().has("--montar-corriendo")
 var cam: Camera3D
 var hecho := {}
 var M := 1.0 / 0.31
@@ -115,7 +116,8 @@ func _inicio() -> void:
 			j.teletransportar(_al_lado(-1.0), 0.0)
 			fin = {"conducir": 11.0, "derrape": 9.0, "bajar": 11.0, "golpear": 9.0, "disparar": 9.0, "lento": 8.0}[modo]
 			if modo == "bajar":
-				j.teletransportar(_al_lado(-1.0, 5.2), 0.0)
+				j.teletransportar(_al_lado(-1.0, 6.7 if montar_corriendo else 5.2),
+					moto.rumbo - PI / 2.0 if montar_corriendo else 0.0)
 			if modo in ["golpear", "disparar"]:
 				# un muñeco junto al camino (a la derecha), algo más adelante
 				# (en el espacio de la moto: x a la derecha, -z delante)
@@ -433,7 +435,11 @@ func _process(dt: float) -> void:
 	if not moto.caida:
 		incl_max = maxf(incl_max, absf(rad_to_deg(moto.inclinacion)))
 	# subir a la moto
+	if modo == "bajar" and montar_corriendo:
+		_key(KEY_SHIFT, t > 0.33 and t < 0.85)
 	if not modo in ["vitrina", "levantar", "exportar_pie"] and _una("subir", t > 0.6):
+		if modo == "bajar" and montar_corriendo:
+			notas.corria = j.L.sprinting
 		_key(KEY_F, true)
 	if _una("soltarF", t > 0.7):
 		_key(KEY_F, false)
@@ -625,7 +631,9 @@ func _process(dt: float) -> void:
 				_key(KEY_A, false)
 				_key(KEY_D, false)
 		"bajar":
-			_key(KEY_W, t > 7.4 and t < 9.2)
+			_key(KEY_W, (montar_corriendo and t > 0.33 and t < 0.85) or (t > 7.4 and t < 9.2))
+			if _una("montaje_inicial", t > 2.8):
+				notas.montado = j.moto == moto
 			if _una("bajar1", t > 3.4):
 				_key(KEY_F, true)
 			if _una("bajar1b", t > 3.5):
@@ -924,7 +932,7 @@ func _veredicto() -> void:
 		"derrape":
 			if moto.caida or moto.piloto == null: fallos.append("se cae al derrapar")
 		"bajar":
-			for k in ["bajado", "resubido", "saltado"]:
+			for k in ["montado", "bajado", "resubido", "saltado"] + (["corria"] if montar_corriendo else []):
 				if not notas.get(k, false): fallos.append("falla: " + k)
 	if not modo in ["vitrina", "levantar", "levantar_hueco"] and not monta:
 		fallos.append("no se sube")
