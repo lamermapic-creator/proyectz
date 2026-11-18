@@ -402,7 +402,7 @@ func _unhandled_input(e: InputEvent) -> void:
 						if mc.caida:
 							levantar_moto(mc)
 						else:
-							subir_moto(mc)
+							_pedir_montar(mc)
 				KEY_C, KEY_CTRL:
 					if colgado != null:
 						soltar_cornisa()
@@ -1129,6 +1129,9 @@ func _process(dt: float) -> void:
 	if levantando_moto != null:
 		_paso_levantar(dt)
 	_aproximar_escalada()
+	_aproximar_moto(dt)
+	if moto != null:
+		return
 	arsenal.dirigir()
 	update_character(dt)
 	if levantando_moto != null:
@@ -1152,8 +1155,9 @@ func teletransportar(pies: Vector3, giro: float) -> void:
 		L.knocked = false
 		collision_layer = 1
 		collision_mask = 1 | 4
+	_moto_pendiente = null
 	if moto != null:
-		bajar_moto()
+		bajar_moto(true)
 	if colgado != null:
 		soltar_cornisa()
 	if vaulting != null:
@@ -1315,7 +1319,7 @@ func update_character(dt: float) -> void:
 	if _apuntar_pedido:
 		aiming = ahora() >= _carrera_hasta and (arsenal.cfg().get("Kind", "") == "Gun" or Rbx.flat(vel_real).length() <= C.PLAYER.WalkSpeed * 1.1)
 	var want_sprint: bool = Input.is_physical_key_pressed(KEY_SHIFT) and moving and not aiming and not _apuntar_pedido and ahora() >= _frenar_combate_hasta and (not firing or arsenal.cfg().get("Slot", "") == "Corta")
-	if arsenal.cc.accion != null and arsenal.cc.accion.tipo in ["patada", "pisoton"]:
+	if is_instance_valid(_moto_pendiente) or (arsenal.cc.accion != null and arsenal.cc.accion.tipo in ["patada", "pisoton"]):
 		want_sprint = false
 	# tumbado: Shift = reptar rápido (solo boca abajo y ya tumbado); agachado se corre agachado
 	if stance == 2:
@@ -1539,7 +1543,7 @@ func update_character(dt: float) -> void:
 				var lado_m := 0.35 if arsenal.recogiendo.mano == "R" else -0.35
 				var ty := atan2(-dv.x, -dv.z) + lado_m
 				rotation = Vector3(0, cy + Rbx.wrap_a(ty - cy) * minf(1, dt * 8), 0)
-		elif not sprinting and (aiming or arsenal.armado()):
+		elif not is_instance_valid(_moto_pendiente) and not sprinting and (aiming or arsenal.armado()):
 			# con arma o apuntando, el cuerpo sigue a la mira con algo de peso
 			var yaw_apuntado := yaw
 			if aiming and arsenal.cfg().get("Kind", "") == "Gun":
@@ -2048,7 +2052,61 @@ var _moto_v_prev := 0.0
 var _moto_acel := 0.0
 var _cam_roll_moto := 0.0
 var _moto_parada := true
-const MOTO_SUBIR_DUR := 0.55 # s que tarda en pasar la pierna y sentarse
+const MOTO_SUBIR_DUR := 0.72 # s que tarda en pasar la pierna y sentarse
+
+
+const MOTO_BAJAR_DUR := 0.68
+var _moto_pendiente: Moto
+var _moto_pedido_t := 0.0
+var _moto_lado := -1.0
+var _moto_bajar_t := -1.0
+
+
+func _pedir_montar(m: Moto) -> void:
+	if not m.se_puede_subir() or not en_suelo or stance == 2 or levantando_moto != null:
+		return
+	_moto_pendiente = m
+	_moto_pedido_t = reloj
+	_moto_lado = 1.0 if (global_position - m.global_position).dot(m.derecha()) > 0.0 else -1.0
+	if stance == 1:
+		set_stance(0)
+	arsenal.ir_a_recoger = null
+	arsenal.end_rest()
+
+
+func _sitio_moto(m: Moto, lado: float) -> Vector3:
+	var pie := m.asiento_cf().origin + Rbx.flat(m.derecha()).normalized() * (lado * 2.5)
+	var piso := raycast(pie + Vector3.UP * 2.0, Vector3.DOWN * 8.0, [m.get_rid()])
+	if piso.is_empty() or (piso.normal as Vector3).y < 0.65:
+		return Vector3.INF
+	return piso.position
+
+
+func _aproximar_moto(dt: float) -> void:
+	var m := _moto_pendiente
+	if not is_instance_valid(m):
+		return
+	if not m.se_puede_subir() or absf(m.velocidad()) > 0.8 or not en_suelo or stance != 0 or health <= 0 \
+			or colgado != null or vaulting != null or reloj - _moto_pedido_t > 3.5 or move_direction.length() > 0.1:
+		_moto_pendiente = null
+		return
+	var pie := _sitio_moto(m, _moto_lado)
+	if pie == Vector3.INF:
+		_moto_pendiente = null
+		return
+	var meta := pie
+	var lateral := Rbx.flat(m.derecha()).normalized()
+	var lado_actual := (global_position - m.global_position).dot(lateral) * _moto_lado
+	if lado_actual < 2.2 and not m.de_lado(global_position):
+		meta = global_position + lateral * _moto_lado * (2.5 - lado_actual)
+	var delta := Rbx.flat(meta - global_position)
+	move_direction = delta.limit_length(1.0) if delta.length() > 0.22 else Vector3.ZERO
+	if move_direction == Vector3.ZERO:
+		_girar_cuerpo_hacia(m.rumbo, dt, 9.0)
+		if absf(angle_difference(rotation.y, m.rumbo)) < 0.09 and Rbx.flat(vel_real).length() < 0.75:
+			subir_moto(m)
+			if moto != null:
+				_moto_pendiente = null
 
 
 ## la moto más cercana a la que se puede subir (o levantar), o null
@@ -2060,7 +2118,7 @@ func moto_cercana() -> Moto:
 		if mm == null or mm.piloto != null:
 			continue
 		var d := (mm.global_position + Vector3(0, 2.0, 0) - global_position).length()
-		if d < dmin and mm.de_lado(global_position):
+		if d < dmin and (mm.de_lado(global_position) if mm.caida else mm.se_puede_subir() and absf(mm.velocidad()) < 0.8):
 			dmin = d
 			mejor = mm
 	return mejor
@@ -2089,6 +2147,8 @@ func subir_moto(m: Moto) -> void:
 	_subir_a = null
 	air_vel = null
 	_move_override = null
+	_moto_bajar_t = -1.0
+	_moto_lado = 1.0 if (global_position - m.global_position).dot(m.derecha()) > 0.0 else -1.0
 	moto = m
 	m.subir(self)
 	collision_layer = 0
@@ -2110,15 +2170,12 @@ func _paso_moto(dt: float) -> void:
 		_fin_moto(null)
 		return
 	var mandos := {}
-	if health > 0 and not free_mouse:
+	if health > 0 and not free_mouse and _moto_bajar_t < 0.0 and reloj - _moto_t0 >= MOTO_SUBIR_DUR:
 		var g := 1.0 if Input.is_physical_key_pressed(KEY_W) else 0.0
 		var f := 1.0 if Input.is_physical_key_pressed(KEY_S) else 0.0
 		var giro := 0.0
 		if Input.is_physical_key_pressed(KEY_D): giro += 1.0
 		if Input.is_physical_key_pressed(KEY_A): giro -= 1.0
-		# mientras se sienta todavía no arranca
-		if reloj - _moto_t0 < MOTO_SUBIR_DUR * 0.8:
-			g = 0.0
 		mandos = {"gas": g, "freno": f, "giro": giro, "freno_mano": Input.is_physical_key_pressed(KEY_SPACE)}
 	m.paso(dt, mandos)
 	if moto == null:
@@ -2126,11 +2183,17 @@ func _paso_moto(dt: float) -> void:
 	# el cuerpo va sentado (al subir, pasa de donde estaba al asiento)
 	var objetivo := m.asiento_cf()
 	var k := Rbx.smooth((reloj - _moto_t0) / MOTO_SUBIR_DUR)
+	if _moto_bajar_t >= 0.0:
+		k = 1.0 - Rbx.smooth((reloj - _moto_bajar_t) / MOTO_BAJAR_DUR)
+		if k <= 0.0:
+			moto = null
+			m.bajar()
+			_fin_moto(m)
+			return
 	if k < 1.0:
-		var desde := _moto_desde
-		# pasa la pierna por encima: el cuerpo sube un poco a mitad
-		var alto := Transform3D(desde.basis, desde.origin + Vector3(0, sin(PI * k) * 0.6, 0))
-		global_transform = alto.interpolate_with(objetivo, k)
+		var desde := _moto_desde.interpolate_with(objetivo, k)
+		desde.origin.y += sin(PI * k) * 0.48
+		global_transform = desde
 	else:
 		global_transform = objetivo
 	var v := m.velocidad()
@@ -2166,7 +2229,7 @@ func _paso_moto(dt: float) -> void:
 func _estado_moto(k_subir: float) -> Dictionary:
 	var m := moto
 	var cpo := m.cuerpo_cf()
-	var izq := -m.derecha()
+	var izq := m.derecha() * (_moto_lado if k_subir < 1.0 else -1.0)
 	# pie al suelo: con margen (si no, a ~2 studs/s el pie sube y baja sin parar)
 	var vm := absf(m.velocidad())
 	if m.en_aire or vm > 3.2:
@@ -2174,13 +2237,13 @@ func _estado_moto(k_subir: float) -> Dictionary:
 	elif vm < 1.4:
 		_moto_parada = true
 	# donde apoyaría el pie izquierdo parado (en el suelo, junto a la moto)
-	var pie := m.global_position + izq * 1.25 + m.adelante() * 0.35
+	var pie := _moto_desde.origin - Vector3.UP * center_cur if k_subir < 1.0 else m.global_position + izq * 1.25 + m.adelante() * 0.35
 	var gs := raycast(pie + Vector3(0, 3.0, 0), Vector3(0, -6.0, 0))
 	if not gs.is_empty():
 		pie = gs.position
 	return {
 		"cuerpo": cpo, "vel": m.velocidad(), "acel": _moto_acel, "incl": m.inclinacion,
-		"aire": m.en_aire, "direccion": m.direccion, "subir": k_subir,
+		"aire": m.en_aire, "direccion": m.direccion, "subir": k_subir, "lado": _moto_lado,
 		"punoL": m.puno("L"), "punoR": m.puno("R"),
 		"estriboL": m.estribo("L"), "estriboR": m.estribo("R"),
 		"pie_suelo": pie, "parada": _moto_parada,
@@ -2196,13 +2259,28 @@ func _mando_inclinar() -> float:
 
 
 ## bajarse con F. Parado: se baja por la izquierda (o la derecha si hay pared). En marcha: salta
-func bajar_moto() -> void:
+func bajar_moto(inmediato := false) -> void:
 	var m := moto
 	if m == null:
 		return
+	if not inmediato and (_moto_bajar_t >= 0.0 or reloj - _moto_t0 < MOTO_SUBIR_DUR):
+		return
+	if not inmediato and absf(m.velocidad()) <= 0.8 and not m.en_aire:
+		var pie := _sitio_moto(m, -1.0)
+		var lado := -1.0
+		if not _salida_moto_libre(m, pie):
+			lado = 1.0
+			pie = _sitio_moto(m, lado)
+		if not _salida_moto_libre(m, pie):
+			notify("No hay espacio para bajar")
+			return
+		m.vel_h = Vector3.ZERO
+		_moto_lado = lado
+		_moto_desde = Transform3D(Basis(Vector3.UP, m.rumbo), pie + Vector3.UP * center_cur)
+		_moto_bajar_t = reloj
+		return
 	var vh := m.vel_h
-	# (marcha atrás se va empujando con los pies, a paso de persona: bajarse así no es saltar en marcha)
-	var rapida := m.velocidad() >= 4.0 or m.en_aire
+	var rapida := not inmediato and (absf(m.velocidad()) > 0.8 or m.en_aire)
 	var asiento := m.asiento_cf().origin
 	moto = null
 	m.bajar()
@@ -2215,7 +2293,7 @@ func bajar_moto() -> void:
 	if rapida:
 		# salta en marcha: sale por el lado con la inercia de la moto
 		global_position = asiento + lado * 1.0 + Vector3(0, 0.4, 0)
-		var vel := vh * 0.7 + lado * 6.0 + Vector3(0, 8.0, 0)
+		var vel := vh + lado * 6.0 + Vector3(0, 7.0, 0)
 		var vv := vh.length()
 		if vv > 14.0:
 			# demasiado deprisa para caer de pie: rueda por el suelo (los golpes hacen el daño)
@@ -2230,6 +2308,14 @@ func bajar_moto() -> void:
 	global_position = Vector3(sitio.x, y_pies + center_cur + 0.1, sitio.z)
 	velocity = Vector3.ZERO
 	vel_real = Vector3.ZERO
+
+
+func _salida_moto_libre(m: Moto, pie: Vector3) -> bool:
+	if pie == Vector3.INF:
+		return false
+	var desde := m.asiento_cf().origin
+	var hasta := pie + Vector3.UP * center_cur
+	return raycast(desde, hasta - desde).is_empty() and raycast(hasta, Vector3.UP * 2.5).is_empty()
 
 
 ## la moto tira al piloto (choque, mal aterrizaje): sale despedido con "imp" y recibe "danio"
@@ -2270,6 +2356,7 @@ func _lanzar(vel: Vector3) -> void:
 
 ## de vuelta a pie: colisiones, cuerpo derecho y los pies vuelven a apoyarse
 func _fin_moto(m: Moto) -> void:
+	_moto_bajar_t = -1.0
 	collision_layer = 1
 	collision_mask = 1 | 4
 	L.moto = null

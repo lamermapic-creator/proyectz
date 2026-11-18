@@ -1,5 +1,7 @@
 ## 2026-11-17 — Levantarse para correr
 
+- Moto: F hace caminar al personaje hasta un costado de la moto disponible. El montaje y la salida en parado pasan la pierna sobre el asiento y usan apoyo en el suelo. Si la moto avanza o retrocede, el salto conserva su inercia.
+
 - Sangre: 20 gotas por impacto de intensidad base, con un máximo de 192 gotas activas y 140 manchas simultáneas.
 
 - Sangre simulada durante los pasos de física, con gravedad, arrastre y expansión de la mancha al tocar el escenario estático. Se descartan las colisiones del jugador y la moto para evitar manchas suspendidas.

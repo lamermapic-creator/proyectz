@@ -114,6 +114,8 @@ func _inicio() -> void:
 			moto = _moto("Moto_0")
 			j.teletransportar(_al_lado(-1.0), 0.0)
 			fin = {"conducir": 11.0, "derrape": 9.0, "bajar": 11.0, "golpear": 9.0, "disparar": 9.0, "lento": 8.0}[modo]
+			if modo == "bajar":
+				j.teletransportar(_al_lado(-1.0, 5.2), 0.0)
 			if modo in ["golpear", "disparar"]:
 				# un muñeco junto al camino (a la derecha), algo más adelante
 				# (en el espacio de la moto: x a la derecha, -z delante)
@@ -623,25 +625,26 @@ func _process(dt: float) -> void:
 				_key(KEY_A, false)
 				_key(KEY_D, false)
 		"bajar":
-			_key(KEY_W, t > 1.2 and t < 3.0 or t > 6.0 and t < 7.6)
-			_key(KEY_S, t > 3.0 and t < 4.6)
-			if _una("bajar1", t > 4.8):
+			_key(KEY_W, t > 7.4 and t < 9.2)
+			if _una("bajar1", t > 3.4):
 				_key(KEY_F, true)
-			if _una("bajar1b", t > 4.9):
+			if _una("bajar1b", t > 3.5):
 				_key(KEY_F, false)
-				_log("bajado parado: piloto=%s pos_j=%s" % [str(j.moto != null), str(j.global_position)])
-				notas.bajado = j.moto == null
-			if _una("subir2", t > 5.5):
+				notas.bajando = j.moto != null and j._moto_bajar_t >= 0.0
+			if _una("bajar1fin", t > 4.3):
+				notas.bajado = notas.get("bajando", false) and j.moto == null
+			if _una("subir2", t > 4.7):
 				_key(KEY_F, true)
-			if _una("subir2b", t > 5.6):
+			if _una("subir2b", t > 4.8):
 				_key(KEY_F, false)
+			if _una("subir2fin", t > 7.3):
 				notas.resubido = j.moto != null
-			if _una("bajar2", t > 7.8):
+			if _una("bajar2", t > 9.0):
+				notas.vel_salto = absf(moto.velocidad()) > 0.8
 				_key(KEY_F, true)
-			if _una("bajar2b", t > 7.9):
+			if _una("bajar2b", t > 9.05):
 				_key(KEY_F, false)
-				_log("saltado en marcha: estado=%s vel=%s" % [j.estado, str(j.vel_real)])
-				notas.saltado = j.moto == null and (j.estado == "Freefall" or j.ragdoll != null)
+				notas.saltado = notas.get("vel_salto", false) and j.moto == null and (j.estado == "Freefall" or j.ragdoll != null)
 		"disparar":
 			if _una("pistola", t > 1.0):
 				j.arsenal.select_slot(0)

@@ -2199,8 +2199,8 @@ func update_rig(dt: float) -> void:
 		smooth_j(Mr, "Root", 12, dt)
 		pelvis_cf = fk(root_cf, Mr)
 		var acel_m: float = mt.acel
-		waistP -= 0.42 + 0.3 * tuck - clampf(acel_m * 0.006, -0.15, 0.12) - moto_de_pie * 0.4
-		neckP += 0.36 + 0.3 * tuck
+		waistP -= (0.42 + 0.3 * tuck - clampf(acel_m * 0.006, -0.15, 0.12) - moto_de_pie * 0.4) * smoothstep(0.15, 0.85, k_sub)
+		neckP += (0.36 + 0.3 * tuck) * smoothstep(0.15, 0.85, k_sub)
 		waistR -= incl_m * 0.12
 		neckR -= incl_m * 0.5
 		neckY += float(mt.direccion) * 0.7
@@ -2210,12 +2210,14 @@ func update_rig(dt: float) -> void:
 			if s == "L" and pie_moto > 0.01:
 				t_m = t_m.lerp((mt.pie_suelo as Vector3) + Vector3(0, 0.32, 0), Rbx.smooth(pie_moto))
 			if k_sub < 1.0:
-				# al subir: la pierna derecha pasa por encima del asiento; la izquierda viene del suelo
-				var arco := sin(PI * clampf(k_sub / 0.85, 0.0, 1.0))
-				if s == "R":
-					t_m += cpo.basis.y * (arco * 1.7) + cpo.basis.z * (arco * 1.1) + cpo.basis.x * (arco * 0.4)
+				# Parte de ambos pies de pie. El interior cruza primero; el exterior se apoya hasta sentarse.
+				var suelo: Vector3 = (mt.pie_suelo as Vector3) + Vector3.UP * 0.32 + cpo.basis.x * (sgn * hip_x)
+				if sgn != float(mt.get("lado", -1.0)):
+					var cruce := smoothstep(0.04, 0.82, k_sub)
+					t_m = suelo.lerp(t_m, cruce)
+					t_m += cpo.basis.y * (sin(PI * cruce) * 2.15) + cpo.basis.z * (sin(PI * cruce) * 0.65)
 				else:
-					t_m = t_m.lerp((mt.pie_suelo as Vector3) + Vector3(0, 0.32, 0), 1.0 - Rbx.smooth(k_sub))
+					t_m = suelo.lerp(t_m, smoothstep(0.30, 1.0, k_sub))
 			leg_targets[s] = t_m
 			leg_targets["pole" + s] = (pelvis_cf * Rbx.cf(sgn * (hip_x + 0.9), 0.4, -5.0)).origin
 		pelvis_drop = 0.0
