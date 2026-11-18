@@ -41,6 +41,9 @@ Base de código verificada: `2f0e2282ad3cbe51ca1d99cc3307e8d4a60c523b` (main al 
   petición caduca a 0,7 s. Guardia con clic derecho espera bajar la velocidad.
 - Z corriendo: tumbarse rápido en 0,4 s con deslizamiento frenado de 0,45 s; respeta
   colisiones. Prueba `tests/tumbar_corriendo.gd` (también `--pared`).
+- Tumbado: nueva pulsación de Shift + dirección permite incorporarse y salir corriendo,
+  si hay espacio; no cancela la caída por mantener Shift. `tests/levantarse_corriendo.gd`,
+  incluido `--techo`, y regresión de caída con `--mantener-shift`.
 - Pausa de 0,16 s tras correr antes de apuntar, subir a moto o levantarla.
 - Al correr, cuerpo sigue movimiento incluso armado; cámara queda libre. Giro con aceleración/frenada.
 - Marcha lateral/posterior ajustada; mezcla caminar/correr amortiguada y alcance de pies acotado

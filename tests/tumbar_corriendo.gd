@@ -38,8 +38,9 @@ func probar() -> void:
   escena.add_child(pared)
   pared.global_position=Vector3(p.x,4,z_pared)
  j.set_stance(2)
- tecla(KEY_W,false)
- tecla(KEY_SHIFT,false)
+ if not OS.get_cmdline_user_args().has("--mantener-shift"):
+  tecla(KEY_W,false)
+  tecla(KEY_SHIFT,false)
  await frames(27)
  var d:=Rbx.flat(j.global_position-p).length()
  var ok: bool=corria and j.stance==2 and j.prone_p>0.98 and (d>0.3 or con_pared) and d<5.0 and j.ragdoll==null

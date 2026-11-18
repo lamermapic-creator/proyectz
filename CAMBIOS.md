@@ -1,3 +1,9 @@
+## 2026-11-17 — Levantarse para correr
+
+Tumbado, pulsa Shift y una dirección para incorporarte y salir corriendo, con aceleración
+progresiva. Respeta techos bajos. Mantener Shift al lanzarte cuerpo a tierra no cancela
+la caída: para levantarte, suéltalo y púlsalo de nuevo. Carrera agachada conservada.
+
 ## 2026-11-17 — Agarre de armas y gráficos del nivel
 
 Empuñaduras ajustadas al modelo y palma izquierda anclada al guardamanos con orientación

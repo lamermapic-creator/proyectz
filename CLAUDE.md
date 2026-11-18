@@ -1,5 +1,14 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
+## 2026-11-17 · Codex · Incorporarse y salir corriendo
+- Tumbado: nueva pulsación de Shift + dirección pide ponerse de pie y correr. Se espera
+  a terminar la transición anterior y se comprueba espacio sobre la cabeza.
+- Boca abajo se incorpora en ~0,6 s y comienza a avanzar al finalizar; boca arriba conserva
+  la transición existente. Mantener Shift al tumbarse NO provoca levantarse automáticamente.
+  Carrera agachada conservada. Ayuda H actualizada.
+- `tests/levantarse_corriendo.gd` (normal/--techo) y `tumbar_corriendo.gd`
+  (normal/--mantener-shift) pasan en Godot 4.6.3.
+
 ## 2026-11-17 · Codex · Agarre y mejora de iluminación
 - Grip de armas de fuego calibrado por posición/inclinación; mano de apoyo con objetivo
   completo de palma, no solo posición. Agarre corto a una mano y recarga conservados.

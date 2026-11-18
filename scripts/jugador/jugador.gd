@@ -36,6 +36,9 @@ var _carrera_hasta := -9.0
 var _apuntar_pedido := false
 var _frenar_combate_hasta := -9.0
 var _vel_giro_cuerpo := 0.0
+var _shift_postura_previo := false
+var _pedir_levantarse_carrera := false
+var _levantarse_carrera_hasta := -9.0
 var _tumbar_rapido_hasta := -9.0
 var _vel_tumbar_rapido := Vector3.ZERO
 var _salto_pedido := false
@@ -260,7 +263,7 @@ func _crear_hud() -> void:
 	capa.add_child(aviso)
 	_hud["aviso"] = aviso
 	var ayuda := Label.new()
-	ayuda.text = "1-4: armas · Clic der: apuntar (arma de fuego) / guardia (arma blanca o sin arma) · Clic izq: disparar/golpear (sin arma: puñetazos) · Clic der + Espacio: bloquear (a tiempo: parada) · Clic der + doble Espacio: empujón · G: patada (en el suelo: pisotón) · R: recargar · X: apoyar arma · F: recoger / subir a la moto · Shift: correr · C: agacharse · Z: cuerpo a tierra (corriendo: rápido) · Espacio: saltar/sortear · Q/E: asomarse · V: hombro · H: esta ayuda · Rueda: acercar/alejar cámara · Colgado: A/D moverse (Shift: rápido), Espacio subir, S soltarse · Esc: pausa" + (" · F1: trucos · F4: estamina infinita · F5: balas infinitas · F6: ver ruido · F7: zombis sordos · F8: zombis ciegos" if OS.is_debug_build() else "")
+	ayuda.text = "1-4: armas · Clic der: apuntar (arma de fuego) / guardia (arma blanca o sin arma) · Clic izq: disparar/golpear (sin arma: puñetazos) · Clic der + Espacio: bloquear (a tiempo: parada) · Clic der + doble Espacio: empujón · G: patada (en el suelo: pisotón) · R: recargar · X: apoyar arma · F: recoger / subir a la moto · Shift: correr (tumbado: levantarse y correr) · C: agacharse · Z: cuerpo a tierra (corriendo: rápido) · Espacio: saltar/sortear · Q/E: asomarse · V: hombro · H: esta ayuda · Rueda: acercar/alejar cámara · Colgado: A/D moverse (Shift: rápido), Espacio subir, S soltarse · Esc: pausa" + (" · F1: trucos · F4: estamina infinita · F5: balas infinitas · F6: ver ruido · F7: zombis sordos · F8: zombis ciegos" if OS.is_debug_build() else "")
 	# ayuda de controles: oculta (H la muestra/oculta), en un recuadro que no se sale de la pantalla
 	ayuda.add_theme_font_size_override("font_size", 15)
 	ayuda.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -1291,6 +1294,20 @@ func update_character(dt: float) -> void:
 	if colgado != null:
 		step_colgado(dt)
 
+	# Una pulsación nueva de Shift levanta; mantenerlo al tirarse no cancela la caída.
+	var shift_postura := Input.is_physical_key_pressed(KEY_SHIFT)
+	if shift_postura and not _shift_postura_previo and stance == 2:
+		_pedir_levantarse_carrera = true
+	_shift_postura_previo = shift_postura
+	if not shift_postura:
+		_pedir_levantarse_carrera = false
+	if _pedir_levantarse_carrera and move_direction.length() > 0.1 and stance == 2 and en_suelo and not L.knocked and not L.gettingUp and ragdoll == null and colgado == null and vaulting == null and levantando_moto == null and arsenal.recogiendo == null:
+		if (prone_p <= 0.001 or prone_p >= 0.999) and headroom(5.6):
+			var desde_arriba := supine
+			set_stance(0)
+			if stance == 0:
+				_levantarse_carrera_hasta = ahora() + (C.PLAYER.ProneTime if desde_arriba else 0.65)
+				_pedir_levantarse_carrera = false
 	# estamina y velocidad
 	var moving := move_direction.length() > 0.1
 	if _apuntar_pedido:
@@ -1461,9 +1478,16 @@ func update_character(dt: float) -> void:
 		walk_speed = _vel_tumbar_rapido.length() * (1.0 - smoothstep(0.0, 1.0, avance_t))
 		_move_override = _vel_tumbar_rapido.normalized()
 		jump_height = 0.0
+	# Dar los primeros pasos al terminar de incorporarse, antes de acelerar a carrera.
+	if stance == 0 and ahora() < _levantarse_carrera_hasta and prone_p < 0.3 and getup_p <= 0.0 and en_suelo:
+		walk_speed = C.PLAYER.WalkSpeed * (1.0 - smoothstep(0.0, 0.3, prone_p))
+		cur_move = walk_speed
+		_move_override = move_direction
 	# altura del cuerpo según la postura. Tumbarse avanza a ritmo constante (fases de la animación)
 	var p_t := 1.0 if stance == 2 else 0.0
 	var tiempo_tumbar: float = 0.4 if tumbar_rapido else C.PLAYER.ProneTime
+	if stance == 0 and ahora() < _levantarse_carrera_hasta and L.levanta_arriba == null:
+		tiempo_tumbar = 0.6
 	prone_p = prone_p + clampf(p_t - prone_p, -dt / tiempo_tumbar, dt / tiempo_tumbar)
 	var base_c: float = C.STANCE[1 if stance == 2 else stance].Center
 	non_prone_c += (base_c - non_prone_c) * minf(1, dt * 3.5)
