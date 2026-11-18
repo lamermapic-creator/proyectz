@@ -638,9 +638,7 @@ const BASE_IMPACTO := {
 
 
 static func _stream(tipo: String) -> Array:
-	# sin ventana (pruebas --headless) no se oye nada: se usa el sintetizado, que no deja archivos .ogg
-	# reproduciéndose al salir (el servidor de audio "dummy" no los suelta → "resources still in use at exit")
-	var g: Array = [] if DisplayServer.get_name() == "headless" else _grabados(tipo)
+	var g := _grabados(tipo)
 	if not g.is_empty():
 		var i := randi() % g.size()
 		if g.size() > 1 and i == int(_ultima.get(tipo, -1)):
@@ -655,6 +653,9 @@ static func _stream(tipo: String) -> Array:
 
 
 static func sonido(ctx: Node, tipo: String, pos, vol := 1.0, tono := 1.0) -> void:
+	# El servidor de audio nulo no reproduce ni libera a tiempo estos efectos.
+	if DisplayServer.get_name() == "headless":
+		return
 	var sel := _stream(tipo)
 	if sel[1]:
 		tono = clampf(lerpf(1.0, tono, 0.35), 0.82, 1.22) * (0.96 + randf() * 0.08)

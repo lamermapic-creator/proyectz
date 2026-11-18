@@ -1,5 +1,7 @@
 ## 2026-11-17 — Levantarse para correr
 
+- Depuración: ambos perfiles de exportación incluyen la clave de ejecución que espera Godot 4.6. Los efectos de audio puntuales se omiten en pruebas sin ventana para evitar avisos de recursos de audio al cerrar.
+
 - Locomoción: al cambiar de ritmo, el pie atrasado adelanta el despegue y la pierna mantiene más flexión. La compensación de cadera usa un muelle estable con fotogramas largos.
 
 - Moto: barrido de la rueda delantera al caer de morro y transferencia a cuerpo rígido en impactos fuertes, con inercia y vuelco. F levanta desde cerca cuando la moto se estabiliza, con giro suave, pies en sitio y agarres fijos.
