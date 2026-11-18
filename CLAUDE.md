@@ -1,6 +1,6 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
-- Combate a pie: puños y armas blancas con preparación y recuperación reajustadas, menor torsión del tronco y un pisotón derecho compartido contra blancos caídos al alcance.
+- Combate a pie: nuevas trayectorias de puño, cuchillo, machete y bate. Clic contra un caído usa un golpe descendente compartido de brazo; G conserva el pisotón.
 
 ## 2026-11-17 · Codex · Incorporarse y salir corriendo
 - Tumbado: nueva pulsación de Shift + dirección pide ponerse de pie y correr. Se espera

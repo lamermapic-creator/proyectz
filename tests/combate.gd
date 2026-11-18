@@ -315,8 +315,8 @@ func _paso_cc(a: Arsenal, dt: float) -> void:
 				a.melee()
 			var ac = a.cc.accion
 			var tipo: String = (str(ac.tipo) + str(ac["var"])) if ac != null else ("clasico" if an.melee_st != null else "-")
-			if ac != null and ac.has("suelo"):
-				tipo = "suelo_" + str(ac.suelo)
+			if ac != null and ac.get("bajo", false):
+				tipo = "suelo_" + str(ac.tipo)
 			cc_res["vistos"] = cc_res.get("vistos", {})
 			print("CC t=%.2f golpe %s vida_muneco=%.0f" % [t, tipo, man.health])
 			if tipo != "-":

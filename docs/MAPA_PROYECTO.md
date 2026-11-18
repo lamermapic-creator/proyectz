@@ -1,6 +1,6 @@
 # Mapa de Proyecto Z
 
-- Combate a pie: puños y armas blancas con preparación y recuperación reajustadas, menor torsión del tronco y un pisotón derecho compartido contra blancos caídos al alcance.
+- Combate a pie: nuevas trayectorias de puño, cuchillo, machete y bate. Clic contra un caído usa un golpe descendente compartido de brazo; G conserva el pisotón.
 
 Actualizado: 2026-11-17. Repositorio: `lamermapic-creator/proyectz`.
 Base de código verificada: `2f0e2282ad3cbe51ca1d99cc3307e8d4a60c523b` (main al consultar).

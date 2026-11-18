@@ -86,6 +86,7 @@ for a in DC.PATADA:
 	L += accion(a, "\t")
 L.append("]")
 L.append("")
+L.append("const SUELO := " + "\n".join(accion(DC.SUELO, ""))[:-1])
 L.append("const PISOTON := [")
 for a in DC.PISOTON:
 	L += accion(a, "\t")

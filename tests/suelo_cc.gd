@@ -137,7 +137,7 @@ func _process(dt: float) -> void:
 	if not ul.is_empty() and float(ul.t) != ult_paron_t:
 		ult_paron_t = float(ul.t)
 		parones += 1
-		if ul.get("suelo", false) and ul.tipo != "pisoton":
+		if ul.get("suelo", false) and ul.tipo != ("pisoton" if golpe == "pisoton" else ("puno" if golpe == "puno" else "golpe")):
 			impactos_suelo_incorrectos += 1
 		print("SUELO paron=%.3f detencion=%.3f escala=%.2f" % [float(ul.paron), float(ul.detencion), Engine.time_scale])
 		if ul.tipo == "golpe" and (golpe == "cuchillo" or golpe == "bate"):

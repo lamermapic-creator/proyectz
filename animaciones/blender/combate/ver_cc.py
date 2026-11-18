@@ -158,7 +158,7 @@ def pose_de(txt):
 		a = DC.EMPUJON[p[1]][int(p[2])]
 		return [DC.pose_accion(a, float(u)) for u in p[3].split(",")]
 	if p[0] == "suelo":
-		a = DC.PISOTON[0]
+		a = DC.SUELO
 		return [DC.pose_accion(a, float(u)) for u in p[2].split(",")]
 	if p[0] == "puno":
 		a = DC.PUNOS[int(p[1])]

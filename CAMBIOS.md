@@ -1,6 +1,6 @@
 ## 2026-11-17 — Levantarse para correr
 
-- Combate a pie: puños y armas blancas con preparación y recuperación reajustadas, menor torsión del tronco y un pisotón derecho compartido contra blancos caídos al alcance.
+- Combate a pie: nuevas trayectorias de puño, cuchillo, machete y bate. Clic contra un caído usa un golpe descendente compartido de brazo; G conserva el pisotón.
 
 Tumbado, pulsa Shift y una dirección para incorporarte y salir corriendo, con aceleración
 progresiva. Respeta techos bajos. Mantener Shift al lanzarte cuerpo a tierra no cancela

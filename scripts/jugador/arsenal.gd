@@ -902,9 +902,6 @@ func melee() -> void:
 	var now := ahora()
 	if now - last_melee < w.Cooldown:
 		return
-	if J.moto == null and cc_puede() and _blanco_para_pisoton():
-		pisoton()
-		return
 	if J.stamina < w.Stamina * 0.5 and not J.estamina_infinita:
 		J.notify("Estás agotado")
 		return
@@ -917,8 +914,11 @@ func melee() -> void:
 	if J.moto == null and not nuevos.is_empty() and cc_puede():
 		var vg := _cc_variante("golpe_" + equipado, nuevos.size())
 		var ag: Dictionary = nuevos[vg]
+		var bajo := _blanco_caido()
+		if bajo:
+			ag = CombateCC.SUELO
 		var dur_g: float = maxf(float(w.Cooldown), float(ag.dur) * 0.9)
-		cc.accion = {"tipo": "golpe", "clase": cc_clase(), "base": base_g, "var": vg, "t0": now, "dur": dur_g,
+		cc.accion = {"tipo": "golpe", "clase": cc_clase(), "base": base_g, "bajo": bajo, "var": vg, "t0": now, "dur": dur_g,
 			"avance_prev": 0.0, "extra": _cc_extra(float(w.Range) * 0.55) * 0.5}
 		cc_golpes.append([now + dur_g * float(ag.golpe), "golpe", {"arma": equipado}])
 		J.shake = minf(1.0, J.shake + 0.15)
@@ -1027,6 +1027,8 @@ var _puno_pedido := -9.0          # clic durante un puñetazo: el siguiente sale
 
 ## animación (CombateCC) de una acción en curso
 func cc_anim(ac: Dictionary) -> Dictionary:
+	if ac.get("bajo", false):
+		return CombateCC.SUELO
 	match str(ac.tipo):
 		"empujon":
 			return CombateCC.EMPUJON[ac.clase][ac["var"]]
@@ -1134,7 +1136,7 @@ func empujon() -> void:
 	Efectos.sonido(J, "Swing", J.global_position, 0.6, 0.75 + randf() * 0.15)
 
 
-func _blanco_para_pisoton() -> bool:
+func _blanco_caido() -> bool:
 	var bl := cc_blanco(CC_PISOTON.alcance)
 	return not bl.is_empty() and not bl[1].en_pie()
 
@@ -1146,7 +1148,7 @@ func patada() -> void:
 	if not cc_puede(true):
 		return
 	# con el blanco en el suelo delante, pisotón
-	if _blanco_para_pisoton():
+	if _blanco_caido():
 		pisoton()
 		return
 	if not _cc_empezar("patada", CC_PATADA.estamina, CC_PATADA.espera):
@@ -1187,9 +1189,6 @@ func punetazo() -> void:
 		if cc.accion.tipo == "puno":
 			_puno_pedido = now
 		return
-	if _blanco_para_pisoton():
-		pisoton()
-		return
 	if not _cc_empezar("puno", CC_PUNO.estamina, CC_PUNO.espera):
 		return
 	if now - _puno_t > float(CC_PUNO.seguido):
@@ -1210,8 +1209,9 @@ func punetazo() -> void:
 	_puno_ult = v
 	_puno_n += 1
 	_puno_t = now
-	var a: Dictionary = CombateCC.PUNOS[v]
-	cc.accion = {"tipo": "puno", "clase": "manos", "var": v, "t0": now, "dur": float(a.dur), "avance_prev": 0.0,
+	var bajo := _blanco_caido()
+	var a: Dictionary = CombateCC.SUELO if bajo else CombateCC.PUNOS[v]
+	cc.accion = {"tipo": "puno", "clase": "manos", "bajo": bajo, "var": v, "t0": now, "dur": float(a.dur), "avance_prev": 0.0,
 		"extra": _cc_extra(float(CC_PUNO.alcance)) * 0.5}
 	var d := a.duplicate()
 	d["alcance"] = CC_PUNO.alcance
