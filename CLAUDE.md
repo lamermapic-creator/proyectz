@@ -1,5 +1,7 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
+- La portada muestra el rifle del juego sobre una mesa de madera manchada de sangre, con casquillos, cuaderno y luz de trabajo. Godot renderiza el bodegón en tiempo real.
+
 - El fondo del menú se renderiza en Godot. Usa terreno alpino procedural, bosque instanciado, lago con oleaje animado, cielo atmosférico, iluminación solar y niebla.
 
 - La portada muestra un paisaje fotorrealista de un valle alpino al atardecer. La imagen WebP llena la ventana y se recorta proporcionalmente.

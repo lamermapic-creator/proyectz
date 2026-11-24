@@ -1,5 +1,7 @@
 # Mapa de Proyecto Z
 
+- La portada muestra el rifle del juego sobre una mesa de madera manchada de sangre, con casquillos, cuaderno y luz de trabajo. Godot renderiza el bodegón en tiempo real.
+
 - El fondo del menú se renderiza en Godot. Usa terreno alpino procedural, bosque instanciado, lago con oleaje animado, cielo atmosférico, iluminación solar y niebla.
 
 - La portada muestra un paisaje fotorrealista de un valle alpino al atardecer. La imagen WebP llena la ventana y se recorta proporcionalmente.
@@ -76,7 +78,7 @@ Base de código verificada: `2f0e2282ad3cbe51ca1d99cc3307e8d4a60c523b` (main al 
 - `project.godot` → `escenas/menu_principal.tscn`.
 - `scripts/ui/menu_principal.gd`: Jugar, Opciones, Controles, Salir; teclado y paneles escalables.
 - Jugar → `escenas/pruebas_movimiento.tscn`.
-- `scripts/ui/paisaje_menu.gd`: terreno, lago, bosque y cámara del menú.
+- `scripts/ui/mesa_menu.gd`: escena 3D del menú y cámara.
 - `scripts/ui/atmosfera_menu.gdshader`: viñeta sobre el paisaje.
 - `scripts/nivel/nivel_pruebas.gd`: escenario, maniquíes, zombis y motos; cielo frío, sol cálido
   sutil, ACES, sombras suaves y niebla ligera. Ver `docs/AGARRE_Y_GRAFICOS.md`.

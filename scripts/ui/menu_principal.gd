@@ -1,7 +1,7 @@
 extends Node3D
 ## Menú de cuarentena. UI de referencia 1280×720 escalada a la ventana.
 const JUEGO := "res://escenas/pruebas_movimiento.tscn"
-const PAISAJE := preload("res://scripts/ui/paisaje_menu.gd")
+const ESCENA_FONDO := preload("res://scripts/ui/mesa_menu.gd")
 const FUENTE_TITULO := preload("res://assets/fuentes/OpenSans-CondBold.ttf")
 const FUENTE := preload("res://assets/fuentes/OpenSans-Regular.ttf")
 const ROJO := Color("e27b52")
@@ -31,9 +31,9 @@ func _ready() -> void:
 	get_window().title = "Proyecto Z · %s" % str(ProjectSettings.get_setting("application/config/version", "?"))
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	get_tree().paused = false
-	var paisaje := PAISAJE.new()
-	paisaje.name = "PaisajeMenu"
-	add_child(paisaje)
+	var fondo := ESCENA_FONDO.new()
+	fondo.name = "MesaMenu"
+	add_child(fondo)
 	_crear_ui()
 	Opciones.aplicar(get_tree())
 	call_deferred("_aplicar_calidad")

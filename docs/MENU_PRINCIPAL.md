@@ -1,5 +1,7 @@
 > Dirección vigente: [v7, bloques limpios sin repliegues](MODELOS_LIMPIOS_V7.md).
 
+- La portada muestra el rifle del juego sobre una mesa de madera manchada de sangre, con casquillos, cuaderno y luz de trabajo. Godot renderiza el bodegón en tiempo real.
+
 - El fondo del menú se renderiza en Godot. Usa terreno alpino procedural, bosque instanciado, lago con oleaje animado, cielo atmosférico, iluminación solar y niebla.
 
 - La portada muestra un paisaje fotorrealista de un valle alpino al atardecer. La imagen WebP llena la ventana y se recorta proporcionalmente.
@@ -25,7 +27,7 @@ usa `scripts/ui/menu_principal.gd`. No es necesario importar otra escena para ve
 
 ## Presentación
 
-- Valle con lago, bosque y montañas al atardecer. Godot renderiza el terreno y el bosque en tiempo real. Los shaders controlan el agua, el cielo y los materiales.
+- Mesa de trabajo con el rifle, casquillos y un cuaderno. `tablero_menu.gdshader` dibuja la veta, las manchas y las gotas de sangre sobre la madera.
 - Título de dos líneas, acento rojo apagado, foco visible y descripción por acción.
 - Viñeta y grano sutil mediante `atmosfera_menu.gdshader`, sin imágenes ni servicios externos.
 - Fuentes Open Sans incluidas con su licencia Apache 2.0 en `assets/fuentes/`.
@@ -52,7 +54,7 @@ No se modificaron `project.godot`, los controles del jugador ni la resolución d
 ## Archivos que editar
 
 - `scripts/ui/menu_principal.gd`: composición, botones, paneles, foco y transiciones.
-- `scripts/ui/paisaje_menu.gd`: escena 3D de la portada.
+- `scripts/ui/mesa_menu.gd`: escena 3D de la portada.
 - `scripts/ui/atmosfera_menu.gdshader`: viñeta y grano.
 - `assets/fuentes/`: fuentes originales y licencia; mantener sus avisos al distribuir.
 
