@@ -55,7 +55,10 @@ func probar() -> void:
 	var opciones: Button = menu._botones.get_child(1)
 	var controles: Button = menu._botones.get_child(2)
 	comprobar(jugar.has_focus(), "foco inicial en Jugar")
-	comprobar(menu.find_children("*", "CharacterBody3D", true, false).is_empty() and menu.find_children("*", "NavigationRegion3D", true, false).is_empty(), "el fondo no ejecuta personajes físicos ni navegación")
+	var paisaje := menu.find_child("PaisajeMenu", true, false) as TextureRect
+	comprobar(paisaje != null and paisaje.texture != null, "el menú muestra el paisaje")
+	var actores: Array[Node] = menu.find_children("*", "Node3D", true, false)
+	comprobar(actores.all(func(n): return not (n is RigPersonaje or n is CharacterBody3D or n is NavigationRegion3D)), "la portada está libre de personajes y navegación")
 	await captura("principal")
 	await tecla(KEY_DOWN)
 	comprobar(opciones.has_focus(), "flecha abajo selecciona Opciones")

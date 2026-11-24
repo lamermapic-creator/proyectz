@@ -1,5 +1,7 @@
 > Dirección vigente: [v7, bloques limpios sin repliegues](MODELOS_LIMPIOS_V7.md).
 
+- La portada muestra un paisaje fotorrealista de un valle alpino al atardecer. La imagen WebP llena la ventana y se recorta proporcionalmente.
+
 - La portada estrena un corredor interior de descontaminación, con fluorescentes, luz de emergencia ámbar y un sanitario en primer plano.
 
 - Menú principal: puesto de cuarentena con luces frías y luces de trabajo cálidas, lluvia en movimiento, cámara con deriva sutil y más detalle en el escenario. La portada y los paneles entran y salen con fundido y desplazamiento.
@@ -10,7 +12,7 @@ Versión actual de Proyecto Z: **0.6V**.
 
 > Revisión visual vigente: [v5](REVISION_VISUAL_V5.md). Conserva el estilo cuadrado de v4, contratos y flujo.
 
-# Menú principal de cuarentena — 2026-11-16
+# Menú principal — 2026-11-16
 
 Rediseño de la portada de Proyecto Z. La entrada sigue siendo `escenas/menu_principal.tscn`, que
 usa `scripts/ui/menu_principal.gd`. No es necesario importar otra escena para ver el cambio al jugar.
@@ -21,9 +23,7 @@ usa `scripts/ui/menu_principal.gd`. No es necesario importar otra escena para ve
 
 ## Presentación
 
-- Corredor interior con pórticos, compuerta de descontaminación, señalización industrial y luces de emergencia.
-- Tres rigs decorativos de los zombis existentes, con respiración y movimientos suaves. No ejecutan IA,
-  física, navegación, ruido ni combate. No se carga el nivel de pruebas para decorar la portada.
+- Valle con lago, bosque y montañas al atardecer. La imagen se generó para el juego y se integra como una textura WebP.
 - Título de dos líneas, acento rojo apagado, foco visible y descripción por acción.
 - Viñeta y grano sutil mediante `atmosfera_menu.gdshader`, sin imágenes ni servicios externos.
 - Fuentes Open Sans incluidas con su licencia Apache 2.0 en `assets/fuentes/`.
@@ -50,7 +50,7 @@ No se modificaron `project.godot`, los controles del jugador ni la resolución d
 ## Archivos que editar
 
 - `scripts/ui/menu_principal.gd`: composición, botones, paneles, foco y transiciones.
-- `scripts/ui/fondo_menu.gd`: geometría, actores, cámara y luces de la portada.
+- `assets/menu/valle.webp`: imagen del paisaje de la portada.
 - `scripts/ui/atmosfera_menu.gdshader`: viñeta y grano.
 - `assets/fuentes/`: fuentes originales y licencia; mantener sus avisos al distribuir.
 

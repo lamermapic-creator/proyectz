@@ -1,7 +1,7 @@
 extends Node3D
 ## Menú de cuarentena. UI de referencia 1280×720 escalada a la ventana.
 const JUEGO := "res://escenas/pruebas_movimiento.tscn"
-const FONDO := preload("res://scripts/ui/fondo_menu.gd")
+const PAISAJE := preload("res://assets/menu/valle.webp")
 const FUENTE_TITULO := preload("res://assets/fuentes/OpenSans-CondBold.ttf")
 const FUENTE := preload("res://assets/fuentes/OpenSans-Regular.ttf")
 const ROJO := Color("e27b52")
@@ -31,7 +31,6 @@ func _ready() -> void:
 	get_window().title = "Proyecto Z · %s" % str(ProjectSettings.get_setting("application/config/version", "?"))
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	get_tree().paused = false
-	add_child(FONDO.new())
 	_crear_ui()
 	Opciones.aplicar(get_tree())
 	call_deferred("_aplicar_calidad")
@@ -106,11 +105,19 @@ func _crear_ui() -> void:
 	raiz.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	raiz.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	raiz.theme = _tema
+	var paisaje := TextureRect.new()
+	paisaje.name = "PaisajeMenu"
+	paisaje.texture = PAISAJE
+	paisaje.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	paisaje.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	paisaje.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	raiz.add_child(paisaje)
+	paisaje.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var sombra := TextureRect.new()
 	var textura := GradientTexture2D.new()
 	var grad := Gradient.new()
 	grad.offsets = PackedFloat32Array([0.0, 0.35, 0.75, 1.0])
-	grad.colors = PackedColorArray([Color(0.015, 0.025, 0.027, 0.98), Color(0.015, 0.025, 0.027, 0.88), Color(0.015, 0.025, 0.027, 0.18), Color(0, 0, 0, 0)])
+	grad.colors = PackedColorArray([Color(0.015, 0.025, 0.027, 0.60), Color(0.015, 0.025, 0.027, 0.50), Color(0.015, 0.025, 0.027, 0.04), Color(0, 0, 0, 0)])
 	textura.gradient = grad
 	textura.fill_from = Vector2.ZERO
 	textura.fill_to = Vector2.RIGHT

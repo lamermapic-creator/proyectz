@@ -1,5 +1,7 @@
 # Mapa de Proyecto Z
 
+- La portada muestra un paisaje fotorrealista de un valle alpino al atardecer. La imagen WebP llena la ventana y se recorta proporcionalmente.
+
 - La portada estrena un corredor interior de descontaminación, con fluorescentes, luz de emergencia ámbar y un sanitario en primer plano.
 
 - Menú principal: puesto de cuarentena con luces frías y luces de trabajo cálidas, lluvia en movimiento, cámara con deriva sutil y más detalle en el escenario. La portada y los paneles entran y salen con fundido y desplazamiento.
@@ -72,8 +74,8 @@ Base de código verificada: `2f0e2282ad3cbe51ca1d99cc3307e8d4a60c523b` (main al 
 - `project.godot` → `escenas/menu_principal.tscn`.
 - `scripts/ui/menu_principal.gd`: Jugar, Opciones, Controles, Salir; teclado y paneles escalables.
 - Jugar → `escenas/pruebas_movimiento.tscn`.
-- `scripts/ui/fondo_menu.gd`: cuarentena nocturna; zombis decorativos sin IA.
-- `scripts/ui/atmosfera_menu.gdshader`, `suelo_menu.gdshader`: efectos visuales del fondo.
+- `assets/menu/valle.webp`: paisaje fotorrealista del menú.
+- `scripts/ui/atmosfera_menu.gdshader`: viñeta sobre el paisaje.
 - `scripts/nivel/nivel_pruebas.gd`: escenario, maniquíes, zombis y motos; cielo frío, sol cálido
   sutil, ACES, sombras suaves y niebla ligera. Ver `docs/AGARRE_Y_GRAFICOS.md`.
 - Filtro gris suave en los Environment del nivel y fondo del menú: saturación 0,78,
