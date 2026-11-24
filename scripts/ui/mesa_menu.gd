@@ -23,6 +23,8 @@ func _ready() -> void:
 	_iluminar()
 	_camara = Camera3D.new()
 	_camara.fov = 39.0
+	_camara.near = 0.6
+	_camara.far = 38.0
 	add_child(_camara)
 	_encuadrar()
 	_camara.current = true
@@ -70,8 +72,8 @@ func _habitacion() -> void:
 	tubo.emission_energy_multiplier = 2.0
 	_caja(Vector3(4.25, 4.163, -2.46), Vector3(0.72, 0.04, 0.28), tubo)
 	# Un cuaderno usado, con cubierta oscura y canto de papel.
-	var papel := _material(Color("b1a58d"), 0.87)
-	var cubierta := _material(Color("42483a"), 0.85)
+	var papel := _material(Color("978c73"), 0.93)
+	var cubierta := _material(Color("343b32"), 0.85)
 	_caja(Vector3(4.32, 2.456, 1.17), Vector3(1.12, 0.09, 1.5), papel).rotation.y = -0.2
 	_caja(Vector3(4.32, 2.514, 1.17), Vector3(1.15, 0.025, 1.53), cubierta).rotation.y = -0.2
 	var laton := _material(Color("9b702d"), 0.32, 0.65)
@@ -99,6 +101,15 @@ func _posar_arma() -> void:
 	var fondo := INF
 	for nodo in arma.find_children("*", "MeshInstance3D", true, false):
 		var pieza := nodo as MeshInstance3D
+		# El corte del receptor y el cargador tienen superficies que se solapan.
+		# Se separan solo en la copia de exhibición.
+		if pieza.name in ["Lower", "MagUpper"] and pieza.mesh is BoxMesh:
+			var caja_pieza := pieza.mesh.duplicate() as BoxMesh
+			caja_pieza.size.x -= 0.004
+			pieza.mesh = caja_pieza
+		var mat := (pieza.material_override as StandardMaterial3D).duplicate() as StandardMaterial3D
+		mat.roughness = maxf(mat.roughness, 0.46)
+		pieza.material_override = mat
 		var caja := pieza.global_transform * pieza.get_aabb()
 		fondo = minf(fondo, caja.position.y)
 	if is_finite(fondo):
@@ -107,12 +118,16 @@ func _posar_arma() -> void:
 
 func _iluminar() -> void:
 	var lampara := SpotLight3D.new()
-	lampara.position = Vector3(4.0, 5.65, -2.85)
+	lampara.position = Vector3(4.25, 4.09, -2.46)
 	lampara.light_color = Color("ffd19a")
-	lampara.light_energy = 11.5
+	lampara.light_energy = 7.2
 	lampara.spot_range = 13.0
-	lampara.spot_angle = 48.0
+	lampara.spot_angle = 57.0
 	lampara.shadow_enabled = true
+	lampara.shadow_bias = 0.055
+	lampara.shadow_normal_bias = 0.42
+	lampara.shadow_blur = 1.55
+	lampara.light_size = 0.14
 	add_child(lampara)
 	lampara.look_at(Vector3(2.45, TABLERO_Y, 0.05))
 	var relleno := OmniLight3D.new()
