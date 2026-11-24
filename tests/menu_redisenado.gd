@@ -57,6 +57,15 @@ func probar() -> void:
 	comprobar(jugar.has_focus(), "foco inicial en Jugar")
 	var mesa := menu.find_child("MesaMenu", true, false) as Node3D
 	comprobar(mesa != null and mesa.has_node("Mesa") and mesa.has_node("RifleExpuesto"), "el menú muestra el arma sobre la mesa")
+	if mesa != null:
+		var casquillos := mesa.get_children().filter(func(n): return n is MeshInstance3D and n.mesh is CylinderMesh)
+		var tablero := mesa.get_node("Mesa") as MeshInstance3D
+		var superficie: float = (tablero.global_transform * tablero.get_aabb()).end.y
+		comprobar(casquillos.size() == 3 and casquillos.all(func(n):
+			var base: float = (n.global_transform * n.get_aabb()).position.y
+			return absf(base - superficie) < 0.003 and absf(n.global_basis.y.y) < 0.001
+		), "los tres casquillos están tumbados y apoyados en la mesa")
+
 	var actores: Array[Node] = menu.find_children("*", "Node3D", true, false)
 	comprobar(actores.all(func(n): return not (n is RigPersonaje or n is CharacterBody3D or n is NavigationRegion3D)), "la portada está libre de personajes y navegación")
 	await captura("principal")

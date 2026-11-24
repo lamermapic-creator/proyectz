@@ -2,6 +2,7 @@ shader_type spatial;
 render_mode diffuse_burley;
 varying vec3 superficie;
 varying vec3 cara;
+uniform vec3 casquillos[3];
 
 float hash(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -46,7 +47,15 @@ void fragment() {
 	gota *= step(0.67, azar) * (1.0 - smoothstep(0.6, 1.7, length(marca)));
 	float sangre = tapa * max(charco, max(arrastre * 0.82, gota));
 	vec3 rojo = mix(vec3(0.075, 0.004, 0.005), vec3(0.30, 0.009, 0.013), ruido(p * 8.0));
-	ALBEDO = mix(madera, rojo, sangre);
+	float contacto = 0.0;
+	for (int i = 0; i < 3; i++) {
+		vec3 pose = casquillos[i];
+		vec2 eje = vec2(sin(pose.y), cos(pose.y));
+		vec2 d = superficie.xz - pose.xz;
+		d -= eje * clamp(dot(d, eje), -0.13, 0.13);
+		contacto = max(contacto, 1.0 - smoothstep(0.025, 0.098, length(d)));
+	}
+	ALBEDO = mix(madera, rojo, sangre) * (1.0 - tapa * contacto * 0.42);
 	ROUGHNESS = mix(0.64 + veta * 0.22, 0.48, tapa * charco * 0.9);
 	SPECULAR = mix(0.52, 0.25, sangre);
 }

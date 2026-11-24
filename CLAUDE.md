@@ -1,5 +1,7 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
+- Menú: los casquillos quedan tumbados al ras del tablero y su sombra de contacto permanece bajo cada uno.
+
 - Pulido de la portada: veta filtrada en función de la distancia de pantalla, sangre limitada a la tapa, separación de caras superpuestas del rifle de exhibición y sombras más suaves.
 
 - La portada muestra el rifle del juego sobre una mesa de madera manchada de sangre, con casquillos, cuaderno y luz de trabajo. Godot renderiza el bodegón en tiempo real.

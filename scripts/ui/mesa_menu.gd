@@ -1,6 +1,8 @@
 extends Node3D
 ## Bodegón del menú. El arma es una malla de exhibición del modelo del juego.
 const TABLERO_Y := 2.4
+# X, giro sobre Y, Z.
+const CASQUILLOS := [Vector3(2.97, 0.7, 0.92), Vector3(3.35, -0.5, 1.02), Vector3(3.0, -1.1, 1.37)]
 var _camara: Camera3D
 var _tiempo := 0.0
 
@@ -56,6 +58,7 @@ func _habitacion() -> void:
 	var acero := _material(Color("414245"), 0.49, 0.5)
 	var madera := ShaderMaterial.new()
 	madera.shader = preload("res://scripts/ui/tablero_menu.gdshader")
+	madera.set_shader_parameter("casquillos", PackedVector3Array(CASQUILLOS))
 	var mesa := _caja(Vector3(0, TABLERO_Y - 0.13, 0), Vector3(12, 0.26, 6.2), madera)
 	mesa.name = "Mesa"
 	for x in [-5.5, 5.5]:
@@ -77,7 +80,7 @@ func _habitacion() -> void:
 	_caja(Vector3(4.32, 2.456, 1.17), Vector3(1.12, 0.09, 1.5), papel).rotation.y = -0.2
 	_caja(Vector3(4.32, 2.514, 1.17), Vector3(1.15, 0.025, 1.53), cubierta).rotation.y = -0.2
 	var laton := _material(Color("9b702d"), 0.32, 0.65)
-	for datos in [Vector3(2.97, 0.7, 0.92), Vector3(3.35, -0.5, 1.02), Vector3(3.0, -1.1, 1.37)]:
+	for datos in CASQUILLOS:
 		var casquillo := MeshInstance3D.new()
 		var malla := CylinderMesh.new()
 		malla.top_radius = 0.039
@@ -86,8 +89,9 @@ func _habitacion() -> void:
 		malla.radial_segments = 12
 		casquillo.mesh = malla
 		casquillo.material_override = laton
-		casquillo.position = Vector3(datos.x, TABLERO_Y + 0.042, datos.z)
-		casquillo.rotation = Vector3(PI / 2, datos.y, 0)
+		# Inclina el cilindro primero y después gíralo alrededor de la vertical.
+		casquillo.basis = Basis(Vector3.UP, datos.y) * Basis(Vector3.RIGHT, PI * 0.5)
+		casquillo.position = Vector3(datos.x, TABLERO_Y + malla.bottom_radius - 0.001, datos.z)
 		add_child(casquillo)
 
 
