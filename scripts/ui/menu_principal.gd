@@ -4,7 +4,7 @@ const JUEGO := "res://escenas/pruebas_movimiento.tscn"
 const FONDO := preload("res://scripts/ui/fondo_menu.gd")
 const FUENTE_TITULO := preload("res://assets/fuentes/OpenSans-CondBold.ttf")
 const FUENTE := preload("res://assets/fuentes/OpenSans-Regular.ttf")
-const ROJO := Color("c85c45")
+const ROJO := Color("e27b52")
 const TEXTO := Color("e2ded3")
 const SUAVE := Color("969f9d")
 
@@ -80,7 +80,7 @@ func _boton(texto: String, indice: int, accion: Callable, principal := false) ->
 	b.custom_minimum_size = Vector2(400, 66 if principal else 44)
 	b.add_theme_font_override("font", FUENTE_TITULO if principal else FUENTE)
 	b.add_theme_font_size_override("font_size", 28 if principal else 17)
-	b.add_theme_stylebox_override("normal", _estilo(Color("26211e") if principal else Color(0.05, 0.07, 0.07, 0.35), Color("735145") if principal else Color(0.5, 0.6, 0.6, 0.13)))
+	b.add_theme_stylebox_override("normal", _estilo(Color("39251e") if principal else Color(0.05, 0.07, 0.07, 0.35), Color("735145") if principal else Color(0.5, 0.6, 0.6, 0.13)))
 	b.add_theme_stylebox_override("hover", _estilo(Color("3b2923"), ROJO))
 	b.add_theme_stylebox_override("pressed", _estilo(Color("5b3428"), ROJO))
 	b.add_theme_stylebox_override("focus", _estilo(Color(0, 0, 0, 0), ROJO, 2))
@@ -133,8 +133,8 @@ func _crear_ui() -> void:
 	_portada.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_referencia.add_child(_portada)
 	_rect(_portada, Vector2(76, 70), Vector2(28, 3), ROJO)
-	_texto(_portada, "PROYECTO", Vector2(70, 102), 84, TEXTO, true)
-	_texto(_portada, "Z", Vector2(71, 174), 132, ROJO, true)
+	_texto(_portada, "PROYECTO", Vector2(68, 105), 78, TEXTO, true)
+	_texto(_portada, "Z", Vector2(69, 166), 147, ROJO, true)
 	_rect(_portada, Vector2(165, 230), Vector2(1, 52), Color("57615c"))
 	_texto(_portada, "SOBREVIVE.\nNO HAGAS RUIDO.", Vector2(183, 230), 17, TEXTO)
 	_botones = VBoxContainer.new()

@@ -1,5 +1,7 @@
 # Mapa de Proyecto Z
 
+- La portada estrena un corredor interior de descontaminación, con fluorescentes, luz de emergencia ámbar y un sanitario en primer plano.
+
 - Menú principal: puesto de cuarentena con luces frías y luces de trabajo cálidas, lluvia en movimiento, cámara con deriva sutil y más detalle en el escenario. La portada y los paneles entran y salen con fundido y desplazamiento.
 
 - Depuración: corregidas advertencias de GDScript en los scripts del juego y el aviso de audio de motor al terminar pruebas sin ventana.

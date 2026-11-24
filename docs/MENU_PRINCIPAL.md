@@ -1,5 +1,7 @@
 > Dirección vigente: [v7, bloques limpios sin repliegues](MODELOS_LIMPIOS_V7.md).
 
+- La portada estrena un corredor interior de descontaminación, con fluorescentes, luz de emergencia ámbar y un sanitario en primer plano.
+
 - Menú principal: puesto de cuarentena con luces frías y luces de trabajo cálidas, lluvia en movimiento, cámara con deriva sutil y más detalle en el escenario. La portada y los paneles entran y salen con fundido y desplazamiento.
 
 Versión actual de Proyecto Z: **0.6V**.
@@ -19,11 +21,11 @@ usa `scripts/ui/menu_principal.gd`. No es necesario importar otra escena para ve
 
 ## Presentación
 
-- Escenario nocturno exclusivo: carretera, barreras, alambrada, cartel de cuarentena, niebla y luz roja.
+- Corredor interior con pórticos, compuerta de descontaminación, señalización industrial y luces de emergencia.
 - Tres rigs decorativos de los zombis existentes, con respiración y movimientos suaves. No ejecutan IA,
   física, navegación, ruido ni combate. No se carga el nivel de pruebas para decorar la portada.
 - Título de dos líneas, acento rojo apagado, foco visible y descripción por acción.
-- Lluvia en dos planos, viñeta y grano sutil mediante `atmosfera_menu.gdshader`, sin imágenes ni servicios externos.
+- Viñeta y grano sutil mediante `atmosfera_menu.gdshader`, sin imágenes ni servicios externos.
 - Fuentes Open Sans incluidas con su licencia Apache 2.0 en `assets/fuentes/`.
 
 ## Funciones y controles
