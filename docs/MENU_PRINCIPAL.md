@@ -1,5 +1,7 @@
 > Dirección vigente: [v7, bloques limpios sin repliegues](MODELOS_LIMPIOS_V7.md).
 
+- El fondo del menú se renderiza en Godot. Usa terreno alpino procedural, bosque instanciado, lago con oleaje animado, cielo atmosférico, iluminación solar y niebla.
+
 - La portada muestra un paisaje fotorrealista de un valle alpino al atardecer. La imagen WebP llena la ventana y se recorta proporcionalmente.
 
 - La portada estrena un corredor interior de descontaminación, con fluorescentes, luz de emergencia ámbar y un sanitario en primer plano.
@@ -23,7 +25,7 @@ usa `scripts/ui/menu_principal.gd`. No es necesario importar otra escena para ve
 
 ## Presentación
 
-- Valle con lago, bosque y montañas al atardecer. La imagen se generó para el juego y se integra como una textura WebP.
+- Valle con lago, bosque y montañas al atardecer. Godot renderiza el terreno y el bosque en tiempo real. Los shaders controlan el agua, el cielo y los materiales.
 - Título de dos líneas, acento rojo apagado, foco visible y descripción por acción.
 - Viñeta y grano sutil mediante `atmosfera_menu.gdshader`, sin imágenes ni servicios externos.
 - Fuentes Open Sans incluidas con su licencia Apache 2.0 en `assets/fuentes/`.
@@ -50,7 +52,7 @@ No se modificaron `project.godot`, los controles del jugador ni la resolución d
 ## Archivos que editar
 
 - `scripts/ui/menu_principal.gd`: composición, botones, paneles, foco y transiciones.
-- `assets/menu/valle.webp`: imagen del paisaje de la portada.
+- `scripts/ui/paisaje_menu.gd`: escena 3D de la portada.
 - `scripts/ui/atmosfera_menu.gdshader`: viñeta y grano.
 - `assets/fuentes/`: fuentes originales y licencia; mantener sus avisos al distribuir.
 
