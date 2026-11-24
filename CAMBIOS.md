@@ -1,3 +1,7 @@
+## 2026-11-24 — Iluminación y materiales del menú 0.6V
+
+La mesa del menú recibe luz fría de la ventana y luz cálida de la lámpara. La madera muestra nudos y anillos, la sangre tiene un centro húmedo y el cuaderno lleva una cubierta de registro de guardia.
+
 ## 2026-11-17 — Levantarse para correr
 
 - Menú: los casquillos quedan tumbados al ras del tablero y su sombra de contacto permanece bajo cada uno.

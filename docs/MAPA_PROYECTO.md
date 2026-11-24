@@ -1,5 +1,7 @@
 # Mapa de Proyecto Z
 
+- El bodegón se construye en `scripts/ui/mesa_menu.gd`. La veta y el acabado húmedo están en `scripts/ui/tablero_menu.gdshader` y la cubierta ilustrada en `assets/menu/cuaderno.png`.
+
 - Menú: los casquillos quedan tumbados al ras del tablero y su sombra de contacto permanece bajo cada uno.
 
 - Pulido de la portada: veta filtrada en función de la distancia de pantalla, sangre limitada a la tapa, separación de caras superpuestas del rifle de exhibición y sombras más suaves.

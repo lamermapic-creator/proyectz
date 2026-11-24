@@ -13,7 +13,16 @@ func _ready() -> void:
 	env.background_color = Color("101215")
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color("75879b")
-	env.ambient_light_energy = 0.24
+	env.ambient_light_energy = 0.55
+	# La ventana fría y la mesa cálida se reflejan en el metal bruñido.
+	var cielo := ProceduralSkyMaterial.new()
+	cielo.sky_top_color = Color("52697c")
+	cielo.sky_horizon_color = Color("b7c1c3")
+	cielo.ground_horizon_color = Color("857466")
+	cielo.ground_bottom_color = Color("312b27")
+	env.sky = Sky.new()
+	env.sky.sky_material = cielo
+	env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
 	env.ssao_radius = 0.55
 	env.glow_intensity = 0.24
@@ -56,6 +65,17 @@ func _habitacion() -> void:
 	_caja(Vector3(0, -0.2, 0), Vector3(40, 0.4, 35), muro)
 	_caja(Vector3(0, 4.0, -4.6), Vector3(27, 8, 0.35), muro)
 	var acero := _material(Color("414245"), 0.49, 0.5)
+	# Ventana alta con persiana metálica y luz del exterior entre las lamas.
+	var vidrio := _material(Color("536a73"), 0.46)
+	vidrio.emission_enabled = true
+	vidrio.emission = Color("6b8994")
+	vidrio.emission_energy_multiplier = 0.48
+	_caja(Vector3(1.2, 4.35, -4.35), Vector3(5.9, 2.34, 0.13), acero)
+	_caja(Vector3(1.2, 4.35, -4.26), Vector3(5.72, 2.16, 0.08), vidrio)
+	for i in range(8):
+		var lama := _caja(Vector3(1.2, 3.41 + i * 0.27, -4.14), Vector3(5.74, 0.19, 0.12), muro)
+		lama.rotation.x = -0.22
+	_caja(Vector3(1.22, 4.35, -4.04), Vector3(0.09, 2.22, 0.10), acero)
 	var madera := ShaderMaterial.new()
 	madera.shader = preload("res://scripts/ui/tablero_menu.gdshader")
 	madera.set_shader_parameter("casquillos", PackedVector3Array(CASQUILLOS))
@@ -77,8 +97,19 @@ func _habitacion() -> void:
 	# Un cuaderno usado, con cubierta oscura y canto de papel.
 	var papel := _material(Color("978c73"), 0.93)
 	var cubierta := _material(Color("343b32"), 0.85)
-	_caja(Vector3(4.32, 2.456, 1.17), Vector3(1.12, 0.09, 1.5), papel).rotation.y = -0.2
-	_caja(Vector3(4.32, 2.514, 1.17), Vector3(1.15, 0.025, 1.53), cubierta).rotation.y = -0.2
+	_caja(Vector3(4.32, TABLERO_Y + 0.045, 1.17), Vector3(1.12, 0.09, 1.5), papel).rotation.y = -0.2
+	var tapa := _caja(Vector3(4.32, TABLERO_Y + 0.1025, 1.17), Vector3(1.15, 0.025, 1.53), cubierta)
+	tapa.rotation.y = -0.2
+	var tela := _material(Color.WHITE, 0.91)
+	tela.albedo_texture = preload("res://assets/menu/cuaderno.png")
+	tela.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	var portada := MeshInstance3D.new()
+	var plano := PlaneMesh.new()
+	plano.size = Vector2(1.15, 1.53)
+	portada.mesh = plano
+	portada.material_override = tela
+	portada.position.y = 0.0135
+	tapa.add_child(portada)
 	var laton := _material(Color("9b702d"), 0.32, 0.65)
 	for datos in CASQUILLOS:
 		var casquillo := MeshInstance3D.new()
@@ -134,6 +165,14 @@ func _iluminar() -> void:
 	lampara.light_size = 0.14
 	add_child(lampara)
 	lampara.look_at(Vector3(2.45, TABLERO_Y, 0.05))
+	var ventana := SpotLight3D.new()
+	ventana.position = Vector3(-1.3, 5.0, -3.8)
+	ventana.light_color = Color("a3c7da")
+	ventana.light_energy = 4.6
+	ventana.spot_angle = 65.0
+	ventana.spot_range = 12.0
+	add_child(ventana)
+	ventana.look_at(Vector3(1.8, TABLERO_Y, 0.35))
 	var relleno := OmniLight3D.new()
 	relleno.position = Vector3(0.2, 5.5, 3.2)
 	relleno.light_color = Color("89b9dd")

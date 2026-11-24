@@ -31,9 +31,18 @@ void fragment() {
 	float poro = mix(0.5, ruido(detalle), filtro);
 	float ranura = (superficie.z + 0.35) * 1.6;
 	float junta = smoothstep(0.008, 0.025 + fwidth(ranura), abs(fract(ranura) - 0.5));
-	float tabla = hash(vec2(floor(ranura), 0.2));
+	float tabla = hash(vec2(floor(ranura - 0.5), 0.2));
+	// Anillos de crecimiento que se curvan alrededor de un nudo por tablón.
+	vec2 nudo = vec2((p.x - (tabla * 10.0 - 5.0)) * 0.65, fract(ranura - 0.5) - 0.43);
+	float radio = length(nudo * vec2(0.76, 1.8));
+	float fase = p.y * 86.0 + 8.0 * exp(-radio * radio * 2.3) + veta * 2.5;
+	float anillo = cos(fase) * (1.0 - smoothstep(0.6, 3.14, fwidth(fase)));
+	float fibra = ruido(vec2(p.x * 3.1 + tabla * 9.0, p.y * 68.0));
+
 	vec3 madera = mix(vec3(0.056, 0.026, 0.012), vec3(0.22, 0.108, 0.047), veta);
 	madera *= (0.54 + tabla * 0.42 + poro * 0.17) * mix(0.24, 1.0, junta);
+	madera *= (0.95 + anillo * 0.11 + (fibra - 0.5) * 0.30)
+		* mix(0.52, 1.0, smoothstep(0.025, 0.19, radio));
 	vec2 marca = p - vec2(1.46, 0.92);
 	float borde = length(marca * vec2(0.70, 1.5)) + (ruido(p * 7.0) - 0.5) * 0.44;
 	float charco = 1.0 - smoothstep(0.58, 0.69 + fwidth(borde), borde);
@@ -56,6 +65,6 @@ void fragment() {
 		contacto = max(contacto, 1.0 - smoothstep(0.025, 0.098, length(d)));
 	}
 	ALBEDO = mix(madera, rojo, sangre) * (1.0 - tapa * contacto * 0.42);
-	ROUGHNESS = mix(0.64 + veta * 0.22, 0.48, tapa * charco * 0.9);
-	SPECULAR = mix(0.52, 0.25, sangre);
+	ROUGHNESS = mix(0.64 + veta * 0.22, 0.25 + ruido(p * 3.6) * 0.09, tapa * charco);
+	SPECULAR = mix(0.38, 0.56, sangre);
 }
