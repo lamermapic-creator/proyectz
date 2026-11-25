@@ -83,6 +83,7 @@ Base de código verificada: `2f0e2282ad3cbe51ca1d99cc3307e8d4a60c523b` (main al 
 - GDScript, Jolt Physics; studs (1 ≈ 0,31 m), gravedad 35; recursos gratuitos.
 - `project.godot` → `escenas/menu_principal.tscn`.
 - `scripts/ui/menu_principal.gd`: Jugar, Opciones, Controles, Salir; teclado y paneles escalables.
+- Las casas de Barrio del Canal están en `escenas/barrio/`. Las variantes heredan la geometría y las colisiones de `casa_0.tscn`.
 - Jugar abre Zona de pruebas (`escenas/pruebas_movimiento.tscn`) o Barrio del Canal (`escenas/barrio_canal.tscn`).
 - `scripts/ui/mesa_menu.gd`: escena 3D del menú y cámara.
 - `scripts/ui/atmosfera_menu.gdshader`: viñeta sobre el paisaje.

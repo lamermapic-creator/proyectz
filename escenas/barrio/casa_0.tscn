@@ -1,0 +1,569 @@
+[gd_scene format=3]
+
+[ext_resource type="Shader" path="res://scripts/nivel/superficie_barrio.gdshader" id="Superficie"]
+
+[ext_resource type="PackedScene" path="res://escenas/barrio/carpinteria.tscn" id="Detalle"]
+
+[sub_resource type="ShaderMaterial" id="R0"]
+shader = ExtResource("Superficie")
+shader_parameter/color_base = Color(0.5137, 0.3686, 0.2824, 1)
+shader_parameter/acabado = 3
+
+[sub_resource type="BoxMesh" id="R1"]
+material = SubResource("R0")
+size = Vector3(30, 0.24, 27)
+
+[sub_resource type="BoxShape3D" id="R2"]
+size = Vector3(30, 0.24, 27)
+
+[sub_resource type="ShaderMaterial" id="R3"]
+shader = ExtResource("Superficie")
+shader_parameter/color_base = Color(0.6745, 0.4667, 0.3765, 1)
+shader_parameter/acabado = 1
+
+[sub_resource type="BoxMesh" id="R4"]
+material = SubResource("R3")
+size = Vector3(30, 10, 0.7)
+
+[sub_resource type="BoxShape3D" id="R5"]
+size = Vector3(30, 10, 0.7)
+
+[sub_resource type="BoxMesh" id="R6"]
+material = SubResource("R3")
+size = Vector3(0.6, 10, 26)
+
+[sub_resource type="BoxShape3D" id="R7"]
+size = Vector3(0.6, 10, 26)
+
+[sub_resource type="BoxMesh" id="R8"]
+material = SubResource("R3")
+size = Vector3(0.6, 10, 8)
+
+[sub_resource type="BoxShape3D" id="R9"]
+size = Vector3(0.6, 10, 8)
+
+[sub_resource type="BoxMesh" id="R10"]
+material = SubResource("R3")
+size = Vector3(0.6, 10, 10)
+
+[sub_resource type="BoxShape3D" id="R11"]
+size = Vector3(0.6, 10, 10)
+
+[sub_resource type="BoxMesh" id="R12"]
+material = SubResource("R3")
+size = Vector3(0.6, 4, 8)
+
+[sub_resource type="BoxShape3D" id="R13"]
+size = Vector3(0.6, 4, 8)
+
+[sub_resource type="BoxMesh" id="R14"]
+material = SubResource("R3")
+size = Vector3(0.6, 2, 8)
+
+[sub_resource type="BoxShape3D" id="R15"]
+size = Vector3(0.6, 2, 8)
+
+[sub_resource type="BoxMesh" id="R16"]
+material = SubResource("R3")
+size = Vector3(12.4, 10, 0.7)
+
+[sub_resource type="BoxShape3D" id="R17"]
+size = Vector3(12.4, 10, 0.7)
+
+[sub_resource type="BoxMesh" id="R18"]
+material = SubResource("R3")
+size = Vector3(5.2, 2.4, 0.7)
+
+[sub_resource type="BoxShape3D" id="R19"]
+size = Vector3(5.2, 2.4, 0.7)
+
+[sub_resource type="BoxMesh" id="R20"]
+material = SubResource("R0")
+size = Vector3(0.23, 7.2, 4.2)
+
+[sub_resource type="BoxShape3D" id="R21"]
+size = Vector3(0.23, 7.2, 4.2)
+
+[sub_resource type="StandardMaterial3D" id="R22"]
+albedo_color = Color(0.49362, 0.3636, 0.19046, 1)
+roughness = 0.85
+
+[sub_resource type="BoxMesh" id="R23"]
+material = SubResource("R22")
+size = Vector3(0.2, 0.26, 0.48)
+
+[sub_resource type="ShaderMaterial" id="R24"]
+shader = ExtResource("Superficie")
+shader_parameter/color_base = Color(0.7608, 0.702, 0.5882, 1)
+shader_parameter/acabado = 0
+
+[sub_resource type="BoxMesh" id="R25"]
+material = SubResource("R24")
+size = Vector3(0.55, 9.6, 17)
+
+[sub_resource type="BoxShape3D" id="R26"]
+size = Vector3(0.55, 9.6, 17)
+
+[sub_resource type="StandardMaterial3D" id="R27"]
+albedo_color = Color(0.22331, 0.06772, 0.03995, 1)
+roughness = 0.85
+
+[sub_resource type="PrismMesh" id="R28"]
+material = SubResource("R27")
+size = Vector3(32, 4, 29)
+
+[sub_resource type="ConvexPolygonShape3D" id="R29"]
+points = PackedVector3Array(-16.0, -2.0, -14.5, 16.0, -2.0, -14.5, 0, 2.0, -14.5, -16.0, -2.0, 14.5, 16.0, -2.0, 14.5, 0, 2.0, 14.5)
+
+[sub_resource type="StandardMaterial3D" id="R30"]
+albedo_color = Color(0.60548, 0.5174, 0.37868, 1)
+roughness = 0.85
+
+[sub_resource type="BoxMesh" id="R31"]
+material = SubResource("R30")
+size = Vector3(30, 0.28, 27)
+
+[sub_resource type="BoxShape3D" id="R32"]
+size = Vector3(30, 0.28, 27)
+
+[sub_resource type="BoxMesh" id="R33"]
+material = SubResource("R3")
+size = Vector3(2.5, 6, 2.5)
+
+[sub_resource type="BoxShape3D" id="R34"]
+size = Vector3(2.5, 6, 2.5)
+
+[sub_resource type="BoxMesh" id="R35"]
+material = SubResource("R0")
+size = Vector3(7, 2.3, 10)
+
+[sub_resource type="BoxShape3D" id="R36"]
+size = Vector3(7, 2.3, 10)
+
+[sub_resource type="StandardMaterial3D" id="R37"]
+albedo_color = Color(0.12753, 0.18014, 0.15728, 1)
+roughness = 0.85
+
+[sub_resource type="BoxMesh" id="R38"]
+material = SubResource("R37")
+size = Vector3(7.1, 0.5, 7.2)
+
+[sub_resource type="BoxShape3D" id="R39"]
+size = Vector3(7.1, 0.5, 7.2)
+
+[sub_resource type="StandardMaterial3D" id="R40"]
+albedo_color = Color(0.72992, 0.66612, 0.5174, 1)
+roughness = 0.85
+
+[sub_resource type="BoxMesh" id="R41"]
+material = SubResource("R40")
+size = Vector3(5.7, 0.66, 2.0)
+
+[sub_resource type="BoxShape3D" id="R42"]
+size = Vector3(5.7, 0.66, 2.0)
+
+[sub_resource type="StandardMaterial3D" id="R43"]
+albedo_color = Color(0.12474, 0.18014, 0.13902, 1)
+roughness = 0.85
+
+[sub_resource type="BoxMesh" id="R44"]
+material = SubResource("R43")
+size = Vector3(14, 4, 3.8)
+
+[sub_resource type="BoxShape3D" id="R45"]
+size = Vector3(14, 4, 3.8)
+
+[sub_resource type="StandardMaterial3D" id="R46"]
+albedo_color = Color(0.53564, 0.47618, 0.35865, 1)
+roughness = 0.85
+
+[sub_resource type="BoxMesh" id="R47"]
+material = SubResource("R46")
+size = Vector3(14.5, 0.36, 4.2)
+
+[sub_resource type="BoxShape3D" id="R48"]
+size = Vector3(14.5, 0.36, 4.2)
+
+[sub_resource type="StandardMaterial3D" id="R49"]
+albedo_color = Color(0.03703, 0.04455, 0.04778, 1)
+roughness = 0.85
+
+[sub_resource type="BoxMesh" id="R50"]
+material = SubResource("R49")
+size = Vector3(1, 0.08, 1)
+
+[sub_resource type="StandardMaterial3D" id="R51"]
+albedo_color = Color(0.56681, 0.57316, 0.48777, 1)
+roughness = 0.85
+
+[sub_resource type="BoxMesh" id="R52"]
+material = SubResource("R51")
+size = Vector3(3.4, 7.8, 4.3)
+
+[sub_resource type="BoxShape3D" id="R53"]
+size = Vector3(3.4, 7.8, 4.3)
+
+[sub_resource type="ShaderMaterial" id="R54"]
+shader = ExtResource("Superficie")
+shader_parameter/color_base = Color(0.7059, 0.5451, 0.4, 1)
+shader_parameter/acabado = 3
+
+[sub_resource type="BoxMesh" id="R55"]
+material = SubResource("R54")
+size = Vector3(6.4, 0.48, 4)
+
+[sub_resource type="BoxShape3D" id="R56"]
+size = Vector3(6.4, 0.48, 4)
+
+[sub_resource type="StandardMaterial3D" id="R57"]
+albedo_color = Color(0.17344, 0.09869, 0.05459, 1)
+roughness = 0.85
+
+[sub_resource type="BoxMesh" id="R58"]
+material = SubResource("R57")
+size = Vector3(0.48, 3.1, 0.48)
+
+[sub_resource type="BoxShape3D" id="R59"]
+size = Vector3(0.48, 3.1, 0.48)
+
+[sub_resource type="BoxMesh" id="R60"]
+material = SubResource("R0")
+size = Vector3(5, 2.2, 1.55)
+
+[sub_resource type="BoxShape3D" id="R61"]
+size = Vector3(5, 2.2, 1.55)
+
+[sub_resource type="StandardMaterial3D" id="R62"]
+albedo_color = Color(0.19046, 0.09152, 0.05819, 1)
+roughness = 0.85
+
+[sub_resource type="BoxMesh" id="R63"]
+material = SubResource("R62")
+size = Vector3(6, 0.035, 7)
+
+[sub_resource type="StandardMaterial3D" id="R64"]
+albedo_color = Color(0.77423, 0.55423, 0.26736, 1)
+roughness = 0.85
+
+[sub_resource type="BoxMesh" id="R65"]
+material = SubResource("R64")
+size = Vector3(2.4, 0.32, 2.4)
+
+[node name="Casa" type="Node3D"]
+
+
+[node name="Suelo" type="MeshInstance3D" parent="."]
+position = Vector3(0, 0.12, 0)
+mesh = SubResource("R1")
+
+[node name="Cuerpo" type="StaticBody3D" parent="Suelo"]
+
+
+[node name="Forma" type="CollisionShape3D" parent="Suelo/Cuerpo"]
+shape = SubResource("R2")
+
+[node name="Fondo" type="MeshInstance3D" parent="."]
+position = Vector3(0, 5, -13)
+mesh = SubResource("R4")
+
+[node name="Cuerpo" type="StaticBody3D" parent="Fondo"]
+
+
+[node name="Forma" type="CollisionShape3D" parent="Fondo/Cuerpo"]
+shape = SubResource("R5")
+
+[node name="Lateral" type="MeshInstance3D" parent="."]
+position = Vector3(-14.7, 5, 0)
+mesh = SubResource("R6")
+
+[node name="Cuerpo" type="StaticBody3D" parent="Lateral"]
+
+
+[node name="Forma" type="CollisionShape3D" parent="Lateral/Cuerpo"]
+shape = SubResource("R7")
+
+[node name="LateralA" type="MeshInstance3D" parent="."]
+position = Vector3(14.7, 5, -9)
+mesh = SubResource("R8")
+
+[node name="Cuerpo" type="StaticBody3D" parent="LateralA"]
+
+
+[node name="Forma" type="CollisionShape3D" parent="LateralA/Cuerpo"]
+shape = SubResource("R9")
+
+[node name="LateralB" type="MeshInstance3D" parent="."]
+position = Vector3(14.7, 5, 8)
+mesh = SubResource("R10")
+
+[node name="Cuerpo" type="StaticBody3D" parent="LateralB"]
+
+
+[node name="Forma" type="CollisionShape3D" parent="LateralB/Cuerpo"]
+shape = SubResource("R11")
+
+[node name="Antepecho" type="MeshInstance3D" parent="."]
+position = Vector3(14.7, 2, -1)
+mesh = SubResource("R12")
+
+[node name="Cuerpo" type="StaticBody3D" parent="Antepecho"]
+
+
+[node name="Forma" type="CollisionShape3D" parent="Antepecho/Cuerpo"]
+shape = SubResource("R13")
+
+[node name="DintelVentana" type="MeshInstance3D" parent="."]
+position = Vector3(14.7, 9, -1)
+mesh = SubResource("R14")
+
+[node name="Cuerpo" type="StaticBody3D" parent="DintelVentana"]
+
+
+[node name="Forma" type="CollisionShape3D" parent="DintelVentana/Cuerpo"]
+shape = SubResource("R15")
+
+[node name="Frente1" type="MeshInstance3D" parent="."]
+position = Vector3(-8.8, 5, 13)
+mesh = SubResource("R16")
+
+[node name="Cuerpo" type="StaticBody3D" parent="Frente1"]
+
+
+[node name="Forma" type="CollisionShape3D" parent="Frente1/Cuerpo"]
+shape = SubResource("R17")
+
+[node name="Frente18" type="MeshInstance3D" parent="."]
+position = Vector3(8.8, 5, 13)
+mesh = SubResource("R16")
+
+[node name="Cuerpo" type="StaticBody3D" parent="Frente18"]
+
+
+[node name="Forma" type="CollisionShape3D" parent="Frente18/Cuerpo"]
+shape = SubResource("R17")
+
+[node name="Dintel" type="MeshInstance3D" parent="."]
+position = Vector3(0, 8.8, 13)
+mesh = SubResource("R18")
+
+[node name="Cuerpo" type="StaticBody3D" parent="Dintel"]
+
+
+[node name="Forma" type="CollisionShape3D" parent="Dintel/Cuerpo"]
+shape = SubResource("R19")
+
+[node name="HojaAbierta" type="MeshInstance3D" parent="."]
+position = Vector3(-2.65, 3.85, 10.9)
+mesh = SubResource("R20")
+
+[node name="Cuerpo" type="StaticBody3D" parent="HojaAbierta"]
+
+
+[node name="Forma" type="CollisionShape3D" parent="HojaAbierta/Cuerpo"]
+shape = SubResource("R21")
+
+[node name="Tirador" type="MeshInstance3D" parent="."]
+position = Vector3(-2.46, 3.4, 9.35)
+mesh = SubResource("R23")
+
+[node name="Tabique" type="MeshInstance3D" parent="."]
+position = Vector3(-5, 4.8, -4)
+mesh = SubResource("R25")
+
+[node name="Cuerpo" type="StaticBody3D" parent="Tabique"]
+
+
+[node name="Forma" type="CollisionShape3D" parent="Tabique/Cuerpo"]
+shape = SubResource("R26")
+
+[node name="Tejado" type="MeshInstance3D" parent="."]
+position = Vector3(0, 12, 0)
+mesh = SubResource("R28")
+
+[node name="Cuerpo" type="StaticBody3D" parent="Tejado"]
+
+
+[node name="Forma" type="CollisionShape3D" parent="Tejado/Cuerpo"]
+shape = SubResource("R29")
+
+[node name="Techo" type="MeshInstance3D" parent="."]
+position = Vector3(0, 9.86, 0)
+mesh = SubResource("R31")
+
+[node name="Cuerpo" type="StaticBody3D" parent="Techo"]
+
+
+[node name="Forma" type="CollisionShape3D" parent="Techo/Cuerpo"]
+shape = SubResource("R32")
+
+[node name="Chimenea" type="MeshInstance3D" parent="."]
+position = Vector3(8, 13, -6)
+mesh = SubResource("R33")
+
+[node name="Cuerpo" type="StaticBody3D" parent="Chimenea"]
+
+
+[node name="Forma" type="CollisionShape3D" parent="Chimenea/Cuerpo"]
+shape = SubResource("R34")
+
+[node name="Cama" type="MeshInstance3D" parent="."]
+position = Vector3(-10, 1.15, -6)
+mesh = SubResource("R35")
+
+[node name="Cuerpo" type="StaticBody3D" parent="Cama"]
+
+
+[node name="Forma" type="CollisionShape3D" parent="Cama/Cuerpo"]
+shape = SubResource("R36")
+
+[node name="Manta" type="MeshInstance3D" parent="."]
+position = Vector3(-10, 2.55, -4.5)
+mesh = SubResource("R38")
+
+[node name="Cuerpo" type="StaticBody3D" parent="Manta"]
+
+
+[node name="Forma" type="CollisionShape3D" parent="Manta/Cuerpo"]
+shape = SubResource("R39")
+
+[node name="Almohada" type="MeshInstance3D" parent="."]
+position = Vector3(-10, 2.62, -9.5)
+mesh = SubResource("R41")
+
+[node name="Cuerpo" type="StaticBody3D" parent="Almohada"]
+
+
+[node name="Forma" type="CollisionShape3D" parent="Almohada/Cuerpo"]
+shape = SubResource("R42")
+
+[node name="Cocina" type="MeshInstance3D" parent="."]
+position = Vector3(5, 2, -10.7)
+mesh = SubResource("R44")
+
+[node name="Cuerpo" type="StaticBody3D" parent="Cocina"]
+
+
+[node name="Forma" type="CollisionShape3D" parent="Cocina/Cuerpo"]
+shape = SubResource("R45")
+
+[node name="Encimera" type="MeshInstance3D" parent="."]
+position = Vector3(5, 4.18, -10.7)
+mesh = SubResource("R47")
+
+[node name="Cuerpo" type="StaticBody3D" parent="Encimera"]
+
+
+[node name="Forma" type="CollisionShape3D" parent="Encimera/Cuerpo"]
+shape = SubResource("R48")
+
+[node name="Fuego0" type="MeshInstance3D" parent="."]
+position = Vector3(8.0, 4.4, -11.6)
+mesh = SubResource("R50")
+
+[node name="Fuego1" type="MeshInstance3D" parent="."]
+position = Vector3(9.3, 4.4, -11.6)
+mesh = SubResource("R50")
+
+[node name="Fuego2" type="MeshInstance3D" parent="."]
+position = Vector3(8.0, 4.4, -10.3)
+mesh = SubResource("R50")
+
+[node name="Fuego3" type="MeshInstance3D" parent="."]
+position = Vector3(9.3, 4.4, -10.3)
+mesh = SubResource("R50")
+
+[node name="Nevera" type="MeshInstance3D" parent="."]
+position = Vector3(12.6, 3.9, -9.9)
+mesh = SubResource("R52")
+
+[node name="Cuerpo" type="StaticBody3D" parent="Nevera"]
+
+
+[node name="Forma" type="CollisionShape3D" parent="Nevera/Cuerpo"]
+shape = SubResource("R53")
+
+[node name="Mesa" type="MeshInstance3D" parent="."]
+position = Vector3(8, 3.15, 2)
+mesh = SubResource("R55")
+
+[node name="Cuerpo" type="StaticBody3D" parent="Mesa"]
+
+
+[node name="Forma" type="CollisionShape3D" parent="Mesa/Cuerpo"]
+shape = SubResource("R56")
+
+[node name="Pata5_0" type="MeshInstance3D" parent="."]
+position = Vector3(5.4, 1.55, 0.5)
+mesh = SubResource("R58")
+
+[node name="Cuerpo" type="StaticBody3D" parent="Pata5_0"]
+
+
+[node name="Forma" type="CollisionShape3D" parent="Pata5_0/Cuerpo"]
+shape = SubResource("R59")
+
+[node name="Pata5_3" type="MeshInstance3D" parent="."]
+position = Vector3(5.4, 1.55, 3.5)
+mesh = SubResource("R58")
+
+[node name="Cuerpo" type="StaticBody3D" parent="Pata5_3"]
+
+
+[node name="Forma" type="CollisionShape3D" parent="Pata5_3/Cuerpo"]
+shape = SubResource("R59")
+
+[node name="Pata10_0" type="MeshInstance3D" parent="."]
+position = Vector3(10.6, 1.55, 0.5)
+mesh = SubResource("R58")
+
+[node name="Cuerpo" type="StaticBody3D" parent="Pata10_0"]
+
+
+[node name="Forma" type="CollisionShape3D" parent="Pata10_0/Cuerpo"]
+shape = SubResource("R59")
+
+[node name="Pata10_3" type="MeshInstance3D" parent="."]
+position = Vector3(10.6, 1.55, 3.5)
+mesh = SubResource("R58")
+
+[node name="Cuerpo" type="StaticBody3D" parent="Pata10_3"]
+
+
+[node name="Forma" type="CollisionShape3D" parent="Pata10_3/Cuerpo"]
+shape = SubResource("R59")
+
+[node name="Banco0" type="MeshInstance3D" parent="."]
+position = Vector3(8, 1.1, -1.8)
+mesh = SubResource("R60")
+
+[node name="Cuerpo" type="StaticBody3D" parent="Banco0"]
+
+
+[node name="Forma" type="CollisionShape3D" parent="Banco0/Cuerpo"]
+shape = SubResource("R61")
+
+[node name="Banco7" type="MeshInstance3D" parent="."]
+position = Vector3(8, 1.1, 5.8)
+mesh = SubResource("R60")
+
+[node name="Cuerpo" type="StaticBody3D" parent="Banco7"]
+
+
+[node name="Forma" type="CollisionShape3D" parent="Banco7/Cuerpo"]
+shape = SubResource("R61")
+
+[node name="Alfombra" type="MeshInstance3D" parent="."]
+position = Vector3(-0.2, 0.26, 4.7)
+mesh = SubResource("R63")
+
+[node name="Lampara" type="MeshInstance3D" parent="."]
+position = Vector3(3, 8.9, 1)
+mesh = SubResource("R65")
+
+[node name="LuzInterior" type="OmniLight3D" parent="."]
+position = Vector3(2,7.8,1)
+light_color = Color(1,0.8,0.58,1)
+light_energy = 1.5
+omni_range = 18
+
+[node name="Carpinteria" parent="." instance=ExtResource("Detalle")]

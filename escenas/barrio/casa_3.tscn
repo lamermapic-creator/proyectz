@@ -1,0 +1,51 @@
+[gd_scene format=3]
+
+[ext_resource type="Shader" path="res://scripts/nivel/superficie_barrio.gdshader" id="Superficie"]
+
+[ext_resource type="PackedScene" path="res://escenas/barrio/casa_0.tscn" id="Base"]
+
+[sub_resource type="ShaderMaterial" id="Pared"]
+shader = ExtResource("Superficie")
+shader_parameter/color_base = Color(0.4824, 0.4941, 0.4118, 1)
+shader_parameter/acabado = 0
+
+[sub_resource type="StandardMaterial3D" id="Manta"]
+albedo_color = Color(0.2932, 0.1835, 0.0697, 1)
+
+[sub_resource type="StandardMaterial3D" id="Alfombra"]
+albedo_color = Color(0.1835, 0.1573, 0.0781, 1)
+
+[node name="Casa" instance=ExtResource("Base")]
+
+[node name="Fondo" parent="."]
+material_override = SubResource("Pared")
+
+[node name="Lateral" parent="."]
+material_override = SubResource("Pared")
+
+[node name="LateralA" parent="."]
+material_override = SubResource("Pared")
+
+[node name="LateralB" parent="."]
+material_override = SubResource("Pared")
+
+[node name="Antepecho" parent="."]
+material_override = SubResource("Pared")
+
+[node name="DintelVentana" parent="."]
+material_override = SubResource("Pared")
+
+[node name="Frente1" parent="."]
+material_override = SubResource("Pared")
+
+[node name="Frente18" parent="."]
+material_override = SubResource("Pared")
+
+[node name="Dintel" parent="."]
+material_override = SubResource("Pared")
+
+[node name="Manta" parent="."]
+material_override = SubResource("Manta")
+
+[node name="Alfombra" parent="."]
+material_override = SubResource("Alfombra")

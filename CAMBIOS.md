@@ -1,3 +1,8 @@
+## 2026-11-25 — Ampliación de Barrio del Canal
+
+- El barrio ocupa 288 × 336 studs, unas tres veces la superficie inicial. Las calles rodean manzanas con talleres, arbolado y bancos. Las cuatro casas tienen puertas abiertas, dormitorio y cocina-comedor amueblados.
+- El asfalto, las aceras, los ladrillos y la madera usan materiales procedurales con detalle filtrado por distancia.
+
 ## 2026-11-25 — Barrio del Canal
 
 - Jugar permite elegir entre la zona de pruebas y un barrio pequeño con dos calles que se cruzan, aceras, viviendas y una torre de agua.
