@@ -2605,12 +2605,13 @@ func update_rig(dt: float) -> void:
 			pelvis_pitch -= 0.12 * rec_sq
 			neckP -= 0.15 * rec_sq
 		if not cambio_mochila.is_empty():
-			var apoyo_mochila := smoothstep(0.47, 0.82, k_mochila)
+			var apoyo_mochila := smoothstep(0.53, 0.81, k_mochila)
 			apoyo_mochila *= smoothstep(0.0, 0.12, p_mochila) * (1.0 - smoothstep(0.90, 1.0, p_mochila))
-			crouch += 0.92 * apoyo_mochila
+			crouch += 1.15 * apoyo_mochila
 			waistP -= 0.5 * apoyo_mochila
 			pelvis_pitch -= 0.14 * apoyo_mochila
-			waistY += 0.26 * sin(k_mochila * PI)
+			waistY += 0.36 * sin(k_mochila * PI)
+			waistR += 0.12 * sin(k_mochila * PI)
 		waistP -= 0.22 * prep_k
 		# levantar una moto tirada: se agacha con la espalda recta y sube empujando con las piernas
 		var lev = L.get("levanta")
@@ -3773,8 +3774,11 @@ func update_rig(dt: float) -> void:
 	if not cambio_mochila.is_empty():
 		var agarre: Transform3D = J.arsenal.mochila.global_transform
 		var peso := smoothstep(0.0, 0.14, p_mochila) * (1.0 - smoothstep(0.88, 1.0, p_mochila))
-		hand_ik.R = {"pos": agarre * Vector3(0.28, 0.44, 0.02), "pole": chest_yaw_base * Vector3(1.8, 0.12, -0.12), "w": peso}
-		hand_ik.L = {"pos": agarre * Vector3(-0.2, 0.2, -0.13), "pole": chest_yaw_base * Vector3(-1.4, -0.65, -0.48), "w": peso * smoothstep(0.40, 0.66, k_mochila)}
+		var correa := Vector3(0.41, 0.61, -0.45)
+		var asa := Vector3(0.13, 0.67, -0.04)
+		var mano_d := correa.lerp(asa, smoothstep(0.12, 0.37, k_mochila))
+		hand_ik.R = {"pos": agarre * mano_d, "pole": chest_yaw_base * Vector3(1.85, 0.06, -0.28), "w": peso}
+		hand_ik.L = {"pos": agarre * Vector3(-0.45, -0.18, -0.12), "pole": chest_yaw_base * Vector3(-1.15, -0.57, -0.68), "w": peso * smoothstep(0.35, 0.58, k_mochila)}
 		neckP -= 0.26 * peso * k_mochila
 
 	## ------------------------------------------------ cabeza

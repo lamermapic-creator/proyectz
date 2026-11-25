@@ -21,6 +21,8 @@ func _probar() -> void:
 	assert(a.mochila.get_child_count() > 5)
 	assert(a.mochila.get_parent() == j.rig.P.UpperTorso)
 	assert(a.capacidad() == 5 and a.inventario.size() == 4)
+	assert(a.anclaje_arma("Rifle").CF.origin.x > 0.4)
+	assert(a.anclaje_arma("Bate").CF.origin.x < -0.4)
 	a.dar_arma("Revolver", true, 4, 10)
 	assert(a.inventario.size() == 5 and a.arma_en_hueco("Corta3") == "Revolver")
 	assert(a.enfundadas.Revolver.get_parent() == j.rig.P.UpperTorso)

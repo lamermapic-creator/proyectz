@@ -43,7 +43,7 @@ var interfaz: CanvasLayer
 var mochila_puesta := true
 var mochila: Node3D
 var cambio_mochila := {}
-const TIEMPO_MOCHILA := 1.48
+const TIEMPO_MOCHILA := 1.75
 const CENTRO_MOCHILA := Vector3(0, 0, 0.65)
 var impacto := ImpactoCC.new(self)   # sensación de impacto y ajuste del cuerpo al blanco (scripts/jugador/impacto_cc.gd)
 
@@ -202,9 +202,10 @@ func _paso_mochila() -> void:
 	var poner: bool = cambio_mochila.poner
 	var k := 1.0 - p if poner else p
 	var espalda := torso.global_transform.translated_local(CENTRO_MOCHILA)
-	var lado := torso.global_transform.translated_local(Vector3(1.24, 0.15, 0.20))
-	lado.basis = lado.basis.rotated(Vector3.UP, 0.85)
-	var frente := torso.global_transform.translated_local(Vector3(1.07, -0.73, -0.62))
+	var lado := torso.global_transform.translated_local(Vector3(1.45, 0.34, 0.44))
+	lado.basis = lado.basis * Basis.from_euler(Vector3(-0.16, 0.85, -0.20))
+	var frente := torso.global_transform.translated_local(Vector3(1.20, -0.57, -0.52))
+	frente.basis = frente.basis * Basis.from_euler(Vector3(0.18, 0.38, -0.12))
 	var destino: Transform3D = cambio_mochila.suelo
 	if p >= 1.0:
 		mochila_puesta = poner
@@ -219,13 +220,31 @@ func _paso_mochila() -> void:
 		return
 	if mochila.get_parent() == torso:
 		mochila.reparent(J.get_parent())
-	_correas_mochila(k < 0.13)
-	if k < 0.38:
-		mochila.global_transform = espalda.interpolate_with(lado, smoothstep(0.10, 0.38, k))
-	elif k < 0.68:
-		mochila.global_transform = lado.interpolate_with(frente, smoothstep(0.38, 0.68, k))
+	_correas_mochila(k < 0.17)
+	if k < 0.27:
+		mochila.global_transform = espalda.interpolate_with(lado, smoothstep(0.12, 0.27, k))
+	elif k < 0.63:
+		var t := smoothstep(0.27, 0.63, k)
+		var arco := lado.origin + torso.global_basis * Vector3(0.17, -0.12, -0.93)
+		var pose := lado.interpolate_with(frente, t)
+		pose.origin = lado.origin.lerp(arco, t).lerp(arco.lerp(frente.origin, t), t)
+		mochila.global_transform = pose
 	else:
-		mochila.global_transform = frente.interpolate_with(destino, smoothstep(0.68, 0.92, k))
+		mochila.global_transform = frente.interpolate_with(destino, smoothstep(0.63, 0.90, k))
+	for hueco in ["Larga", "BlancaLarga"]:
+		var nombre := arma_en_hueco(hueco)
+		var modelo := enfundadas.get(nombre) as Node3D
+		if not is_instance_valid(modelo):
+			continue
+		var puesto := _anclaje_larga(nombre, hueco, true)
+		if hueco == "BlancaLarga" and inventario.has("Larga"):
+			var local := puesto.translated(-CENTRO_MOCHILA)
+			var movimiento := mochila.global_transform * local
+			# El arma sobrante acompaña a la mochila durante todo el recorrido.
+			modelo.global_transform = movimiento
+		else:
+			var libre := _anclaje_larga(nombre, "Larga", false)
+			modelo.transform = puesto.interpolate_with(libre, smoothstep(0.12, 0.58, k))
 
 
 func _actualizar_equipo_mochila() -> void:
@@ -280,15 +299,20 @@ func anclaje_arma(nombre: String) -> Dictionary:
 		else:
 			return {"Part": "LeftUpperLeg", "CF": Armas.at(Vector3(-0.33, 0.45, 0.28), Vector3.DOWN, Vector3.FORWARD)}
 	elif hueco in ["Larga", "BlancaLarga"]:
-		var secundaria := mochila_puesta and hueco == "BlancaLarga"
-		var z := 1.02 if mochila_puesta else 0.55
-		if secundaria:
-			spot.CF = Armas.at(Vector3(-0.43, 0.82, z + 0.08), Vector3(-0.12, -1, 0), Vector3.BACK)
-		elif Armas.es_larga_blanca(nombre):
-			spot.CF = Armas.at(Vector3(0.39, 0.83, z), Vector3(-0.16, -1, 0), Vector3.BACK)
-		else:
-			spot.CF = Armas.at(Vector3(0.49, -0.47, z), Vector3(-0.62, 0.78, 0), Vector3(0.78, 0.62, 0))
+		spot.CF = _anclaje_larga(nombre, hueco, mochila_puesta)
 	return spot
+
+
+func _anclaje_larga(nombre: String, hueco: String, con_mochila: bool) -> Transform3D:
+	if not con_mochila:
+		if Armas.es_larga_blanca(nombre):
+			return Armas.at(Vector3(0.38, 0.75, 0.55), Vector3(-0.16, -1, 0), Vector3.BACK)
+		return Armas.at(Vector3(0.46, -0.45, 0.56), Vector3(-0.58, 0.82, 0), Vector3(0.82, 0.58, 0))
+	# Dos carriles laterales. Se orienta la hoja hacia abajo y el cañón hacia arriba.
+	var lado := -1.0 if hueco == "BlancaLarga" else 1.0
+	if Armas.es_larga_blanca(nombre):
+		return Armas.at(Vector3(lado * 0.52, 0.77, 0.84), Vector3(-lado * 0.09, -1, 0), Vector3.BACK)
+	return Armas.at(Vector3(lado * 0.48, -0.18, 0.98), Vector3(lado * 0.09, 1, 0), Vector3.BACK)
 
 
 func _refrescar_enfundadas() -> void:

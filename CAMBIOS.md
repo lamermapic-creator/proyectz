@@ -1,3 +1,8 @@
+## 2026-11-25 — Anclajes y transición de la mochila
+
+- Las armas largas se llevan a ambos lados de la mochila. Al moverla, el arma que queda en el cuerpo se acomoda a la espalda y la sobrante acompaña a la mochila hasta el suelo.
+- El gesto comienza en la correa del hombro, pasa al asa y usa la otra mano para sostener el peso al acercarse al suelo.
+
 ## 2026-11-25 — Ranuras por tamaño de arma
 
 - Las armas de fuego y de combate comparten las ranuras según su tamaño. Sin mochila caben dos cortas y una larga. Con mochila caben tres cortas y dos largas.
