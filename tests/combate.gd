@@ -68,7 +68,7 @@ func _process(dt: float) -> void:
 		if _una("dar", t > 0.2):
 			a.dar_arma(arma_x, false)
 		for k in Armas.SLOTS.size():
-			if Armas.SLOTS[k].Id == Armas.WEAPONS[arma_x].Slot:
+			if a.arma_en_hueco(Armas.SLOTS[k].Id) == arma_x:
 				slot = k
 	if modo == "machete" and _una("coger", t > 0.2):
 		# el machete está en el suelo cerca del inicio: se lleva al jugador

@@ -76,9 +76,10 @@ const WEAPONS := {
 ## 4 huecos: solo se lleva un arma de cada tipo
 const SLOTS := [
 	{"Id": "Corta", "Name": "Arma corta"},
-	{"Id": "Larga", "Name": "Arma larga"},
+	{"Id": "Larga", "Name": "Primera arma larga"},
 	{"Id": "BlancaCorta", "Name": "Arma blanca corta"},
-	{"Id": "BlancaLarga", "Name": "Arma blanca larga"},
+	{"Id": "BlancaLarga", "Name": "Segunda arma larga"},
+	{"Id": "Corta2", "Name": "Segunda arma corta"},
 ]
 const LOADOUT := ["Pistola", "Rifle", "Cuchillo", "Bate"]
 const HOLSTER_TIME := 0.42

@@ -1,7 +1,7 @@
 class_name Arsenal
 extends Node
 ## Armas del jugador (port de la parte de armas de ZClient + WeaponServer + InventoryServer):
-## · 4 huecos: arma corta, arma larga, blanca corta, blanca larga. Cargamento inicial:
+## · Huecos de transporte: arma corta, arma larga, blanca corta, blanca larga. Cargamento inicial:
 ##   pistola, rifle, cuchillo y bate. Las que no están en la mano se ven en el cuerpo.
 ## · Cambiar de arma: se guarda la de la mano (0.42 s) y se saca la otra (tiempo de desenfundar).
 ## · Disparar (clic izq.), apuntar (clic der.), recargar (R), apoyar el arma (X), golpear con armas
@@ -40,6 +40,11 @@ var suelo := []                 # armas en el suelo: {name, mag, reserve, nodo, 
 
 var _hud := {}
 var interfaz: CanvasLayer
+var mochila_puesta := true
+var mochila: Node3D
+var cambio_mochila := {}
+const TIEMPO_MOCHILA := 1.48
+const CENTRO_MOCHILA := Vector3(0, 0, 0.65)
 var impacto := ImpactoCC.new(self)   # sensación de impacto y ajuste del cuerpo al blanco (scripts/jugador/impacto_cc.gd)
 
 
@@ -51,6 +56,7 @@ func _exit_tree() -> void:
 func _ready() -> void:
 	J = get_parent() as Jugador
 	anim = J.get_node("Animador") as Animador
+	_separar_mochila()
 	for nombre in Armas.LOADOUT:
 		dar_arma(nombre, false)
 	_crear_hud()
@@ -86,7 +92,10 @@ func es_arma_fuego() -> bool:
 
 
 func _hueco_de(nombre: String) -> String:
-	return Armas.WEAPONS[nombre].Slot
+	for hueco in inventario:
+		if inventario[hueco].name == nombre:
+			return hueco
+	return ""
 
 
 func arma_en_hueco(id: String) -> String:
@@ -101,7 +110,9 @@ func datos_equipado() -> Dictionary:
 ## ---------------------------------------------------------------- inventario
 func dar_arma(nombre: String, soltar_vieja: bool, mag := -1, reserve := -1) -> void:
 	var w: Dictionary = Armas.WEAPONS[nombre]
-	var hueco: String = w.Slot
+	var hueco := _hueco_destino(nombre)
+	if hueco.is_empty():
+		return
 	var vieja = inventario.get(hueco)
 	if vieja != null:
 		if equipado == vieja.name:
@@ -117,6 +128,172 @@ func dar_arma(nombre: String, soltar_vieja: bool, mag := -1, reserve := -1) -> v
 	_refrescar_enfundadas()
 
 
+func _separar_mochila() -> void:
+	var torso: Node3D = J.rig.P.UpperTorso
+	mochila = Node3D.new()
+	mochila.name = "Mochila"
+	torso.add_child(mochila)
+	mochila.position = CENTRO_MOCHILA
+	for pieza in torso.get_children():
+		var nombre := String(pieza.name)
+		if nombre.begins_with("M_Mochila_") or nombre.begins_with("M_CorreaMochila_") or nombre in ["M_Backpack", "M_BackpackPocket", "M_Bedroll", "M_StrapL", "M_StrapR"]:
+			pieza.reparent(mochila)
+
+
+func mochila_al_alcance() -> bool:
+	return not mochila_puesta and is_instance_valid(mochila) and J.global_position.distance_to(mochila.global_position) < 4.3
+
+
+func solicitar_mochila() -> bool:
+	if not cambio_mochila.is_empty() or J.health <= 0 or J.ragdoll != null or J.L.knocked or J.L.gettingUp or J.stance != 0 or not J.en_suelo or J.moto != null or J.colgado != null or J.vaulting != null or J.levantando_moto != null or recogiendo != null or switching != null or recargando > 0.0 or cc.accion != null:
+		J.notify("Ponte de pie y libera las manos para mover la mochila")
+		return false
+	if not mochila_puesta and not mochila_al_alcance():
+		J.notify("Acércate a la mochila")
+		return false
+	var raiz := J.root_cf()
+	var hacia_piso := Rbx.right(raiz) * 1.18 + Rbx.look(raiz) * 0.40
+	var piso := J.global_position + hacia_piso
+	var contacto := J.raycast(piso + Vector3.UP * 0.5, Vector3.DOWN * 7.0)
+	if mochila_puesta and (contacto.is_empty() or not J.raycast(J.global_position, hacia_piso).is_empty()):
+		J.notify("Busca suelo firme para dejar la mochila")
+		return false
+	var suelo_cf := mochila.global_transform
+	if mochila_puesta:
+		suelo_cf = Transform3D(raiz.basis, contacto.position + Vector3.UP * 0.77)
+	guardar_ya()
+	ir_a_recoger = null
+	cambio_mochila = {"t0": ahora(), "poner": not mochila_puesta, "suelo": suelo_cf}
+	return true
+
+
+func _correas_mochila(visibles: bool) -> void:
+	for pieza in mochila.get_children():
+		var nombre := String(pieza.name)
+		if nombre.begins_with("M_CorreaMochila_") or nombre in ["M_StrapL", "M_StrapR"]:
+			pieza.visible = visibles
+
+
+func _bajar_capacidad() -> void:
+	var sobrantes: Array[String] = ["BlancaCorta"]
+	if inventario.has("Larga") and inventario.has("BlancaLarga"):
+		sobrantes.append("BlancaLarga")
+	var piso: Transform3D = cambio_mochila.suelo
+	for hueco in sobrantes:
+		if inventario.has(hueco):
+			var lado := -0.72 if hueco == "BlancaCorta" else 0.72
+			var p := piso * Vector3(lado, -0.77, 0.42)
+			var g := J.raycast(p + Vector3.UP, Vector3.DOWN * 3.0)
+			soltar_en_suelo(inventario[hueco], g.position if not g.is_empty() else p, J.rotation.y)
+			inventario.erase(hueco)
+
+	if inventario.has("BlancaLarga") and not inventario.has("Larga"):
+		inventario.Larga = inventario.BlancaLarga
+		inventario.erase("BlancaLarga")
+
+
+func progreso_mochila() -> float:
+	return clampf((ahora() - float(cambio_mochila.t0)) / TIEMPO_MOCHILA, 0.0, 1.0)
+
+
+func _paso_mochila() -> void:
+	if cambio_mochila.is_empty():
+		return
+	var torso: Node3D = J.rig.P.UpperTorso
+	var p := progreso_mochila()
+	var poner: bool = cambio_mochila.poner
+	var k := 1.0 - p if poner else p
+	var espalda := torso.global_transform.translated_local(CENTRO_MOCHILA)
+	var lado := torso.global_transform.translated_local(Vector3(1.24, 0.15, 0.20))
+	lado.basis = lado.basis.rotated(Vector3.UP, 0.85)
+	var frente := torso.global_transform.translated_local(Vector3(1.07, -0.73, -0.62))
+	var destino: Transform3D = cambio_mochila.suelo
+	if p >= 1.0:
+		mochila_puesta = poner
+		if poner:
+			mochila.reparent(torso, false)
+			mochila.transform = Transform3D(Basis.IDENTITY, CENTRO_MOCHILA)
+		else:
+			mochila.global_transform = destino
+			_bajar_capacidad()
+		_actualizar_equipo_mochila()
+		cambio_mochila.clear()
+		return
+	if mochila.get_parent() == torso:
+		mochila.reparent(J.get_parent())
+	_correas_mochila(k < 0.13)
+	if k < 0.38:
+		mochila.global_transform = espalda.interpolate_with(lado, smoothstep(0.10, 0.38, k))
+	elif k < 0.68:
+		mochila.global_transform = lado.interpolate_with(frente, smoothstep(0.38, 0.68, k))
+	else:
+		mochila.global_transform = frente.interpolate_with(destino, smoothstep(0.68, 0.92, k))
+
+
+func _actualizar_equipo_mochila() -> void:
+	_correas_mochila(mochila_puesta)
+	_refrescar_enfundadas()
+
+
+func cancelar_mochila() -> void:
+	if cambio_mochila.is_empty():
+		return
+	if mochila_puesta:
+		if mochila.get_parent() != J.rig.P.UpperTorso:
+			mochila.reparent(J.rig.P.UpperTorso, false)
+		mochila.transform = Transform3D(Basis.IDENTITY, CENTRO_MOCHILA)
+	else:
+		mochila.global_transform = cambio_mochila.suelo
+	_actualizar_equipo_mochila()
+	cambio_mochila.clear()
+
+
+func capacidad() -> int:
+	return 5 if mochila_puesta else 3
+
+
+func _hueco_destino(nombre: String) -> String:
+	var existente := _hueco_de(nombre)
+	if not existente.is_empty():
+		return existente
+	var categoria: String = Armas.WEAPONS[nombre].Slot
+	if categoria == "BlancaCorta":
+		return categoria if mochila_puesta else ""
+	var huecos := ["Corta", "Corta2"] if categoria == "Corta" else ["Larga", "BlancaLarga"]
+	if categoria == "BlancaLarga" and mochila_puesta:
+		huecos.reverse()
+	if categoria != "Corta" and not mochila_puesta:
+		for hueco in huecos:
+			if inventario.has(hueco):
+				return hueco
+	for hueco in huecos:
+		if not inventario.has(hueco):
+			return hueco
+	return huecos[0]
+
+
+func anclaje_arma(nombre: String) -> Dictionary:
+	var spot := Armas.holster(nombre)
+	var hueco := _hueco_de(nombre)
+	if hueco.is_empty():
+		hueco = _hueco_destino(nombre)
+	if hueco == "Corta2":
+		if nombre == "Subfusil":
+			spot.CF = Armas.at(Vector3(-0.51, -0.43, -0.70), Vector3(0.37, -1, 0), Vector3.FORWARD)
+		else:
+			return {"Part": "LeftUpperLeg", "CF": Armas.at(Vector3(-0.33, 0.45, 0.28), Vector3.DOWN, Vector3.FORWARD)}
+	elif hueco in ["Larga", "BlancaLarga"]:
+		var secundaria := mochila_puesta and hueco == "BlancaLarga"
+		var z := 1.02 if mochila_puesta else 0.55
+		if secundaria:
+			spot.CF = Armas.at(Vector3(-0.43, 0.82, z + 0.08), Vector3(-0.12, -1, 0), Vector3.BACK)
+		elif Armas.es_larga_blanca(nombre):
+			spot.CF = Armas.at(Vector3(0.39, 0.83, z), Vector3(-0.16, -1, 0), Vector3.BACK)
+		else:
+			spot.CF = Armas.at(Vector3(0.49, -0.47, z), Vector3(-0.62, 0.78, 0), Vector3(0.78, 0.62, 0))
+	return spot
+
+
 func _refrescar_enfundadas() -> void:
 	var tiene := {}
 	for h in inventario:
@@ -126,8 +303,10 @@ func _refrescar_enfundadas() -> void:
 			(enfundadas[n] as Node3D).queue_free()
 			enfundadas.erase(n)
 	for n in tiene:
-		if not enfundadas.has(n):
-			var spot := Armas.holster(n)
+		var spot := anclaje_arma(n)
+		if enfundadas.has(n):
+			(enfundadas[n] as Node3D).transform = spot.CF
+		else:
 			var parte: Node3D = J.rig.P.get(spot.Part)
 			if parte == null:
 				continue
@@ -229,7 +408,7 @@ func guardar_ya() -> void:
 
 
 func select_slot(i: int) -> void:
-	if recogiendo != null:
+	if recogiendo != null or not cambio_mochila.is_empty():
 		return
 	if i < 0 or i >= Armas.SLOTS.size() or switching != null or J.health <= 0 or J.colgado != null:
 		return
@@ -338,6 +517,9 @@ func dirigir() -> void:
 
 
 func _empezar_recoger(item: Dictionary) -> void:
+	if _hueco_destino(item.name).is_empty():
+		J.notify("Necesitas la mochila para llevar un arma corta de combate")
+		return
 	# con un arma en la mano derecha se coge con la izquierda
 	var mano := "L" if (armado() and switching == null) else "R"
 	recogiendo = {"t0": ahora(), "dur": RECOGER_DUR_TUMBADO if J.stance == 2 else RECOGER_DUR, "item": item,
@@ -375,7 +557,7 @@ func _paso_recoger() -> void:
 
 ## ---------------------------------------------------------------- entrada
 func _unhandled_input(e: InputEvent) -> void:
-	if interfaz.abierto():
+	if interfaz.abierto() or not cambio_mochila.is_empty():
 		return
 	if e is InputEventMouseButton and e.button_index == MOUSE_BUTTON_LEFT:
 		if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
@@ -403,7 +585,10 @@ func _unhandled_input(e: InputEvent) -> void:
 			KEY_F:
 				# junto a una moto (o en ella) F es subir/bajar (lo lleva el Jugador)
 				if J.moto == null and J.moto_cercana() == null:
-					_recoger()
+					if mochila_al_alcance():
+						solicitar_mochila()
+					else:
+						_recoger()
 			KEY_F5:
 				if not OS.is_debug_build():
 					return
@@ -1551,8 +1736,12 @@ func _cc_atacante(desde: Vector3):
 ## ---------------------------------------------------------------- cada fotograma
 func actualizar(dt: float) -> void:
 	var now := ahora()
+	if J.health > 0:
+		_paso_mochila()
+	else:
+		cancelar_mochila()
 	if _golpe_tras_frenar != "":
-		if now > _golpe_caduca or J.health <= 0 or J.ragdoll != null or J.moto != null:
+		if now > _golpe_caduca or not cambio_mochila.is_empty() or J.health <= 0 or J.ragdoll != null or J.moto != null:
 			_golpe_tras_frenar = ""
 		else:
 			J._frenar_combate_hasta = now + 0.25

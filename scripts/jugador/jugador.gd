@@ -366,7 +366,7 @@ func _input(e: InputEvent) -> void:
 
 
 func _unhandled_input(e: InputEvent) -> void:
-	if arsenal.interfaz.abierto():
+	if arsenal.interfaz.abierto() or not arsenal.cambio_mochila.is_empty():
 		return
 	if e is InputEventMouseButton:
 		if e.button_index == MOUSE_BUTTON_RIGHT:
@@ -449,7 +449,7 @@ var _mouse_delta := Vector2.ZERO
 
 
 func _leer_movimiento() -> Vector3:
-	if arsenal != null and arsenal.interfaz != null and arsenal.interfaz.abierto():
+	if arsenal != null and arsenal.interfaz != null and (arsenal.interfaz.abierto() or not arsenal.cambio_mochila.is_empty()):
 		return Vector3.ZERO
 	var f := 0.0
 	var r := 0.0
@@ -1113,6 +1113,7 @@ func _process(dt: float) -> void:
 	dt = minf(dt, 0.1)
 	reloj += dt
 	if ragdoll != null:
+		arsenal.cancelar_mochila()
 		# en el suelo / por los aires: el cuerpo lo lleva la física (Ragdoll); el jugador solo lo sigue
 		_paso_ragdoll(dt)
 		update_camera(dt)

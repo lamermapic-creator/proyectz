@@ -3,7 +3,8 @@ extends CanvasLayer
 const FACTOR_TIEMPO := 0.2
 const RADIO_INTERIOR := 60.0
 const RADIO_EXTERIOR := 164.0
-const SEMISECTOR := PI / 4.0 - 0.065
+const SEPARACION := 0.065
+var _indices_rueda: Array[int] = []
 
 var _filtro: ColorRect
 var _transicion: Tween
@@ -51,7 +52,7 @@ func _input(evento: InputEvent) -> void:
 			_mostrar(tecla == KEY_TAB)
 		else:
 			return
-	elif tecla in [KEY_I, KEY_TAB] and not get_tree().paused and arsenal.J.health > 0:
+	elif tecla in [KEY_I, KEY_TAB] and not get_tree().paused and arsenal.J.health > 0 and arsenal.cambio_mochila.is_empty():
 		_mostrar(tecla == KEY_TAB)
 	else:
 		return
@@ -100,10 +101,23 @@ func _mostrar(rueda: bool) -> void:
 	if rueda:
 		_crear_rueda(pila)
 	else:
+		var capacidad := Label.new()
+		capacidad.text = "%d / %d armas · %s" % [arsenal.inventario.size(), arsenal.capacidad(), "Mochila puesta" if arsenal.mochila_puesta else "Sin mochila"]
+		pila.add_child(capacidad)
 		for i in Armas.SLOTS.size():
+			var id: String = Armas.SLOTS[i].Id
+			if not arsenal.mochila_puesta and (id == "BlancaCorta" or id == "BlancaLarga"):
+				continue
 			var fila := Label.new()
 			fila.text = _texto_hueco(i, true)
 			pila.add_child(fila)
+		var accion := "Quitar mochila · dejar el excedente en el suelo" if arsenal.mochila_puesta else "Ponerse la mochila"
+		var boton_mochila := EstiloUI.boton(accion, func():
+			_cerrar()
+			arsenal.solicitar_mochila()
+		)
+		boton_mochila.disabled = not arsenal.mochila_puesta and not arsenal.mochila_al_alcance()
+		pila.add_child(boton_mochila)
 	var cerrar := EstiloUI.boton("Cerrar · Esc", _cerrar)
 	cerrar.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	pila.add_child(cerrar)
@@ -126,6 +140,10 @@ func _animar_filtro(visible_filtro: bool) -> void:
 
 
 func _crear_rueda(pila: VBoxContainer) -> void:
+	_indices_rueda.clear()
+	for i in Armas.SLOTS.size():
+		if arsenal.mochila_puesta or Armas.SLOTS[i].Id in ["Corta", "Corta2", "Larga"]:
+			_indices_rueda.append(i)
 	var disco := Control.new()
 	disco.custom_minimum_size = Vector2.ONE * (RADIO_EXTERIOR * 2.0 + 8.0)
 	disco.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
@@ -133,8 +151,8 @@ func _crear_rueda(pila: VBoxContainer) -> void:
 	var centro := disco.custom_minimum_size / 2.0
 	disco.draw.connect(func():
 		var resaltado := _sector(disco.get_local_mouse_position() - centro)
-		for i in Armas.SLOTS.size():
-			var nombre := arsenal.arma_en_hueco(Armas.SLOTS[i].Id)
+		for i in _indices_rueda.size():
+			var nombre := arsenal.arma_en_hueco(Armas.SLOTS[_indices_rueda[i]].Id)
 			var color := Color("24343d") if not nombre.is_empty() else Color("182027")
 			if not nombre.is_empty() and i == resaltado:
 				color = Color("406e80")
@@ -151,12 +169,12 @@ func _crear_rueda(pila: VBoxContainer) -> void:
 		elif evento is InputEventMouseButton and evento.button_index == MOUSE_BUTTON_LEFT and evento.pressed:
 			var i := _sector(evento.position - centro)
 			if i >= 0:
-				_elegir(i)
+				_elegir(_indices_rueda[i])
 	)
-	for i in Armas.SLOTS.size():
-		var rotacion := -PI / 2.0 + i * TAU / Armas.SLOTS.size()
+	for i in _indices_rueda.size():
+		var rotacion := -PI / 2.0 + i * TAU / _indices_rueda.size()
 		var rotulo := Label.new()
-		rotulo.text = _texto_hueco(i, false)
+		rotulo.text = _texto_hueco(_indices_rueda[i], false)
 		rotulo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		rotulo.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		rotulo.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -173,13 +191,14 @@ func _crear_rueda(pila: VBoxContainer) -> void:
 
 
 func _poligono_sector(centro: Vector2, indice: int) -> PackedVector2Array:
-	var angulo := -PI / 2.0 + indice * TAU / Armas.SLOTS.size()
+	var angulo := -PI / 2.0 + indice * TAU / _indices_rueda.size()
 	var puntos := PackedVector2Array()
+	var semi := PI / _indices_rueda.size() - SEPARACION
 	for paso in range(21):
-		var direccion := Vector2.from_angle(angulo + lerpf(-SEMISECTOR, SEMISECTOR, paso / 20.0))
+		var direccion := Vector2.from_angle(angulo + lerpf(-semi, semi, paso / 20.0))
 		puntos.append(centro + direccion * RADIO_EXTERIOR)
 	for paso in range(20, -1, -1):
-		var direccion := Vector2.from_angle(angulo + lerpf(-SEMISECTOR, SEMISECTOR, paso / 20.0))
+		var direccion := Vector2.from_angle(angulo + lerpf(-semi, semi, paso / 20.0))
 		puntos.append(centro + direccion * RADIO_INTERIOR)
 	return puntos
 
@@ -189,11 +208,11 @@ func _sector(desde_centro: Vector2) -> int:
 	if radio < RADIO_INTERIOR or radio > RADIO_EXTERIOR:
 		return -1
 	var angulo := desde_centro.angle() + PI / 2.0
-	var paso := TAU / Armas.SLOTS.size()
+	var paso := TAU / _indices_rueda.size()
 	var indice := roundi(angulo / paso)
-	if absf(angulo - indice * paso) > SEMISECTOR:
+	if absf(angulo - indice * paso) > paso / 2.0 - SEPARACION:
 		return -1
-	return posmod(indice, Armas.SLOTS.size())
+	return posmod(indice, _indices_rueda.size())
 
 
 func _texto_hueco(i: int, detalle: bool) -> String:

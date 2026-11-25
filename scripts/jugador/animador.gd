@@ -2146,6 +2146,12 @@ func update_rig(dt: float) -> void:
 	# recoger algo del suelo: p = progreso (0..1), sq = cuánto se agacha
 	var rec = J.arsenal.recogiendo
 	var rec_p := -1.0
+	var cambio_mochila := J.arsenal.cambio_mochila
+	var p_mochila := 0.0
+	var k_mochila := 0.0
+	if not cambio_mochila.is_empty():
+		p_mochila = J.arsenal.progreso_mochila()
+		k_mochila = 1.0 - p_mochila if cambio_mochila.poner else p_mochila
 	var rec_sq := 0.0
 	if rec != null:
 		rec_p = clampf((now - float(rec.t0)) / float(rec.dur), 0.0, 1.0)
@@ -2598,6 +2604,13 @@ func update_rig(dt: float) -> void:
 			waistP -= 0.5 * rec_sq
 			pelvis_pitch -= 0.12 * rec_sq
 			neckP -= 0.15 * rec_sq
+		if not cambio_mochila.is_empty():
+			var apoyo_mochila := smoothstep(0.47, 0.82, k_mochila)
+			apoyo_mochila *= smoothstep(0.0, 0.12, p_mochila) * (1.0 - smoothstep(0.90, 1.0, p_mochila))
+			crouch += 0.92 * apoyo_mochila
+			waistP -= 0.5 * apoyo_mochila
+			pelvis_pitch -= 0.14 * apoyo_mochila
+			waistY += 0.26 * sin(k_mochila * PI)
 		waistP -= 0.22 * prep_k
 		# levantar una moto tirada: se agacha con la espalda recta y sube empujando con las piernas
 		var lev = L.get("levanta")
@@ -3257,7 +3270,7 @@ func update_rig(dt: float) -> void:
 		# mochila), la saca siguiendo un recorrido natural y la lleva a la posición de uso; al
 		# guardarla hace el camino inverso
 		var support_w := 1.0
-		var spot := Armas.holster(tool)
+		var spot := J.arsenal.anclaje_arma(tool)
 		var spot_part: Node3D = P.get(spot.get("Part", ""))
 		var D := Armas.draw(tool)
 		var holster_t = null
@@ -3735,7 +3748,7 @@ func update_rig(dt: float) -> void:
 			# ya cogido: sube con él hasta delante del pecho y luego lo lleva a su sitio en el cuerpo
 			var pecho := (chest_yaw_base * Rbx.cf(sgn_m * 0.45, -0.45, -0.85)).origin
 			var guardar := pecho
-			var spot := Armas.holster(String(rec.item.name))
+			var spot := J.arsenal.anclaje_arma(String(rec.item.name))
 			var parte: Node3D = P.get(spot.get("Part", ""))
 			if parte:
 				guardar = (parte.global_transform * (spot.CF as Transform3D)).origin
@@ -3756,6 +3769,13 @@ func update_rig(dt: float) -> void:
 			right_free = false
 		# la cabeza mira lo que coge
 		neckP -= 0.25 * rec_sq
+
+	if not cambio_mochila.is_empty():
+		var agarre: Transform3D = J.arsenal.mochila.global_transform
+		var peso := smoothstep(0.0, 0.14, p_mochila) * (1.0 - smoothstep(0.88, 1.0, p_mochila))
+		hand_ik.R = {"pos": agarre * Vector3(0.28, 0.44, 0.02), "pole": chest_yaw_base * Vector3(1.8, 0.12, -0.12), "w": peso}
+		hand_ik.L = {"pos": agarre * Vector3(-0.2, 0.2, -0.13), "pole": chest_yaw_base * Vector3(-1.4, -0.65, -0.48), "w": peso * smoothstep(0.40, 0.66, k_mochila)}
+		neckP -= 0.26 * peso * k_mochila
 
 	## ------------------------------------------------ cabeza
 	# sin arma, la cabeza sigue a la cámara

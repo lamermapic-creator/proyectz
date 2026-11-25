@@ -1,3 +1,8 @@
+## 2026-11-25 — Mochila y capacidad de transporte
+
+- La mochila original del superviviente se puede poner y quitar desde el inventario. Al dejarla en el suelo se puede recuperar de cerca con F. El gesto acompaña el objeto con las manos y flexiona las piernas al recogerlo o apoyarlo.
+- Sin mochila caben dos armas cortas de fuego y una larga. Con mochila se añade una segunda larga y un arma corta de combate. El excedente se deja en el suelo al quitarla.
+
 ## 2026-11-25 — HUD de armas
 
 - Retirada la barra inferior derecha de cuatro armas.
