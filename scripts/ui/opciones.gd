@@ -18,6 +18,9 @@ static func cargar() -> void:
 	if _cargado:
 		return
 	_cargado = true
+	if OS.has_feature("web"):
+		calidad = 0
+		pantalla_completa = false
 	var cf := ConfigFile.new()
 	if cf.load(RUTA) != OK:
 		return
@@ -46,11 +49,12 @@ static func guardar() -> void:
 static func aplicar(arbol: SceneTree) -> void:
 	cargar()
 	# en el editor no se toca el modo de ventana (el juego va incrustado)
-	if not OS.has_feature("editor"):
+	if not OS.has_feature("editor") and not OS.has_feature("web"):
 		var modo := DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN if pantalla_completa else DisplayServer.WINDOW_MODE_WINDOWED
 		if DisplayServer.window_get_mode() != modo:
 			DisplayServer.window_set_mode(modo)
-	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if vsync else DisplayServer.VSYNC_DISABLED)
+	if not OS.has_feature("web"):
+		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if vsync else DisplayServer.VSYNC_DISABLED)
 	AudioServer.set_bus_volume_db(0, linear_to_db(maxf(volumen, 0.0001)))
 	AudioServer.set_bus_mute(0, volumen <= 0.001)
 	aplicar_calidad(arbol)
@@ -71,7 +75,7 @@ static func aplicar_calidad(arbol: SceneTree) -> void:
 			vp.msaa_3d = Viewport.MSAA_4X
 			vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_DISABLED
 			vp.scaling_3d_scale = 1.0
-	RenderingServer.directional_shadow_atlas_set_size([2048, 4096, 8192][calidad], true)
+	RenderingServer.directional_shadow_atlas_set_size([1024, 2048, 4096][calidad] if OS.has_feature("web") else [2048, 4096, 8192][calidad], true)
 	var escena := arbol.current_scene
 	if escena == null:
 		return

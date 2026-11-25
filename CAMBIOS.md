@@ -1,3 +1,8 @@
+## 2026-11-25 — Versión web de Proyecto Z
+
+- Se añadió un perfil de exportación Web sin hilos y controles táctiles básicos para moverse, mirar, combatir, usar la rueda de armas y conducir.
+- La versión web comienza con calidad baja y usa mapas de sombras más pequeños.
+
 ## 2026-11-25 — Menú de trucos
 
 - F1 abre un panel adaptable con foco inicial y un botón para volver a la partida. Los destinos de teletransporte dependen del mapa y las acciones que requieren muñecos o un director de zombis se desactivan cuando el nivel carece de ellos.
