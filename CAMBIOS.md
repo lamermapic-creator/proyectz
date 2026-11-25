@@ -1,3 +1,7 @@
+## 2026-11-25 — Barrio del Canal
+
+- Jugar permite elegir entre la zona de pruebas y un barrio pequeño con dos calles que se cruzan, aceras, viviendas y una torre de agua.
+
 ## 2026-11-25 — Menos asignaciones en consultas de física
 
 - El jugador reutiliza los parámetros de rayos y esferas. Los zombis reutilizan la consulta de visibilidad y generan una sola vez la malla del cono de depuración.

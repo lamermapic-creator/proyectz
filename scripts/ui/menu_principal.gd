@@ -12,6 +12,7 @@ static func version_texto() -> String:
 	return "%s · prototipo" % str(ProjectSettings.get_setting("application/config/version", "?"))
 
 var _botones: VBoxContainer
+var _destinos := VBoxContainer.new()
 var _opciones: PanelOpciones
 var _controles: PanelContainer
 var _fundido: ColorRect
@@ -195,6 +196,13 @@ func _crear_ventanas() -> void:
 	var contenido := VBoxContainer.new()
 	contenido.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(contenido)
+	contenido.add_child(_destinos)
+	_destinos.add_theme_constant_override("separation", 16)
+	_destinos.add_child(EstiloUI.titulo("ELEGIR DESTINO", 38))
+	_destinos.add_child(EstiloUI.boton("Zona de pruebas", _cargar_destino.bind(JUEGO)))
+	_destinos.add_child(EstiloUI.boton("Barrio del Canal", _cargar_destino.bind("res://escenas/barrio_canal.tscn")))
+	_destinos.add_child(EstiloUI.boton("Volver", _volver))
+	_destinos.hide()
 	_opciones = PanelOpciones.new()
 	_opciones.ocultar_al_cerrar = false
 	contenido.add_child(_opciones)
@@ -257,6 +265,7 @@ func _abrir(panel: Control) -> void:
 	_ventanas.visible = true
 	_opciones.visible = false
 	_controles.visible = false
+	_destinos.hide()
 	if panel == _opciones:
 		_opciones.abrir()
 	else:
@@ -271,7 +280,7 @@ func _abrir(panel: Control) -> void:
 
 
 func _volver() -> void:
-	if _cerrando or not _ventanas.visible:
+	if _saliendo or _cerrando or not _ventanas.visible:
 		return
 	_cerrando = true
 	if _tween_panel != null and _tween_panel.is_valid():
@@ -300,7 +309,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 func _jugar() -> void:
-	_transicion(func(): PantallaCarga.ir_a(get_tree(), JUEGO))
+	_abrir(_destinos)
+
+func _cargar_destino(ruta: String) -> void:
+	_transicion(func(): PantallaCarga.ir_a(get_tree(), ruta))
 
 func _salir() -> void:
 	_transicion(func(): get_tree().quit())

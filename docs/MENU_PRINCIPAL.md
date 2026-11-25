@@ -36,11 +36,10 @@ usa `scripts/ui/menu_principal.gd`. No es necesario importar otra escena para ve
 
 ## Funciones y controles
 
-Se conservan Jugar, Opciones, Controles y Salir. Jugar utiliza `PantallaCarga` para entrar al nivel
-existente. Salir usa un fundido antes de cerrar. Las acciones se desactivan durante la transición
+Se conservan Jugar, Opciones, Controles y Salir. Jugar abre el selector de destino. Zona de pruebas y Barrio del Canal usan `PantallaCarga` para entrar al mapa elegido. Salir usa un fundido antes de cerrar. Las acciones se desactivan durante la transición
 para que pulsar Enter varias veces no duplique cargas.
 
-Ratón o flechas para navegar; Enter para seleccionar. Esc cierra Opciones/Controles y devuelve el
+Ratón o flechas para navegar; Enter para seleccionar. Esc cierra el selector de destino, Opciones o Controles y devuelve el
 foco a Jugar. Opciones reutiliza `PanelOpciones` y su guardado de preferencias. La lista de controles
 incluye las acciones actuales de cuerpo a cuerpo. La pausa y el tema compartido de otros menús no
 se rediseñaron: el tema nuevo se aplica localmente a la portada.

@@ -34,12 +34,16 @@ func _process(dt: float) -> void:
 	if _una("op", t > 2.5):
 		esc._abrir(esc._opciones)
 		print("MENU opciones abiertas")
+	if _una("cerrar_op", t > 3.5):
+		esc._volver()
 	if _una("ctl", t > 4.0):
-		esc._volver()
 		esc._abrir(esc._controles)
-	if _una("jugar", t > 5.5):
+	if _una("cerrar_ctl", t > 5.0):
 		esc._volver()
+	if _una("jugar", t > 5.5):
 		esc._jugar()
+	if _una("destino", t > 5.9):
+		esc._destinos.get_child(1).pressed.emit()
 	if _una("pausa", t > 8.5):
 		_key(KEY_ESCAPE)
 	if _una("pinfo", t > 9.0):

@@ -106,7 +106,11 @@ func probar() -> void:
 	await esperar(4)
 	jugar.grab_focus()
 	await tecla(KEY_ENTER)
-	comprobar(menu._saliendo and jugar.disabled, "Jugar inicia una única transición")
+	comprobar(menu._destinos.is_visible_in_tree(), "Jugar abre el selector de destino")
+	if "--barrio" in OS.get_cmdline_user_args():
+		await tecla(KEY_DOWN)
+	await tecla(KEY_ENTER)
+	comprobar(menu._saliendo and jugar.disabled, "Elegir destino inicia una única transición")
 	await tecla(KEY_ENTER)
 	var limite := Time.get_ticks_msec() + 15000
 	while Time.get_ticks_msec() < limite:
@@ -115,7 +119,7 @@ func probar() -> void:
 		await process_frame
 		# En headless los FPS fijos avanzan más rápido que el hilo real de carga.
 		OS.delay_msec(2)
-	comprobar(current_scene != null and current_scene.scene_file_path == "res://escenas/pruebas_movimiento.tscn", "Jugar llega al nivel")
+	comprobar(current_scene != null and current_scene.scene_file_path == ("res://escenas/barrio_canal.tscn" if "--barrio" in OS.get_cmdline_user_args() else "res://escenas/pruebas_movimiento.tscn"), "Jugar llega al destino elegido")
 	var cargas := root.get_children().filter(func(n): return n is PantallaCarga)
 	comprobar(cargas.size() <= 1, "Enter repetido no duplica la carga")
 	if tenia_config:
