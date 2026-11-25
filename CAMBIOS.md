@@ -1,3 +1,7 @@
+## 2026-11-25 — HUD de armas
+
+- Retirada la barra inferior derecha de cuatro armas.
+
 ## 2026-11-25 — Sectores de la rueda y efecto de cámara
 
 - Tab abre cuatro sectores separados. Se equipa con un clic en la rueda y el inventario muestra el equipo y la munición. La cámara lenta de la rueda añade desaturación, viñeta y desenfoque radial con entrada y salida suaves.

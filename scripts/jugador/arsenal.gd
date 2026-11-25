@@ -1831,58 +1831,12 @@ func _crear_hud() -> void:
 	Jugador._contorno(rh, 5)
 	capa.add_child(rh)
 	_hud.rest = rh
-	# huecos de arma (abajo a la derecha, encima del panel del arma). Solo se ven un momento al cambiar o coger
-	# un arma (antes estaban siempre en el centro, tapando los pies del personaje)
-	var barra := HBoxContainer.new()
-	barra.anchor_left = 1.0
-	barra.anchor_right = 1.0
-	barra.anchor_top = 1.0
-	barra.anchor_bottom = 1.0
-	barra.offset_left = -560
-	barra.offset_right = -28
-	barra.offset_top = -190
-	barra.offset_bottom = -160
-	barra.alignment = BoxContainer.ALIGNMENT_END
-	barra.add_theme_constant_override("separation", 6)
-	capa.add_child(barra)
-	_hud.barra = barra
-	_hud.huecos = []
-	for i in Armas.SLOTS.size():
-		var caja := PanelContainer.new()
-		caja.custom_minimum_size = Vector2(124, 30)
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0, 0, 0, 0.45)
-		sb.set_corner_radius_all(4)
-		sb.border_color = Color8(230, 200, 120)
-		caja.add_theme_stylebox_override("panel", sb)
-		var lab := Label.new()
-		lab.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		lab.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		lab.add_theme_font_size_override("font_size", 12)
-		Jugador._contorno(lab, 3)
-		caja.add_child(lab)
-		barra.add_child(caja)
-		_hud.huecos.append({"caja": caja, "sb": sb, "lab": lab})
 	_ignorar_raton(capa)
-
-
-var _barra_t := -99.0      # última vez que cambió el arma o el inventario (la barra de huecos se ve un rato)
-var _barra_firma := ""
 
 
 func _actualizar_hud() -> void:
 	var w := cfg()
 	var vivo := J.health > 0
-	# barra de huecos: visible 3 s después de cualquier cambio (o mientras se cambia de arma), luego se desvanece
-	var firma := equipado + str(inventario.keys()) + str(switching != null)
-	for k in inventario:
-		firma += str(inventario[k].name)
-	if firma != _barra_firma:
-		_barra_firma = firma
-		_barra_t = ahora()
-	var vis_b := clampf(1.0 - (ahora() - _barra_t - 3.0) / 0.6, 0.0, 1.0)
-	(_hud.barra as Control).modulate.a = vis_b
-	(_hud.barra as Control).visible = vis_b > 0.01
 	_hud.panel.visible = not w.is_empty()
 	_hud.rec.visible = recargando > 0.0
 	if not w.is_empty():
@@ -1939,12 +1893,3 @@ func _actualizar_hud() -> void:
 		_hud.rest.add_theme_color_override("font_color", Color8(235, 235, 235))
 	else:
 		_hud.rest.text = ""
-	# huecos
-	for i in Armas.SLOTS.size():
-		var ui: Dictionary = _hud.huecos[i]
-		var n := arma_en_hueco(Armas.SLOTS[i].Id)
-		(ui.lab as Label).text = Armas.WEAPONS[n].Tip if n != "" else "—"
-		var activa := n != "" and n == equipado
-		(ui.sb as StyleBoxFlat).set_border_width_all(2 if activa else 0)
-		(ui.sb as StyleBoxFlat).bg_color = Color(0, 0, 0, 0.7 if activa else 0.4)
-		(ui.lab as Label).modulate = Color8(230, 225, 215) if n != "" else Color8(110, 105, 100)
