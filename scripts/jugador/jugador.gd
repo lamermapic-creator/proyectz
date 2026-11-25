@@ -104,7 +104,6 @@ var prone_p := 0.0
 var eye_cur: float = C.STANCE[0].Eye
 var shake := 0.0
 var free_mouse := false
-var controles_tactiles := false
 var jump_prep_t := -9.0
 var slow_until := 0.0
 
@@ -143,8 +142,7 @@ func _ready() -> void:
 	motion_mode = MOTION_MODE_FLOATING
 	camara.top_level = true
 	yaw = rotation.y
-	controles_tactiles = OS.has_feature("web") and DisplayServer.is_touchscreen_available()
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if controles_tactiles else Input.MOUSE_MODE_CAPTURED
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	_crear_hud()
 	# capas: 1 = escenario, 2 = zonas de impacto de los muñecos (solo balas), 4 = cuerpos de los muñecos
 	collision_mask = 1 | 4
@@ -155,8 +153,6 @@ func _ready() -> void:
 	var pausa := MenuPausa.new()
 	pausa.name = "MenuPausa"
 	add_child(pausa)
-	if controles_tactiles:
-		add_child(preload("res://scripts/ui/controles_tactiles.gd").new())
 	# menú de trucos (F1), solo en desarrollo
 	if OS.is_debug_build():
 		var trucos := MenuTrucos.new()
@@ -395,7 +391,7 @@ func _unhandled_input(e: InputEvent) -> void:
 			# rueda: acercar / alejar la cámara (no cambia la distancia al apuntar)
 			var paso := -ZOOM_PASO if e.button_index == MOUSE_BUTTON_WHEEL_UP else ZOOM_PASO
 			zoom_cam = clampf(zoom_cam + paso, ZOOM_MIN, ZOOM_MAX)
-		elif e.button_index == MOUSE_BUTTON_LEFT and e.pressed and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED and not free_mouse and not controles_tactiles:
+		elif e.button_index == MOUSE_BUTTON_LEFT and e.pressed and Input.mouse_mode != Input.MOUSE_MODE_CAPTURED and not free_mouse:
 			Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 	elif e is InputEventKey and not e.echo:
 		var k: int = e.physical_keycode
@@ -1827,7 +1823,7 @@ func update_camera(dt: float) -> void:
 	var alive := health > 0
 	if _mouse_delta.length() > 0.0005:
 		_moto_raton_t = now_t
-	if alive and (Input.mouse_mode == Input.MOUSE_MODE_CAPTURED or controles_tactiles):
+	if alive and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
 		yaw -= _mouse_delta.x
 		pitch = clampf(pitch - _mouse_delta.y, -1.35, 1.2)
 		# tumbado boca abajo no puedes mirar muy arriba (si insistes, el personaje rueda boca arriba)

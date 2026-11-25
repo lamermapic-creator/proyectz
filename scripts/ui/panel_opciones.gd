@@ -26,9 +26,8 @@ func _ready() -> void:
 	_seccion("Vídeo")
 	_desplegable("Calidad gráfica", Opciones.CALIDADES, Opciones.calidad, func(i): Opciones.calidad = i)
 	_deslizador("Campo de visión", 60, 90, 1, Opciones.fov, func(v): Opciones.fov = v, func(v): return "%d°" % int(v))
-	if not OS.has_feature("web"):
-		_casilla("Pantalla completa", Opciones.pantalla_completa, func(v): Opciones.pantalla_completa = v)
-		_casilla("Sincronización vertical (VSync)", Opciones.vsync, func(v): Opciones.vsync = v)
+	_casilla("Pantalla completa", Opciones.pantalla_completa, func(v): Opciones.pantalla_completa = v)
+	_casilla("Sincronización vertical (VSync)", Opciones.vsync, func(v): Opciones.vsync = v)
 	_seccion("Audio")
 	_deslizador("Volumen general", 0, 1, 0.01, Opciones.volumen, func(v): Opciones.volumen = v, func(v): return "%d %%" % int(round(v * 100)))
 
