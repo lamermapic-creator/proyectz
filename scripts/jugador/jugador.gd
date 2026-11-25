@@ -171,9 +171,19 @@ func _ready() -> void:
 
 
 ## ---------------------------------------------------------------- utilidades de física
+var _consulta_rayo := PhysicsRayQueryParameters3D.new()
+var _consulta_esfera := PhysicsShapeQueryParameters3D.new()
+var _esferas_consulta: Dictionary[float, SphereShape3D] = {}
+
+
 func raycast(desde: Vector3, dir: Vector3, excluir_extra: Array = []) -> Dictionary:
-	var q := PhysicsRayQueryParameters3D.create(desde, desde + dir, 1)
-	q.exclude = _excluir() + excluir_extra
+	var q := _consulta_rayo
+	q.from = desde
+	q.to = desde + dir
+	q.collision_mask = 1
+	var exclusiones := _excluir()
+	exclusiones.append_array(excluir_extra)
+	q.exclude = exclusiones
 	var r := get_world_3d().direct_space_state.intersect_ray(q)
 	if r.is_empty():
 		return {}
@@ -181,28 +191,31 @@ func raycast(desde: Vector3, dir: Vector3, excluir_extra: Array = []) -> Diction
 	return r
 
 
-## ¿una esfera en ese punto toca el escenario?
-func _esfera_choca(p: Vector3, radio: float) -> bool:
-	var sh := SphereShape3D.new()
-	sh.radius = radio
-	var q := PhysicsShapeQueryParameters3D.new()
-	q.shape = sh
+func _preparar_consulta_esfera(p: Vector3, radio: float, movimiento: Vector3) -> PhysicsShapeQueryParameters3D:
+	var esfera := _esferas_consulta.get(radio) as SphereShape3D
+	if esfera == null:
+		esfera = SphereShape3D.new()
+		esfera.radius = radio
+		if _esferas_consulta.size() < 8:
+			_esferas_consulta[radio] = esfera
+	var q := _consulta_esfera
+	q.shape = esfera
 	q.transform = Transform3D(Basis.IDENTITY, p)
+	q.motion = movimiento
 	q.collision_mask = 1
 	q.exclude = _excluir()
+	return q
+
+
+## ¿una esfera en ese punto toca el escenario?
+func _esfera_choca(p: Vector3, radio: float) -> bool:
+	var q := _preparar_consulta_esfera(p, radio, Vector3.ZERO)
 	return not get_world_3d().direct_space_state.intersect_shape(q, 1).is_empty()
 
 
 ## workspace:Spherecast: devuelve la distancia recorrida hasta chocar (o -1 si no choca)
 func spherecast(desde: Vector3, radio: float, dir: Vector3) -> float:
-	var sh := SphereShape3D.new()
-	sh.radius = radio
-	var q := PhysicsShapeQueryParameters3D.new()
-	q.shape = sh
-	q.transform = Transform3D(Basis.IDENTITY, desde)
-	q.motion = dir
-	q.collision_mask = 1
-	q.exclude = _excluir()
+	var q := _preparar_consulta_esfera(desde, radio, dir)
 	var space := get_world_3d().direct_space_state
 	if not space.intersect_shape(q, 1).is_empty():
 		return 0.0

@@ -1,3 +1,8 @@
+## 2026-11-25 — Menos asignaciones en consultas de física
+
+- El jugador reutiliza los parámetros de rayos y esferas. Los zombis reutilizan la consulta de visibilidad y generan una sola vez la malla del cono de depuración.
+- En Godot 4.7.2 sin ventana, la mediana de siete lotes de 20 000 rayos y 20 000 barridos de esfera pasó de 438 a 419 ms. Los dos ensayos detectaron las mismas 280 000 colisiones.
+
 ## 2026-11-25 — Paso fijo del jugador y la moto
 
 - El movimiento del jugador y la moto se resuelve junto a Jolt en el paso fijo de física. La cámara y el HUD se siguen actualizando por fotograma. La prueba de movimiento recorrió 8,2609 studs en dos segundos a 30, 60 y 120 FPS.

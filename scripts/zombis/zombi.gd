@@ -358,6 +358,17 @@ func _sentir_contacto() -> void:
 		_percibir(j.global_position, 1.0, true)
 
 
+var _consulta_visibilidad := PhysicsRayQueryParameters3D.new()
+
+
+func _rayo_visibilidad(ojos: Vector3, excluir: Array[RID]) -> PhysicsRayQueryParameters3D:
+	var q := _consulta_visibilidad
+	q.from = ojos
+	q.collision_mask = 1
+	q.exclude = excluir
+	return q
+
+
 ## ¿hay camino libre para las manos (y la nariz) hasta el jugador? Los mismos rayos que la vista (cabeza, pecho y
 ## cadera, contra el escenario, capa 1): con una pared en medio ni lo nota por contacto ni le puede pegar; por
 ## encima de una barrera baja sí (basta con que una de las tres partes quede a tiro).
@@ -366,8 +377,8 @@ func _alcanzable(j: Node3D) -> bool:
 	var ojos := global_position + Vector3(0, 2.0, 0)
 	if j.get("rig") == null:
 		# blanco sin muñeco: un solo rayo a su centro
-		var q := PhysicsRayQueryParameters3D.create(ojos, j.global_position, 1)
-		q.exclude = _no_tapan(j)
+		var q := _rayo_visibilidad(ojos, _no_tapan(j))
+		q.to = j.global_position
 		return get_world_3d().direct_space_state.intersect_ray(q).is_empty()
 	return _fraccion_visible(j, ojos) > 0.0
 
@@ -451,15 +462,14 @@ func _fraccion_visible(j: Node3D, ojos: Vector3) -> float:
 	if r == null:
 		return 0.0
 	var piezas: Dictionary = r.P
-	var excluir := _no_tapan(j)
+	var q := _rayo_visibilidad(ojos, _no_tapan(j))
 	var espacio := get_world_3d().direct_space_state
 	var vistas := 0
 	for n in ["Head", "UpperTorso", "LowerTorso"]:
 		var nd: Node3D = piezas.get(n)
 		if nd == null:
 			continue
-		var q := PhysicsRayQueryParameters3D.create(ojos, nd.global_position, 1)
-		q.exclude = excluir
+		q.to = nd.global_position
 		if espacio.intersect_ray(q).is_empty():
 			vistas += 1
 	return vistas / 3.0
@@ -1166,26 +1176,20 @@ func _dibujar_cono() -> void:
 			_cono.visible = false
 		return
 	if _cono == null:
-		_cono = MeshInstance3D.new()
-		_cono.mesh = ImmediateMesh.new()
-		_cono.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		var m := StandardMaterial3D.new()
-		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		m.vertex_color_use_as_albedo = true
-		m.no_depth_test = true
-		_cono.material_override = m
-		_cono.position = Vector3(0, 2.0, 0)
-		add_child(_cono)
+		_crear_cono()
 	_cono.visible = true
-	var im := _cono.mesh as ImmediateMesh
-	im.clear_surfaces()
-	im.surface_begin(Mesh.PRIMITIVE_LINES)
-	im.surface_set_color(Color(1.0, 1.0 - sospecha, 0.2 * (1.0 - sospecha)))
 	var alcance := float(C.ZOMBI.VistaAlcance) * (1.0 + 0.3 * alerta)
+	_cono.scale = Vector3(alcance, 1.0, alcance)
+	(_cono.material_override as StandardMaterial3D).albedo_color = Color(1.0, 1.0 - sospecha, 0.2 * (1.0 - sospecha))
+
+
+func _crear_cono() -> void:
+	var im := ImmediateMesh.new()
+	im.surface_begin(Mesh.PRIMITIVE_LINES)
 	var a := deg_to_rad(float(C.ZOMBI.VistaAngulo))
 	var previo := Vector3.ZERO
 	for i in 13:
-		var p := Vector3(0, 0, -alcance).rotated(Vector3.UP, lerpf(-a, a, i / 12.0))
+		var p := Vector3.FORWARD.rotated(Vector3.UP, lerpf(-a, a, i / 12.0))
 		if i == 0 or i == 12:
 			im.surface_add_vertex(Vector3.ZERO)
 			im.surface_add_vertex(p)
@@ -1194,6 +1198,15 @@ func _dibujar_cono() -> void:
 			im.surface_add_vertex(p)
 		previo = p
 	im.surface_end()
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.no_depth_test = true
+	_cono = MeshInstance3D.new()
+	_cono.mesh = im
+	_cono.material_override = material
+	_cono.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_cono.position = Vector3(0, 2.0, 0)
+	add_child(_cono)
 
 
 ## ---------------------------------------------------------------- utilidades
