@@ -45,5 +45,15 @@ func _probar() -> void:
 	assert(a.arma_en_hueco("BlancaLarga") == "Rifle")
 	a.select_slot(1)
 	assert(a.equipado == "Escopeta" and a.datos_equipado().mag == 3)
+	a.inventario.erase("Corta2")
+	a.dar_arma("Revolver", true)
+	var muslo: Node3D = j.rig.P.LeftUpperLeg
+	var funda := muslo.get_node("FundaIzquierda") as Node3D
+	assert(a.enfundadas.Revolver.get_parent() == muslo)
+	assert(funda.transform.is_equal_approx(a.enfundadas.Revolver.transform))
+	a._equipar("Revolver")
+	a.mostrar(true)
+	assert(not a.enfundadas.Revolver.visible)
+	assert(funda.visible)
 	print("Mochila original, límites, anclajes, dejar y recoger, y munición verificados")
 	quit()

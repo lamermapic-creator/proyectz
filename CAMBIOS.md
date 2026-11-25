@@ -1,3 +1,7 @@
+## Funda para la segunda arma corta
+
+- El superviviente lleva una funda visible en el muslo izquierdo. La pistola o el revólver de la segunda ranura usan ese mismo punto para guardarse y desenfundarse.
+
 ## 2026-11-25 — Ampliación de Barrio del Canal
 
 - El barrio ocupa 288 × 336 studs, unas tres veces la superficie inicial. Las calles rodean manzanas con talleres, arbolado y bancos. Las cuatro casas tienen puertas abiertas, dormitorio y cocina-comedor amueblados.

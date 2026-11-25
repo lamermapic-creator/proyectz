@@ -44,6 +44,7 @@ var mochila_puesta := true
 var mochila: Node3D
 var cambio_mochila := {}
 const TIEMPO_MOCHILA := 1.75
+const POS_FUNDA_IZQUIERDA := Vector3(-0.45, 0.45, 0.16)
 const CENTRO_MOCHILA := Vector3(0, 0, 0.65)
 var impacto := ImpactoCC.new(self)   # sensación de impacto y ajuste del cuerpo al blanco (scripts/jugador/impacto_cc.gd)
 
@@ -57,6 +58,7 @@ func _ready() -> void:
 	J = get_parent() as Jugador
 	anim = J.get_node("Animador") as Animador
 	_separar_mochila()
+	_crear_funda_izquierda()
 	for nombre in Armas.LOADOUT:
 		dar_arma(nombre, false)
 	_crear_hud()
@@ -284,6 +286,32 @@ func _hueco_destino(nombre: String) -> String:
 	return huecos[0]
 
 
+func _anclaje_funda_izquierda() -> Transform3D:
+	return Armas.at(POS_FUNDA_IZQUIERDA, Vector3.DOWN, Vector3.FORWARD)
+
+
+func _crear_funda_izquierda() -> void:
+	var funda := Node3D.new()
+	funda.name = "FundaIzquierda"
+	(J.rig.P.LeftUpperLeg as Node3D).add_child(funda)
+	funda.transform = _anclaje_funda_izquierda()
+	var cuero := Armas.material(Color8(52, 42, 34), "Leather")
+	var correa := Armas.material(Color8(91, 77, 60), "Fabric")
+	for pieza in [
+		[Vector3(-0.205, 0.28, -0.43), Vector3(0.09, 0.51, 0.73), cuero],
+		[Vector3(0.16, 0.28, -0.43), Vector3(0.07, 0.51, 0.73), cuero],
+		[Vector3(-0.02, 0.52, -0.43), Vector3(0.38, 0.07, 0.73), cuero],
+		[Vector3(0.41, 0.16, -0.49), Vector3(0.57, 0.64, 0.15), correa],
+	]:
+		var malla := BoxMesh.new()
+		malla.size = pieza[1]
+		malla.material = pieza[2]
+		var nodo := MeshInstance3D.new()
+		nodo.mesh = malla
+		nodo.position = pieza[0]
+		funda.add_child(nodo)
+
+
 func anclaje_arma(nombre: String) -> Dictionary:
 	var spot := Armas.holster(nombre)
 	var hueco := _hueco_de(nombre)
@@ -297,7 +325,7 @@ func anclaje_arma(nombre: String) -> Dictionary:
 		if nombre == "Subfusil":
 			spot.CF = Armas.at(Vector3(-0.51, -0.43, -0.70), Vector3(0.37, -1, 0), Vector3.FORWARD)
 		else:
-			return {"Part": "LeftUpperLeg", "CF": Armas.at(Vector3(-0.33, 0.45, 0.28), Vector3.DOWN, Vector3.FORWARD)}
+			return {"Part": "LeftUpperLeg", "CF": _anclaje_funda_izquierda()}
 	elif hueco in ["Larga", "BlancaLarga"]:
 		spot.CF = _anclaje_larga(nombre, hueco, mochila_puesta)
 	return spot
