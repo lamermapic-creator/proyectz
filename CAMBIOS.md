@@ -1,3 +1,7 @@
+## 2026-11-25 — Ranuras por tamaño de arma
+
+- Las armas de fuego y de combate comparten las ranuras según su tamaño. Sin mochila caben dos cortas y una larga. Con mochila caben tres cortas y dos largas.
+
 ## 2026-11-25 — Mochila y capacidad de transporte
 
 - La mochila original del superviviente se puede poner y quitar desde el inventario. Al dejarla en el suelo se puede recuperar de cerca con F. El gesto acompaña el objeto con las manos y flexiona las piernas al recogerlo o apoyarlo.

@@ -111,8 +111,6 @@ func datos_equipado() -> Dictionary:
 func dar_arma(nombre: String, soltar_vieja: bool, mag := -1, reserve := -1) -> void:
 	var w: Dictionary = Armas.WEAPONS[nombre]
 	var hueco := _hueco_destino(nombre)
-	if hueco.is_empty():
-		return
 	var vieja = inventario.get(hueco)
 	if vieja != null:
 		if equipado == vieja.name:
@@ -175,13 +173,13 @@ func _correas_mochila(visibles: bool) -> void:
 
 
 func _bajar_capacidad() -> void:
-	var sobrantes: Array[String] = ["BlancaCorta"]
+	var sobrantes: Array[String] = ["Corta3"]
 	if inventario.has("Larga") and inventario.has("BlancaLarga"):
 		sobrantes.append("BlancaLarga")
 	var piso: Transform3D = cambio_mochila.suelo
 	for hueco in sobrantes:
 		if inventario.has(hueco):
-			var lado := -0.72 if hueco == "BlancaCorta" else 0.72
+			var lado := -0.72 if hueco == "Corta3" else 0.72
 			var p := piso * Vector3(lado, -0.77, 0.42)
 			var g := J.raycast(p + Vector3.UP, Vector3.DOWN * 3.0)
 			soltar_en_suelo(inventario[hueco], g.position if not g.is_empty() else p, J.rotation.y)
@@ -257,15 +255,10 @@ func _hueco_destino(nombre: String) -> String:
 	if not existente.is_empty():
 		return existente
 	var categoria: String = Armas.WEAPONS[nombre].Slot
-	if categoria == "BlancaCorta":
-		return categoria if mochila_puesta else ""
-	var huecos := ["Corta", "Corta2"] if categoria == "Corta" else ["Larga", "BlancaLarga"]
-	if categoria == "BlancaLarga" and mochila_puesta:
-		huecos.reverse()
-	if categoria != "Corta" and not mochila_puesta:
-		for hueco in huecos:
-			if inventario.has(hueco):
-				return hueco
+	var corta := categoria in ["Corta", "BlancaCorta"]
+	var huecos := ["Corta", "Corta2"] if corta else ["Larga"]
+	if mochila_puesta:
+		huecos.append("Corta3" if corta else "BlancaLarga")
 	for hueco in huecos:
 		if not inventario.has(hueco):
 			return hueco
@@ -277,6 +270,10 @@ func anclaje_arma(nombre: String) -> Dictionary:
 	var hueco := _hueco_de(nombre)
 	if hueco.is_empty():
 		hueco = _hueco_destino(nombre)
+	if nombre == "Cuchillo":
+		return spot
+	if hueco == "Corta3":
+		return {"Part": "UpperTorso", "CF": Armas.at(Vector3(0.47, -0.23, -0.67), Vector3(0.16, -1, 0), Vector3.FORWARD)}
 	if hueco == "Corta2":
 		if nombre == "Subfusil":
 			spot.CF = Armas.at(Vector3(-0.51, -0.43, -0.70), Vector3(0.37, -1, 0), Vector3.FORWARD)
@@ -517,9 +514,6 @@ func dirigir() -> void:
 
 
 func _empezar_recoger(item: Dictionary) -> void:
-	if _hueco_destino(item.name).is_empty():
-		J.notify("Necesitas la mochila para llevar un arma corta de combate")
-		return
 	# con un arma en la mano derecha se coge con la izquierda
 	var mano := "L" if (armado() and switching == null) else "R"
 	recogiendo = {"t0": ahora(), "dur": RECOGER_DUR_TUMBADO if J.stance == 2 else RECOGER_DUR, "item": item,

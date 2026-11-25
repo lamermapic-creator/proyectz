@@ -106,7 +106,7 @@ func _mostrar(rueda: bool) -> void:
 		pila.add_child(capacidad)
 		for i in Armas.SLOTS.size():
 			var id: String = Armas.SLOTS[i].Id
-			if not arsenal.mochila_puesta and (id == "BlancaCorta" or id == "BlancaLarga"):
+			if not arsenal.mochila_puesta and id in ["Corta3", "BlancaLarga"]:
 				continue
 			var fila := Label.new()
 			fila.text = _texto_hueco(i, true)
