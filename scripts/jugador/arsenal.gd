@@ -53,6 +53,9 @@ func _ready() -> void:
 	for nombre in Armas.LOADOUT:
 		dar_arma(nombre, false)
 	_crear_hud()
+	var interfaz := preload("res://scripts/ui/inventario_armas.gd").new()
+	interfaz.arsenal = self
+	add_child(interfaz)
 	# un machete en el suelo cerca del punto de partida (arma blanca larga: si lo coges, sueltas el bate)
 	call_deferred("_soltar_inicial")
 

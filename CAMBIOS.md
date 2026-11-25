@@ -1,3 +1,7 @@
+## 2026-11-25 — Rueda de armas e inventario 0.6V
+
+- Tab abre la rueda y I muestra las cuatro ranuras del inventario con el arma equipada y la munición cargada y de reserva. Ambas pantallas pausan la partida y permiten seleccionar con clic o con 1–4.
+
 ## 2026-11-24 — Iluminación y materiales del menú 0.6V
 
 La mesa del menú recibe luz fría de la ventana y luz cálida de la lámpara. La madera muestra nudos y anillos, la sangre tiene un centro húmedo y el cuaderno lleva una cubierta de registro de guardia.
