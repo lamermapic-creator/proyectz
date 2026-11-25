@@ -1,3 +1,7 @@
+## 2026-11-25 — Menú de trucos
+
+- F1 abre un panel adaptable con foco inicial y un botón para volver a la partida. Los destinos de teletransporte dependen del mapa y las acciones que requieren muñecos o un director de zombis se desactivan cuando el nivel carece de ellos.
+
 ## Funda para la segunda arma corta
 
 - El superviviente lleva una funda visible en el muslo izquierdo. La pistola o el revólver de la segunda ranura usan ese mismo punto para guardarse y desenfundarse.

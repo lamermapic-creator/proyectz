@@ -23,7 +23,17 @@ const ZONAS := [
 	["Zona de motos (rampas y muro)", Vector3(6, 0, -27), 0.0],
 ]
 
+## Destinos del barrio en studs.
+const ZONAS_BARRIO := [
+	["Entrada sur", Vector3(0, 0, 74), 0.0],
+	["Cruce central", Vector3.ZERO, 0.0],
+	["Entrada norte", Vector3(0, 0, -140), 180.0],
+]
+
 var J: Jugador
+var _panel: PanelContainer
+var _boton_zombi: Button
+var _rejillas: Array[GridContainer] = []
 var _raiz: Control
 var _checks := {}
 var _abierto := false
@@ -43,16 +53,17 @@ func _ready() -> void:
 	velo.color = Color(0, 0, 0, 0.35)
 	velo.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_raiz.add_child(velo)
-	var panel := PanelContainer.new()
-	panel.anchor_bottom = 1.0
-	panel.offset_left = 24
-	panel.offset_top = 24
-	panel.offset_right = 24 + 700
-	panel.offset_bottom = -24
-	_raiz.add_child(panel)
+	_panel = PanelContainer.new()
+	_panel.anchor_bottom = 1.0
+	_panel.offset_left = 24
+	_panel.offset_top = 24
+	_panel.offset_right = 24 + 700
+	_panel.offset_bottom = -24
+	_raiz.add_child(_panel)
 	var scroll := ScrollContainer.new()
+	scroll.follow_focus = true
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	panel.add_child(scroll)
+	_panel.add_child(scroll)
 	var v := VBoxContainer.new()
 	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	v.add_theme_constant_override("separation", 6)
@@ -63,6 +74,8 @@ func _ready() -> void:
 	sub.add_theme_color_override("font_color", EstiloUI.TEXTO_SUAVE)
 	sub.add_theme_font_size_override("font_size", 14)
 	v.add_child(sub)
+
+	_accion(v, "Volver a la partida", cerrar)
 
 	_seccion(v, "Interruptores")
 	var g1 := _rejilla(v)
@@ -107,19 +120,37 @@ func _ready() -> void:
 
 	_seccion(v, "Mundo")
 	var g4 := _rejilla(v)
-	_accion(g4, "Revivir los muñecos", _revivir_munecos)
-	_accion(g4, "Zombi delante", _zombi_delante)
+	_accion(g4, "Revivir los muñecos", _revivir_munecos).disabled = not J.get_parent().has_method("_crear_maniquies")
+	_boton_zombi = _accion(g4, "Zombi delante", _zombi_delante)
 	_accion(g4, "Moto delante", _moto_delante)
 	_accion(g4, "Levantar las motos caídas", func():
 		for m in J.get_tree().get_nodes_in_group(Moto.GRUPO):
 			(m as Moto).levantar())
 
-	_seccion(v, "Ir a…")
-	var g5 := _rejilla(v)
-	for z in ZONAS:
-		var zona: Array = z
-		_accion(g5, zona[0], func():
-			J.teletransportar(zona[1] * M, deg_to_rad(zona[2]))
+	var ruta := J.get_parent().scene_file_path
+	if ruta == "res://escenas/barrio_canal.tscn":
+		_agregar_destinos(v, ZONAS_BARRIO, 1.0)
+	elif ruta == "res://escenas/pruebas_movimiento.tscn":
+		_agregar_destinos(v, ZONAS, M)
+	get_viewport().size_changed.connect(_ajustar_panel)
+	_ajustar_panel()
+
+
+func _ajustar_panel() -> void:
+	var ancho := get_viewport().get_visible_rect().size.x
+	_panel.offset_right = minf(724.0, ancho - 24.0)
+	for rejilla in _rejillas:
+		rejilla.columns = 2 if ancho >= 715.0 else 1
+
+
+func _agregar_destinos(padre: Control, destinos: Array, escala: float) -> void:
+	_seccion(padre, "Ir a…")
+	var rejilla := _rejilla(padre)
+	for zona: Array in destinos:
+		var pies: Vector3 = zona[1] * escala
+		var giro := deg_to_rad(zona[2])
+		_accion(rejilla, zona[0], func():
+			J.teletransportar(pies, giro)
 			cerrar())
 
 
@@ -136,6 +167,7 @@ func _seccion(padre: Control, txt: String) -> void:
 
 func _rejilla(padre: Control) -> GridContainer:
 	var g := GridContainer.new()
+	_rejillas.append(g)
 	g.columns = 2
 	g.add_theme_constant_override("h_separation", 8)
 	g.add_theme_constant_override("v_separation", 6)
@@ -143,19 +175,19 @@ func _rejilla(padre: Control) -> GridContainer:
 	return g
 
 
-func _accion(padre: Control, txt: String, f: Callable) -> void:
-	var b := EstiloUI.boton(txt, func():
-		f.call()
-		J.notify(txt))
-	b.custom_minimum_size = Vector2(320, 38)
+func _accion(padre: Control, txt: String, f: Callable) -> Button:
+	var b := EstiloUI.boton(txt, f)
+	b.custom_minimum_size = Vector2(0, 38)
+	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	b.add_theme_font_size_override("font_size", 16)
 	padre.add_child(b)
+	return b
 
 
 func _check(padre: Control, id: String, txt: String, f: Callable) -> void:
 	var c := CheckBox.new()
 	c.text = txt
-	c.custom_minimum_size = Vector2(320, 34)
+	c.custom_minimum_size = Vector2(0, 34)
 	c.toggled.connect(func(on: bool): f.call(on))
 	padre.add_child(c)
 	_checks[id] = c
@@ -176,14 +208,16 @@ func abierto() -> bool:
 
 
 func abrir() -> void:
-	if _abierto:
+	if _abierto or get_tree().paused or J.arsenal.interfaz.abierto():
 		return
 	_abierto = true
 	_raton_antes = Input.mouse_mode
 	_refrescar()
+	_boton_zombi.disabled = not J.get_parent().has_node("Zombis")
 	_raiz.visible = true
 	get_tree().paused = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	(_raiz.find_children("*", "Button", true, false)[0] as Button).grab_focus()
 
 
 func cerrar() -> void:
@@ -192,18 +226,18 @@ func cerrar() -> void:
 	_abierto = false
 	_raiz.visible = false
 	get_tree().paused = false
-	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+	Input.mouse_mode = _raton_antes
 
 
 func _input(e: InputEvent) -> void:
 	if not (e is InputEventKey) or not e.pressed or e.echo:
 		return
-	var k: int = (e as InputEventKey).physical_keycode
+	var k: int = e.physical_keycode if e.physical_keycode != 0 else e.keycode
 	if k == KEY_F1:
 		get_viewport().set_input_as_handled()
 		if _abierto:
 			cerrar()
-		elif not get_tree().paused and not J.arsenal.interfaz.abierto():
+		else:
 			abrir()
 	elif k == KEY_ESCAPE and _abierto:
 		get_viewport().set_input_as_handled()
