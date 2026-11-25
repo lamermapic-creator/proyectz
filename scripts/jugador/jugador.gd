@@ -265,7 +265,7 @@ func _crear_hud() -> void:
 	capa.add_child(aviso)
 	_hud["aviso"] = aviso
 	var ayuda := Label.new()
-	ayuda.text = "1-4: armas · Clic der: apuntar (arma de fuego) / guardia (arma blanca o sin arma) · Clic izq: disparar/golpear (sin arma: puñetazos) · Clic der + Espacio: bloquear (a tiempo: parada) · Clic der + doble Espacio: empujón · G: patada (en el suelo: pisotón) · R: recargar · X: apoyar arma · F: recoger / subir a la moto · Shift: correr (tumbado: levantarse y correr) · C: agacharse · Z: cuerpo a tierra (corriendo: rápido) · Espacio: saltar/sortear · Q/E: asomarse · V: hombro · H: esta ayuda · Rueda: acercar/alejar cámara · Colgado: A/D moverse (Shift: rápido), Espacio subir, S soltarse · Esc: pausa" + (" · F1: trucos · F4: estamina infinita · F5: balas infinitas · F6: ver ruido · F7: zombis sordos · F8: zombis ciegos" if OS.is_debug_build() else "")
+	ayuda.text = "Tab: rueda de armas · I: inventario · Clic der: apuntar (arma de fuego) / guardia (arma blanca o sin arma) · Clic izq: disparar/golpear (sin arma: puñetazos) · Clic der + Espacio: bloquear (a tiempo: parada) · Clic der + doble Espacio: empujón · G: patada (en el suelo: pisotón) · R: recargar · X: apoyar arma · F: recoger / subir a la moto · Shift: correr (tumbado: levantarse y correr) · C: agacharse · Z: cuerpo a tierra (corriendo: rápido) · Espacio: saltar/sortear · Q/E: asomarse · V: hombro · H: esta ayuda · Rueda: acercar/alejar cámara · Colgado: A/D moverse (Shift: rápido), Espacio subir, S soltarse · Esc: pausa" + (" · F1: trucos · F4: estamina infinita · F5: balas infinitas · F6: ver ruido · F7: zombis sordos · F8: zombis ciegos" if OS.is_debug_build() else "")
 	# ayuda de controles: oculta (H la muestra/oculta), en un recuadro que no se sale de la pantalla
 	ayuda.add_theme_font_size_override("font_size", 15)
 	ayuda.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -345,7 +345,7 @@ func _update_hud() -> void:
 		var kmh := absf(moto.velocidad()) * C.STUD * 3.6
 		var m_txt := "R" if moto.velocidad() < -0.5 else str(moto.marcha)
 		velo.text = "%d km/h\n%sª%s" % [roundi(kmh), m_txt, " · luces" if moto.luces else ""]
-		_hud["ayuda"].text = "W: gas · S: freno / marcha atrás · A/D: girar · Espacio: freno de mano (derrapar) · En el aire: Shift/Ctrl inclinarse · Clic der: apuntar · Clic izq: disparar/golpear · 1-4: armas de una mano · F: bajarse (en marcha, saltar) · L: luces · V: hombro · H: esta ayuda · Esc: pausa"
+		_hud["ayuda"].text = "W: gas · S: freno / marcha atrás · A/D: girar · Espacio: freno de mano (derrapar) · En el aire: Shift/Ctrl inclinarse · Clic der: apuntar · Clic izq: disparar/golpear · Tab: rueda de armas de una mano · F: bajarse (en marcha, saltar) · L: luces · V: hombro · H: esta ayuda · Esc: pausa"
 	else:
 		_hud["ayuda"].text = _hud["ayuda_pie"]
 

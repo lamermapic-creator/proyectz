@@ -117,6 +117,7 @@ Base de código verificada: `2f0e2282ad3cbe51ca1d99cc3307e8d4a60c523b` (main al 
 
 - `scripts/jugador/arsenal.gd`: inventario, disparo, recarga, guardia y cuerpo a cuerpo.
 - `scripts/ui/inventario_armas.gd` muestra la rueda (Tab) y el inventario (I) con los datos del Arsenal y reduce el tiempo de juego al 20 % mientras están abiertos.
+- `scripts/ui/efecto_rueda.gdshader` aplica el filtro de cámara lenta al abrir la rueda.
 - `scripts/armas/armas.gd`, `modelos_armas.gd` y resto de `scripts/armas/`: datos, modelos y efectos.
 - `Armas.grip()`: referencia por empuñadura; apoyo izquierdo con posición y orientación IK.
   `tests/agarre_armas.gd` comprueba el contacto de las manos.

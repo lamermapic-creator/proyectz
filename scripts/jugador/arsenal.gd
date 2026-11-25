@@ -1,7 +1,7 @@
 class_name Arsenal
 extends Node
 ## Armas del jugador (port de la parte de armas de ZClient + WeaponServer + InventoryServer):
-## · 4 huecos (1-4): arma corta, arma larga, blanca corta, blanca larga. Cargamento inicial:
+## · 4 huecos: arma corta, arma larga, blanca corta, blanca larga. Cargamento inicial:
 ##   pistola, rifle, cuchillo y bate. Las que no están en la mano se ven en el cuerpo.
 ## · Cambiar de arma: se guarda la de la mano (0.42 s) y se saca la otra (tiempo de desenfundar).
 ## · Disparar (clic izq.), apuntar (clic der.), recargar (R), apoyar el arma (X), golpear con armas
@@ -218,7 +218,7 @@ func sacar_tras_trepar() -> void:
 			return
 
 
-## teclas 1-4: guardar la de la mano y sacar la otra (o guardar si es la misma)
+## Rueda de armas: guardar la de la mano y sacar la otra (o guardar si es la misma)
 ## guardar el arma de golpe (colgarse de una cornisa: hacen falta las dos manos)
 func guardar_ya() -> void:
 	if armado() or switching != null:
@@ -397,10 +397,6 @@ func _unhandled_input(e: InputEvent) -> void:
 			J.firing = false
 	elif e is InputEventKey and e.pressed and not e.echo:
 		match e.physical_keycode:
-			KEY_1: select_slot(0)
-			KEY_2: select_slot(1)
-			KEY_3: select_slot(2)
-			KEY_4: select_slot(3)
 			KEY_R: reload()
 			KEY_X: set_rest(rest == null)
 			KEY_G: patada()
@@ -1947,7 +1943,7 @@ func _actualizar_hud() -> void:
 	for i in Armas.SLOTS.size():
 		var ui: Dictionary = _hud.huecos[i]
 		var n := arma_en_hueco(Armas.SLOTS[i].Id)
-		(ui.lab as Label).text = "%d  %s" % [i + 1, Armas.WEAPONS[n].Tip if n != "" else "—"]
+		(ui.lab as Label).text = Armas.WEAPONS[n].Tip if n != "" else "—"
 		var activa := n != "" and n == equipado
 		(ui.sb as StyleBoxFlat).set_border_width_all(2 if activa else 0)
 		(ui.sb as StyleBoxFlat).bg_color = Color(0, 0, 0, 0.7 if activa else 0.4)

@@ -1,10 +1,14 @@
+## 2026-11-25 — Sectores de la rueda y efecto de cámara
+
+- Tab abre cuatro sectores separados. Se equipa con un clic en la rueda y el inventario muestra el equipo y la munición. La cámara lenta de la rueda añade desaturación, viñeta y desenfoque radial con entrada y salida suaves.
+
 ## 2026-11-25 — Cámara lenta en el inventario
 
 - La rueda de armas y el inventario reducen la velocidad de la partida y del audio al 20 % mientras están abiertos. Al cerrar recuperan la velocidad previa.
 
 ## 2026-11-25 — Rueda de armas e inventario 0.6V
 
-- Tab abre la rueda y I muestra las cuatro ranuras del inventario con el arma equipada y la munición cargada y de reserva. Ambas pantallas permiten seleccionar con clic o con 1–4.
+- Tab abre la rueda y I muestra las cuatro ranuras del inventario con el arma equipada y la munición cargada y de reserva. Ambas pantallas permitían seleccionar con clic o con 1–4.
 
 ## 2026-11-24 — Iluminación y materiales del menú 0.6V
 

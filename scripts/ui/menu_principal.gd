@@ -216,7 +216,7 @@ func _panel_controles() -> PanelContainer:
 		["WASD / Shift", "Moverse / correr"], ["Espacio", "Saltar, sortear o trepar"],
 		["C o Ctrl / Z", "Agacharse / cuerpo a tierra"], ["Q / E", "Asomarse"],
 		["Tab / I", "Rueda de armas / inventario"],
-		["1 – 4 / F", "Elegir arma / recoger"], ["Clic derecho", "Apuntar o ponerse en guardia"],
+		["F", "Recoger arma"], ["Clic derecho", "Apuntar o ponerse en guardia"],
 		["Clic izquierdo", "Disparar o golpear"], ["G", "Patada; pisotón al enemigo caído"],
 		["Clic derecho + Espacio", "Bloquear; doble Espacio: empujón"],
 		["R / X", "Recargar / apoyar el arma"], ["V / rueda", "Cambiar de hombro / acercar cámara"],
