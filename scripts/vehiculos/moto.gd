@@ -386,18 +386,13 @@ func _caida_segun_golpe(b: RigidBody3D) -> void:
 				+ Vector3(0, azar.call(-2.0, 2.0), 0)
 
 
-## ---------------------------------------------------------------- cada fotograma
-func _process(dt: float) -> void:
-	dt = minf(dt, 0.1)
-	# con piloto, el Jugador la mueve (paso) en su propio _process: así cuerpo y moto van a la vez
-	if piloto != null and is_instance_valid(piloto):
-		return
-	piloto = null
-	paso(dt, {})
+var _ultimo_paso_fisico := -1
 
 
 ## mandos: gas, freno (0..1), giro (-1 izquierda .. 1 derecha), freno_mano (bool), inclinar (-1..1, en el aire)
 func paso(dt: float, mandos: Dictionary) -> void:
+	if Engine.is_in_physics_frame():
+		_ultimo_paso_fisico = Engine.get_physics_frames()
 	_reloj += dt
 	if caida and (_fisica != null or levantando):
 		_paso_fisica(dt)
@@ -1646,7 +1641,12 @@ var _v_fisica_prev := Vector3.ZERO
 
 
 ## (en el paso de física: sin nadie que la sujete, de pie no se aguanta y el peso la vence hacia un lado)
-func _physics_process(_dt: float) -> void:
+func _physics_process(dt: float) -> void:
+	# El piloto y la moto comparten el mismo paso para conservar el acople al asiento.
+	if not is_instance_valid(piloto):
+		piloto = null
+		if _ultimo_paso_fisico != Engine.get_physics_frames():
+			paso(dt, {})
 	if _fisica == null or _fisica.freeze:
 		return
 	var bt := _fisica.global_transform

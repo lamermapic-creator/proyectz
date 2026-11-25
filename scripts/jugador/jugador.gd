@@ -1109,24 +1109,19 @@ func step_colgado(dt: float) -> void:
 
 
 ## ---------------------------------------------------------------- bucle principal
-func _process(dt: float) -> void:
-	dt = minf(dt, 0.1)
+func _physics_process(dt: float) -> void:
 	reloj += dt
 	if ragdoll != null:
 		arsenal.cancelar_mochila()
 		# en el suelo / por los aires: el cuerpo lo lleva la física (Ragdoll); el jugador solo lo sigue
 		_paso_ragdoll(dt)
-		update_camera(dt)
 		_paso_salud(dt)
-		_update_hud()
 		return
 	if moto != null:
 		_paso_moto(dt)
 		if moto != null:
 			arsenal.actualizar(dt)
-			update_camera(dt)
 			_paso_salud(dt)
-			_update_hud()
 			return
 	move_direction = _leer_movimiento() if health > 0 else Vector3.ZERO
 	if levantando_moto != null:
@@ -1138,8 +1133,11 @@ func _process(dt: float) -> void:
 		rotation.y = lerp_angle(float(levantando_moto.desde), float(levantando_moto.giro), Rbx.smooth((reloj - float(levantando_moto.t0)) / LEVANTAR_AGARRE))
 	arsenal.actualizar(dt)
 	humanoid_step(dt)
-	update_camera(dt)
 	_paso_salud(dt)
+
+
+func _process(dt: float) -> void:
+	update_camera(minf(dt, 0.1))
 	_update_hud()
 
 

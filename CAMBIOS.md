@@ -1,3 +1,7 @@
+## 2026-11-25 — Paso fijo del jugador y la moto
+
+- El movimiento del jugador y la moto se resuelve junto a Jolt en el paso fijo de física. La cámara y el HUD se siguen actualizando por fotograma. La prueba de movimiento recorrió 8,2609 studs en dos segundos a 30, 60 y 120 FPS.
+
 ## 2026-11-25 — Anclajes y transición de la mochila
 
 - Las armas largas se llevan a ambos lados de la mochila. Al moverla, el arma que queda en el cuerpo se acomoda a la espalda y la sobrante acompaña a la mochila hasta el suelo.

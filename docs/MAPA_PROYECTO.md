@@ -134,6 +134,7 @@ Base de código verificada: `2f0e2282ad3cbe51ca1d99cc3307e8d4a60c523b` (main al 
   La secuencia termina en reposo; otros disparos no la reinician. Límite de ragdolls activos existente.
 - `scripts/nivel/maniqui.gd`: blanco de entrenamiento, contrato de daño y recuperación.
 - `scripts/vehiculos/`: moto y modelo; dirección progresiva, agarre/derrape y freno/marcha atrás.
+- El jugador y la moto ejecutan su movimiento en el paso fijo de física. La cámara y el HUD se actualizan por fotograma.
 
 ## Ruido e IA
 
