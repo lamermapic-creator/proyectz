@@ -366,6 +366,8 @@ func _input(e: InputEvent) -> void:
 
 
 func _unhandled_input(e: InputEvent) -> void:
+	if arsenal.interfaz.abierto():
+		return
 	if e is InputEventMouseButton:
 		if e.button_index == MOUSE_BUTTON_RIGHT:
 			_apuntar_pedido = e.pressed
@@ -447,6 +449,8 @@ var _mouse_delta := Vector2.ZERO
 
 
 func _leer_movimiento() -> Vector3:
+	if arsenal != null and arsenal.interfaz != null and arsenal.interfaz.abierto():
+		return Vector3.ZERO
 	var f := 0.0
 	var r := 0.0
 	if Input.is_physical_key_pressed(KEY_W): f += 1
@@ -2149,7 +2153,7 @@ func _paso_moto(dt: float) -> void:
 		_fin_moto(null)
 		return
 	var mandos := {"freno_mano": true} if _moto_bajar_t >= 0.0 else {}
-	if health > 0 and not free_mouse and _moto_bajar_t < 0.0 and reloj - _moto_t0 >= _moto_subir_dur:
+	if health > 0 and not free_mouse and not arsenal.interfaz.abierto() and _moto_bajar_t < 0.0 and reloj - _moto_t0 >= _moto_subir_dur:
 		var g := 1.0 if Input.is_physical_key_pressed(KEY_W) else 0.0
 		var f := 1.0 if Input.is_physical_key_pressed(KEY_S) else 0.0
 		var giro := 0.0

@@ -1,11 +1,14 @@
 extends CanvasLayer
-## Dos vistas del inventario del Arsenal. La pausa modal se comparte entre ambas.
+## Dos vistas del inventario del Arsenal con una escala de tiempo compartida.
+const FACTOR_TIEMPO := 0.2
 
 var arsenal: Arsenal
 var _raiz: ColorRect
 var _centro: CenterContainer
 var _raton_anterior := Input.MOUSE_MODE_CAPTURED
 var _rueda := false
+var _escala_anterior := 1.0
+var _velocidad_audio_anterior := 1.0
 
 
 func _ready() -> void:
@@ -42,12 +45,31 @@ func _input(evento: InputEvent) -> void:
 	get_viewport().set_input_as_handled()
 
 
+func abierto() -> bool:
+	return is_instance_valid(_raiz) and _raiz.visible
+
+
+func _process(_dt: float) -> void:
+	if abierto() and (arsenal.J.health <= 0 or get_tree().paused):
+		_cerrar()
+
+
+func _exit_tree() -> void:
+	if abierto():
+		_cerrar()
+
+
 func _mostrar(rueda: bool) -> void:
 	if not _raiz.visible:
 		_raton_anterior = Input.mouse_mode
 		arsenal.J.firing = false
 		arsenal.J.aiming = false
-		get_tree().paused = true
+		arsenal.J._apuntar_pedido = false
+		arsenal.impacto.soltar()
+		_escala_anterior = Engine.time_scale
+		Engine.time_scale = _escala_anterior * FACTOR_TIEMPO
+		_velocidad_audio_anterior = AudioServer.playback_speed_scale
+		AudioServer.playback_speed_scale = _velocidad_audio_anterior * FACTOR_TIEMPO
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 		_raiz.show()
 	_rueda = rueda
@@ -128,5 +150,8 @@ func _guardar() -> void:
 
 func _cerrar() -> void:
 	_raiz.hide()
-	get_tree().paused = false
-	Input.mouse_mode = _raton_anterior
+	arsenal.impacto.soltar()
+	Engine.time_scale = _escala_anterior
+	AudioServer.playback_speed_scale = _velocidad_audio_anterior
+	if not get_tree().paused:
+		Input.mouse_mode = _raton_anterior

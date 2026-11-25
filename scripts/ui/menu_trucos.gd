@@ -203,7 +203,7 @@ func _input(e: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		if _abierto:
 			cerrar()
-		elif not get_tree().paused: # no encima del menú de pausa
+		elif not get_tree().paused and not J.arsenal.interfaz.abierto():
 			abrir()
 	elif k == KEY_ESCAPE and _abierto:
 		get_viewport().set_input_as_handled()

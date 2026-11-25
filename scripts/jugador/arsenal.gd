@@ -39,6 +39,7 @@ var golpes_pendientes := []     # [hora, arma]
 var suelo := []                 # armas en el suelo: {name, mag, reserve, nodo, etiqueta}
 
 var _hud := {}
+var interfaz: CanvasLayer
 var impacto := ImpactoCC.new(self)   # sensación de impacto y ajuste del cuerpo al blanco (scripts/jugador/impacto_cc.gd)
 
 
@@ -53,7 +54,7 @@ func _ready() -> void:
 	for nombre in Armas.LOADOUT:
 		dar_arma(nombre, false)
 	_crear_hud()
-	var interfaz := preload("res://scripts/ui/inventario_armas.gd").new()
+	interfaz = preload("res://scripts/ui/inventario_armas.gd").new()
 	interfaz.arsenal = self
 	add_child(interfaz)
 	# un machete en el suelo cerca del punto de partida (arma blanca larga: si lo coges, sueltas el bate)
@@ -374,6 +375,8 @@ func _paso_recoger() -> void:
 
 ## ---------------------------------------------------------------- entrada
 func _unhandled_input(e: InputEvent) -> void:
+	if interfaz.abierto():
+		return
 	if e is InputEventMouseButton and e.button_index == MOUSE_BUTTON_LEFT:
 		if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
 			return
