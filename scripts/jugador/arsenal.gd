@@ -298,10 +298,16 @@ func _crear_funda_izquierda() -> void:
 	var cuero := Armas.material(Color8(52, 42, 34), "Leather")
 	var correa := Armas.material(Color8(91, 77, 60), "Fabric")
 	for pieza in [
-		[Vector3(-0.205, 0.28, -0.43), Vector3(0.09, 0.51, 0.73), cuero],
-		[Vector3(0.16, 0.28, -0.43), Vector3(0.07, 0.51, 0.73), cuero],
-		[Vector3(-0.02, 0.52, -0.43), Vector3(0.38, 0.07, 0.73), cuero],
-		[Vector3(0.41, 0.16, -0.49), Vector3(0.57, 0.64, 0.15), correa],
+		# La funda va por fuera del pantalón. Una placa estrecha la une a la correa.
+		[Vector3(-0.187, 0.29, -0.43), Vector3(0.06, 0.43, 0.68), cuero],
+		[Vector3(0.153, 0.29, -0.43), Vector3(0.06, 0.42, 0.64), cuero],
+		[Vector3(-0.017, 0.501, -0.43), Vector3(0.29, 0.043, 0.63), cuero],
+		[Vector3(-0.017, 0.087, -0.47), Vector3(0.29, 0.043, 0.57), cuero],
+		[Vector3(0.174, 0.16, -0.47), Vector3(0.08, 0.27, 0.57), correa],
+		[Vector3(0.44, -0.145, -0.56), Vector3(0.57, 0.045, 0.09), correa],
+		[Vector3(0.44, 0.462, -0.56), Vector3(0.57, 0.045, 0.09), correa],
+		[Vector3(0.734, 0.159, -0.56), Vector3(0.042, 0.59, 0.09), correa],
+		[Vector3(0.145, 0.159, -0.56), Vector3(0.042, 0.59, 0.09), correa],
 	]:
 		var malla := BoxMesh.new()
 		malla.size = pieza[1]

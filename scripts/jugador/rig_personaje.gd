@@ -170,6 +170,8 @@ func construir() -> void:
 		m.apply()
 	if _usa_modelo():
 		_cargar_modelo()
+		if modelo == "superviviente":
+			_cubrir_union_rodilla_izquierda()
 		return
 	for d in DETALLES:
 		if maniqui:
@@ -207,6 +209,23 @@ func _cargar_modelo() -> void:
 			mi.name = "M_" + String(c.name).trim_prefix("M_")
 			_meshes.append(mi)
 	inst.free()
+
+
+## El pantalón cubre el pivote incluso cuando las dos piezas de la pierna se flexionan.
+func _cubrir_union_rodilla_izquierda() -> void:
+	var pierna: Node3D = P.LeftLowerLeg
+	var pantalón := pierna.get_node_or_null("M_LeftLowerLeg_1") as MeshInstance3D
+	if pantalón == null:
+		return
+	var tejido := BoxMesh.new()
+	tejido.size = Vector3(0.39, 0.26, 0.39)
+	tejido.material = pantalón.get_active_material(0)
+	var unión := MeshInstance3D.new()
+	unión.name = "M_UnionRodilla"
+	unión.mesh = tejido
+	unión.position = Vector3(0, 0.625, 0.025)
+	pierna.add_child(unión)
+	_meshes.append(unión)
 
 
 func _malla(padre: Node3D, nombre: String, tam: Vector3, color: Color, material: String, t: Transform3D, forma: String, transp: float) -> void:

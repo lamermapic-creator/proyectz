@@ -1,3 +1,7 @@
+## 2026-11-27 — Modelo de la pierna izquierda
+
+- La funda del muslo se fija con una correa que rodea el pantalón. Una pieza de tela cubre la unión de la rodilla al flexionarse.
+
 ## 2026-11-27 — Combinaciones del salto con y sin arma
 
 - Con las manos libres, el personaje gira hacia la dirección pulsada antes de despegar. Con un arma, el torso sigue la mira. W, W+A y W+D dan un salto completo, W+S salta en el sitio y las entradas laterales o hacia atrás tienen un desplazamiento corto. Las direcciones opuestas se cancelan.
