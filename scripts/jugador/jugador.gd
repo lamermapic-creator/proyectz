@@ -751,6 +751,16 @@ func step_vault(dt: float) -> void:
 			arsenal.sacar_tras_trepar()
 
 
+func _rumbo_mira_armada() -> float:
+	if aiming and arsenal.es_arma_fuego():
+		var hacia := Rbx.flat(arsenal.punto_mira() - global_position)
+		var distancia := hacia.length()
+		if distancia > 0.3 and distancia < 10.0:
+			var rumbo := atan2(-hacia.x, -hacia.z)
+			return yaw + Rbx.wrap_a(rumbo - yaw) * (1.0 - smoothstep(6.0, 10.0, distancia))
+	return yaw
+
+
 func jump_or_vault() -> void:
 	if health <= 0 or vaulting != null or L.knocked or L.gettingUp:
 		return
@@ -772,13 +782,15 @@ func jump_or_vault() -> void:
 	if jump_height <= 0:
 		return
 	var hs := Rbx.flat(vel_real).length()
-	var cuerpo := root_cf()
 	_salto_sin_parkour = salto_vertical_asd
 	if salto_vertical_asd:
 		_subir_a = null
 		_direccion_salto = Vector3.ZERO
+	elif _leer_movimiento().length() > 0.1:
+		var rumbo := _rumbo_mira_armada() if arsenal.armado() else Rbx.yaw_of(root_cf())
+		_direccion_salto = Vector3(-sin(rumbo), 0, -cos(rumbo))
 	else:
-		_direccion_salto = Rbx.flat(Rbx.look(cuerpo)).normalized() if _leer_movimiento().length() > 0.1 else Vector3.ZERO
+		_direccion_salto = Vector3.ZERO
 	jump_prep_t = ahora()
 	_salto_t = ahora()
 	if hs < 3:
@@ -1588,19 +1600,13 @@ func update_character(dt: float) -> void:
 				var lado_m := 0.35 if arsenal.recogiendo.mano == "R" else -0.35
 				var ty := atan2(-dv.x, -dv.z) + lado_m
 				rotation = Vector3(0, cy + Rbx.wrap_a(ty - cy) * minf(1, dt * 8), 0)
-		elif not sprinting and (aiming or arsenal.armado()):
-			# con arma o apuntando, el cuerpo sigue a la mira con algo de peso
-			var yaw_apuntado := yaw
-			if aiming and arsenal.cfg().get("Kind", "") == "Gun":
-				var punto_cerca := arsenal.punto_mira()
-				var hacia_cerca := Rbx.flat(punto_cerca - global_position)
-				if hacia_cerca.length() > 0.3 and hacia_cerca.length() < 10.0:
-					var giro_cerca := atan2(-hacia_cerca.x, -hacia_cerca.z)
-					yaw_apuntado += Rbx.wrap_a(giro_cerca - yaw) * (1.0 - smoothstep(6.0, 10.0, hacia_cerca.length()))
+		elif (not sprinting or _salto_recto) and (aiming or arsenal.armado()):
+			# Con el arma en mano, el torso sigue la mira también durante el salto.
+			var yaw_apuntado := _rumbo_mira_armada()
 			var diff2 := Rbx.wrap_a(yaw_apuntado - cy)
 			var margen := deg_to_rad(4.0) if arsenal.cfg().get("Slot", "") == "Larga" and (aiming or firing) else 0.0
 			_girar_cuerpo_hacia(yaw_apuntado - signf(diff2) * minf(absf(diff2), margen), dt, 6.0)
-		else:
+		elif not _salto_recto:
 			# sin arma o corriendo: el cuerpo sigue el movimiento; los pies tienen tiempo de dar
 			# sus pasos y las piernas no se cruzan al machacar WASD
 			var md := move_direction

@@ -39,4 +39,24 @@ func _probar() -> void:
 			return
 		for i in 85:
 			await physics_frame
+	for armado in [false, true]:
+		j.teletransportar(Vector3(0, 0, -54), 0)
+		if armado:
+			j.arsenal.select_slot(0)
+		for i in 75:
+			await physics_frame
+		# La cámara mira a la izquierda, el cuerpo sigue mirando al frente.
+		j.rotation.y = 0
+		j.yaw = PI / 2
+		_tecla(KEY_W, true)
+		Input.flush_buffered_events()
+		j.jump_or_vault()
+		_tecla(KEY_W, false)
+		var esperado := Vector3.LEFT if armado else Vector3.FORWARD
+		print("SALTO W armado=", armado, " impulso=", j._direccion_salto)
+		if not j._direccion_salto.is_equal_approx(esperado):
+			quit(1)
+			return
+		for i in 100:
+			await physics_frame
 	quit()

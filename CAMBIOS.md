@@ -1,4 +1,5 @@
 ## 2026-11-27 — Salto vertical con A, S y D
+- Al saltar hacia delante con W, el impulso toma el rumbo del cuerpo con las manos libres o el de la mira con un arma equipada. El torso armado puede seguir la mira durante el vuelo.
 
 - Espacio con A, S o D y sin W da un salto vertical en el sitio sin iniciar maniobras de parkour.
 
