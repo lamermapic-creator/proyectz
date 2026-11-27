@@ -1,5 +1,7 @@
 # CLAUDE.md — Proyecto Z (léelo antes de tocar nada)
 
+- Al anunciar una versión nueva del prototipo, añadir su resumen para jugadores a `NOVEDADES` en `scripts/ui/menu_principal.gd`. El botón cuadrado junto a la versión muestra la entrada correspondiente a `application/config/version`.
+
 - El bodegón se construye en `scripts/ui/mesa_menu.gd`. La veta y el acabado húmedo están en `scripts/ui/tablero_menu.gdshader` y la cubierta ilustrada en `assets/menu/cuaderno.png`.
 
 - Menú: los casquillos quedan tumbados al ras del tablero y su sombra de contacto permanece bajo cada uno.

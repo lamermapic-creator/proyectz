@@ -1,4 +1,5 @@
 ## 2026-11-27 — Prototipo V0.7
+- El botón cuadrado junto al número de versión abre el resumen de novedades de la actualización.
 
 - La versión visible del prototipo es V0.7. Se actualizaron los datos y las rutas de los perfiles de exportación de Windows.
 

@@ -7,12 +7,22 @@ const FUENTE := preload("res://assets/fuentes/OpenSans-Regular.ttf")
 const ROJO := Color("e27b52")
 const TEXTO := Color("e2ded3")
 const SUAVE := Color("969f9d")
+const NOVEDADES := {
+	"V0.7": [
+		"Zancadas más fluidas y apoyos separados al caminar, correr y girar.",
+		"Transiciones más suaves al agacharse, tumbarse y levantarse.",
+		"Saltos de barrera con impulso, piernas escalonadas y flexión al aterrizar.",
+		"Golpes y patadas mejor enlazados. El arma acompaña al torso durante la patada.",
+	],
+}
 
 static func version_texto() -> String:
 	return "%s · prototipo" % str(ProjectSettings.get_setting("application/config/version", "?"))
 
 var _botones: VBoxContainer
 var _destinos := VBoxContainer.new()
+var _novedades := VBoxContainer.new()
+var _boton_novedades: Button
 var _opciones: PanelOpciones
 var _controles: PanelContainer
 var _fundido: ColorRect
@@ -158,8 +168,22 @@ func _crear_ui() -> void:
 	_rect(_referencia, Vector2(76, 657), Vector2(1128, 1), Color(0.6, 0.65, 0.63, 0.20))
 	_texto(_referencia, "↑ ↓  NAVEGAR     ENTER  SELECCIONAR", Vector2(76, 674), 11, SUAVE)
 	var version := _texto(_referencia, version_texto(), Vector2(930, 670), 13, SUAVE)
-	version.size.x = 274
+	version.size.x = 217
 	version.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_boton_novedades = Button.new()
+	_boton_novedades.name = "Novedades"
+	_boton_novedades.text = "+"
+	_boton_novedades.tooltip_text = "Novedades de esta versión"
+	_boton_novedades.accessibility_name = "Novedades de esta versión"
+	_boton_novedades.position = Vector2(1160, 666)
+	_boton_novedades.size = Vector2(44, 44)
+	_boton_novedades.add_theme_stylebox_override("normal", _estilo(Color("39251e"), Color("735145")))
+	_boton_novedades.add_theme_stylebox_override("focus", _estilo(Color(0, 0, 0, 0), ROJO, 2))
+	_portada.add_child(_boton_novedades)
+	_boton_novedades.pressed.connect(func(): _abrir(_novedades))
+	for b in _botones.get_children():
+		b.focus_neighbor_right = b.get_path_to(_boton_novedades)
+	_boton_novedades.focus_neighbor_left = _boton_novedades.get_path_to(_botones.get_child(0))
 	_crear_ventanas()
 	_fundido = _rect(raiz, Vector2.ZERO, Vector2.ZERO, Color.BLACK)
 	_fundido.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -203,6 +227,17 @@ func _crear_ventanas() -> void:
 	_destinos.add_child(EstiloUI.boton("Barrio del Canal", _cargar_destino.bind("res://escenas/barrio_canal.tscn")))
 	_destinos.add_child(EstiloUI.boton("Volver", _volver))
 	_destinos.hide()
+	contenido.add_child(_novedades)
+	_novedades.add_theme_constant_override("separation", 16)
+	var version := str(ProjectSettings.get_setting("application/config/version"))
+	_novedades.add_child(EstiloUI.titulo("NOVEDADES · " + version, 38))
+	for cambio in NOVEDADES.get(version, ["Las novedades de esta versión aún no están disponibles."]):
+		var linea := Label.new()
+		linea.text = "•  " + cambio
+		linea.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_novedades.add_child(linea)
+	_novedades.add_child(EstiloUI.boton("Volver", _volver))
+	_novedades.hide()
 	_opciones = PanelOpciones.new()
 	_opciones.ocultar_al_cerrar = false
 	contenido.add_child(_opciones)
@@ -266,6 +301,7 @@ func _abrir(panel: Control) -> void:
 	_opciones.visible = false
 	_controles.visible = false
 	_destinos.hide()
+	_novedades.hide()
 	if panel == _opciones:
 		_opciones.abrir()
 	else:
@@ -283,6 +319,7 @@ func _volver() -> void:
 	if _saliendo or _cerrando or not _ventanas.visible:
 		return
 	_cerrando = true
+	var foco := _boton_novedades if _novedades.visible else _botones.get_child(0) as Button
 	if _tween_panel != null and _tween_panel.is_valid():
 		_tween_panel.kill()
 	_tween_panel = create_tween().set_parallel(true).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
@@ -291,11 +328,12 @@ func _volver() -> void:
 	_tween_panel.chain().tween_callback(func():
 		_opciones.visible = false
 		_controles.visible = false
+		_novedades.hide()
 		_ventanas.visible = false
 		_portada.visible = true
 		_botones.visible = true
 		_cerrando = false
-		(_botones.get_child(0) as Button).grab_focus())
+		foco.grab_focus())
 	_portada.modulate.a = 0.0
 	_tween_panel.chain().tween_property(_portada, "modulate:a", 1.0, 0.16)
 

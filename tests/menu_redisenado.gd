@@ -90,6 +90,16 @@ func probar() -> void:
 	await tecla(KEY_ESCAPE)
 	await esperar(20)
 	comprobar(not menu._ventanas.visible and jugar.has_focus(), "cerrar Controles con Esc")
+	await tecla(KEY_RIGHT)
+	comprobar(menu._boton_novedades.has_focus(), "navegar al botón Novedades")
+	await tecla(KEY_ENTER)
+	await esperar(19)
+	comprobar(menu._novedades.is_visible_in_tree(), "Enter abre Novedades")
+	var version := str(ProjectSettings.get_setting("application/config/version"))
+	comprobar(menu._novedades.get_child(0).text.ends_with(version), "Novedades muestra la versión actual")
+	await tecla(KEY_ESCAPE)
+	await esperar(20)
+	comprobar(not menu._ventanas.visible and menu._boton_novedades.has_focus(), "Esc devuelve el foco a Novedades")
 	for tam in [Vector2i(640, 360), Vector2i(800, 600), Vector2i(1280, 720), Vector2i(1920, 1080), Vector2i(2560, 1080)]:
 		root.size = tam
 		await esperar(4)
