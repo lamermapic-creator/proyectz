@@ -1,3 +1,9 @@
+## 2026-11-27 — Transiciones de postura, parkour y combate
+
+- Al tumbarse o levantarse, las piernas suavizan los cambios de apoyo y vuelven a la IK directa al completar la postura.
+- El salto sobre obstáculos conserva la velocidad entre el acercamiento, el arco y la salida. El giro hacia el obstáculo es gradual.
+- Parkour y combate enlazan la pose visible con la siguiente al empezar y terminar la acción.
+
 ## 2026-11-27 — Transiciones de las piernas
 
 - El ciclo de marcha conserva su fase al cambiar de sentido. Cada paso empieza en la posición visible del pie y el apoyo conserva el punto donde termina el vuelo.

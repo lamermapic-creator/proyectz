@@ -615,10 +615,9 @@ func find_vault(lejos := false, en_aire := false):
 	return {"kind": "mantle", "edge": edge, "dir": d, "topY": flo.position.y, "landY": flo.position.y, "h": h, "feetY": feet_y}
 
 
-## curva cuadrática que pasa por p_mid en t = 0.5
-static func thru(p0: Vector3, p_mid: Vector3, p1: Vector3, t: float) -> Vector3:
-	var c := p_mid * 2 - (p0 + p1) * 0.5
-	return p0 * pow(1 - t, 2) + c * (2 * t * (1 - t)) + p1 * (t * t)
+## Interpolación de Hermite. Las tangentes se expresan en distancia por tramo.
+static func _tramo_vault(origen: Vector3, destino: Vector3, entrada: Vector3, salida: Vector3, t: float) -> Vector3:
+	return origen.bezier_interpolate(origen + entrada / 3.0, destino - salida / 3.0, destino, t)
 
 
 static func smooth01(x: float) -> float:
@@ -648,7 +647,19 @@ func start_vault(v: Dictionary) -> bool:
 		# arranque: primero se acerca al borde (sin subir), luego el arco por encima
 		v.pre = Vector3(e.x, p0.y, e.z) - d * 0.9
 		v.k = 0.25 if face_dist > 1.2 else 0.0
-		v.exitVel = d * maxf(hs, 5.5) # (antes al menos 7: andando despacio, al caer salía acelerado)
+		var inicio_arco: Vector3 = v.pre if v.k > 0.0 else p0
+		var medio: Vector3 = v.pMid
+		var fin: Vector3 = v.p1
+		var medio_t: float = (1.0 - v.k) * v.dur * 0.5
+		var subida := maxf(0.0, (medio - inicio_arco).dot(d)) / medio_t
+		var bajada := maxf(0.0, (fin - medio).dot(d)) / medio_t
+		var entrada_max := subida
+		if v.k > 0.0:
+			entrada_max = maxf(0.0, (inicio_arco - p0).dot(d)) / (v.k * v.dur)
+		v.vel_entrada = d * minf(hs, entrada_max * 2.0)
+		v.vel_arco = d * minf(entrada_max, subida) if v.k > 0.0 else v.vel_entrada
+		v.vel_medio = d * minf(subida, bajada)
+		v.exitVel = d * minf(maxf(hs, 5.5), bajada * 2.0)
 	else:
 		v.dur = 0.85 + v.h * 0.14
 		v.hang = Vector3(e.x, 0, e.z) - d * 0.75
@@ -663,6 +674,7 @@ func start_vault(v: Dictionary) -> bool:
 		v.v0 = maxf(Vector3(vel_real.x, 0, vel_real.z).dot(d), 0.0)
 		v.dist0 = dist_h
 	v.p0 = p0
+	v.yaw_inicial = rotation.y
 	# (empieza ya en este fotograma: si no, el cuerpo se quedaba quieto un fotograma justo al empezar)
 	v.t0 = ahora() - get_physics_process_delta_time()
 	v.prev = p0
@@ -683,9 +695,13 @@ func _vault_path(v: Dictionary, t: float) -> Vector3:
 	if v.kind == "vault":
 		var k: float = v.k
 		if t < k:
-			return p0.lerp(v.pre, t / k)
-		var u := (t - k) / (1 - k)
-		return thru(v.pre if k > 0 else p0, v.pMid, v.p1, u)
+			var segundos: float = k * v.dur
+			return _tramo_vault(p0, v.pre, v.vel_entrada * segundos, v.vel_arco * segundos, t / k)
+		var u := (t - k) / (1.0 - k)
+		var medio_t: float = (1.0 - k) * v.dur * 0.5
+		if u < 0.5:
+			return _tramo_vault(v.pre if k > 0.0 else p0, v.pMid, v.vel_arco * medio_t, v.vel_medio * medio_t, u * 2.0)
+		return _tramo_vault(v.pMid, v.p1, v.vel_medio * medio_t, v.exitVel * medio_t, u * 2.0 - 1.0)
 	var s_a := clampf(t / 0.3, 0.0, 1.0)  # pegarse a la pared (más largo que antes: sin tirón hacia ella)
 	var b := smooth01((t - 0.12) / 0.5) # tirar hacia arriba
 	var c := smooth01((t - 0.55) / 0.4) # subir el cuerpo encima
@@ -714,7 +730,9 @@ func step_vault(dt: float) -> void:
 	var v: Dictionary = vaulting
 	var t: float = (ahora() - v.t0) / v.dur
 	var pos := _vault_path(v, minf(t, 1))
-	global_transform = Rbx.look_at(pos, pos + v.dir)
+	global_position = pos
+	var rumbo := Rbx.yaw_of(Rbx.look_at(pos, pos + v.dir))
+	rotation.y = lerp_angle(float(v.yaw_inicial), rumbo, smooth01(t / 0.24))
 	vel_real = (pos - v.prev) / maxf(dt, 1.0 / 240)
 	velocity = vel_real
 	v.prev = pos
@@ -1509,7 +1527,7 @@ func update_character(dt: float) -> void:
 		tiempo_tumbar = 0.6
 	prone_p = prone_p + clampf(p_t - prone_p, -dt / tiempo_tumbar, dt / tiempo_tumbar)
 	var base_c: float = C.STANCE[1 if stance == 2 else stance].Center
-	non_prone_c += (base_c - non_prone_c) * minf(1, dt * 3.5)
+	non_prone_c = Rbx.damp(non_prone_c, base_c, 3.5, dt)
 	var sp := smooth01(maxf(prone_p, getup_p))
 	center_cur = non_prone_c + (C.STANCE[2].Center - non_prone_c) * sp
 	# cápsula baja al tumbarse: cabe por debajo de un coche

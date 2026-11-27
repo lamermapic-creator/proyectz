@@ -2000,13 +2000,52 @@ static func _caja_de(n: Node3D) -> AABB:
 	return caja
 
 
-## ---------------------------------------------------------------- actualización por fotograma
+## Conserva la pose que estaba dibujada al cambiar entre ramas de IK.
+var _modo_pose := Vector3i(-1, -1, -1)
+var _accion_pose := -1.0
+var _pose_anterior: Dictionary = {}
+var _mezcla_pose_t := 0.0
+var _mezcla_pose_dur := 0.0
+
+
 func _process(dt: float) -> void:
 	if rig == null or feet.is_empty():
 		return
 	dt = minf(dt, 0.1)
+	if jugador.health <= 0 or jugador.L.knocked or jugador.moto != null:
+		_modo_pose = Vector3i(-1, -1, -1)
+		_pose_anterior.clear()
+	else:
+		_preparar_transicion_pose()
 	update_rig(dt)
+	if not _pose_anterior.is_empty():
+		_mezcla_pose_t = minf(_mezcla_pose_t + dt, _mezcla_pose_dur)
+		var peso := smoothstep(0.0, _mezcla_pose_dur, _mezcla_pose_t)
+		for nombre in _pose_anterior:
+			var motor: RigPersonaje.Motor = rig.M[nombre]
+			motor.transform = (_pose_anterior[nombre] as Transform3D).interpolate_with(motor.transform, peso)
+		if _mezcla_pose_t >= _mezcla_pose_dur:
+			_pose_anterior.clear()
 	rig.aplicar()
+
+
+func _preparar_transicion_pose() -> void:
+	var l: Dictionary = jugador.L
+	var maniobra := 0
+	if l.vault != null:
+		maniobra = 1
+	elif l.get("hang") != null:
+		maniobra = 2
+	var modo := Vector3i(int(l.stance == 2), int(float(l.proneP) > 0.001), maniobra)
+	var accion = jugador.arsenal.cc.accion
+	var golpe := float(accion.t0) if accion != null else -1.0
+	if _modo_pose.x >= 0 and (_modo_pose != modo or _accion_pose != golpe):
+		_mezcla_pose_dur = 0.14 if _modo_pose != modo else 0.08
+		_mezcla_pose_t = 0.0
+		for nombre in rig.M:
+			_pose_anterior[nombre] = (rig.M[nombre] as RigPersonaje.Motor).transform
+	_modo_pose = modo
+	_accion_pose = golpe
 
 
 func update_rig(dt: float) -> void:
@@ -2396,12 +2435,15 @@ func update_rig(dt: float) -> void:
 				Lg.top.transform = (fk_t[0] as Transform3D).interpolate_with(Lg.top.transform, sup_mov_k)
 				Lg.mid.transform = (fk_t[1] as Transform3D).interpolate_with(Lg.mid.transform, sup_mov_k)
 				Lg.fin.transform = (fk_t[2] as Transform3D).interpolate_with(Lg.fin.transform, sup_mov_k)
-		# (sin suavizar: van por IK a sitios fijos del suelo; suavizadas se quedaban atrás y se metían en el suelo)
+		# Suaviza el cambio de apoyo y conserva la IK directa al terminar la transición.
 		for s in ["L", "R"]:
 			var Lg3: Limb = leg[s]
 			for pair in [[Lg3.top, "Hip"], [Lg3.mid, "Knee"], [Lg3.fin, "Ankle"]]:
 				if rlv > 0.001:
 					smooth_j(pair[0], s + pair[1], 14, dt)
+				elif pb > 0.08 and pb < 0.94:
+					var tasa := lerpf(38.0, 21.0, smoothstep(0.08, 0.22, pb) * (1.0 - smoothstep(0.78, 0.94, pb)))
+					smooth_j(pair[0], s + pair[1], tasa, dt)
 				else:
 					anota_j(pair[0], s + pair[1], dt)
 		waistR += roll * 0.5 * lay
