@@ -1,3 +1,7 @@
+## 2026-11-27 — Prototipo V0.7
+
+- La versión visible del prototipo es V0.7. Se actualizaron los datos y las rutas de los perfiles de exportación de Windows.
+
 ## 2026-11-27 — Patadas con un arma en mano
 
 - Durante la patada y el pisotón, el arma acompaña el movimiento del pecho y se recoge durante el impulso. La mano de apoyo conserva el agarre en las armas a dos manos y el apuntado recupera su peso de forma gradual.

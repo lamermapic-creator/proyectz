@@ -12,7 +12,7 @@
 
 - Menú principal: puesto de cuarentena con luces frías y luces de trabajo cálidas, lluvia en movimiento, cámara con deriva sutil y más detalle en el escenario. La portada y los paneles entran y salen con fundido y desplazamiento.
 
-Versión actual de Proyecto Z: **0.6V**.
+Versión actual de Proyecto Z: **V0.7**.
 
 > Dirección vigente: [v6, todas las piezas cuadradas](CORRECCION_CUADRADA_V6.md).
 
