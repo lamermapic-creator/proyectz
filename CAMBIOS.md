@@ -1,3 +1,8 @@
+## 2026-11-27 — Transiciones de las piernas
+
+- El ciclo de marcha conserva su fase al cambiar de sentido. Cada paso empieza en la posición visible del pie y el apoyo conserva el punto donde termina el vuelo.
+- La prueba de marcha, carrera, cambios laterales y frenada a 60 FPS redujo el desplazamiento máximo del pie por fotograma de 1,19 a 0,64 studs.
+
 ## 2026-11-25 — Menú de trucos
 
 - F1 abre un panel adaptable con foco inicial y un botón para volver a la partida. Los destinos de teletransporte dependen del mapa y las acciones que requieren muñecos o un director de zombis se desactivan cuando el nivel carece de ellos.
