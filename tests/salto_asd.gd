@@ -14,25 +14,27 @@ func _probar() -> void:
 	change_scene_to_file("res://escenas/pruebas_movimiento.tscn")
 	await scene_changed
 	var j := current_scene.get_node("Jugador") as Jugador
-	var casos := {KEY_A: Vector3.LEFT, KEY_S: Vector3.BACK, KEY_D: Vector3.RIGHT}
-	for tecla in casos:
-		j.teletransportar(Vector3(0,0,-54),0)
+	for tecla in [KEY_A, KEY_S, KEY_D]:
+		j.teletransportar(Vector3(0, 0, -54), 0)
 		for i in 12:
 			await physics_frame
-		j.yaw = PI / 2
-		j.rotation.y = 0
-		var inicio := j.global_position
-		_tecla(tecla,true)
-		_tecla(KEY_SPACE,true)
-		for i in 3:
+		_tecla(tecla, true)
+		_tecla(KEY_SPACE, true)
+		for i in 18:
 			await physics_frame
-		_tecla(tecla,false)
-		_tecla(KEY_SPACE,false)
-		for i in 12:
+			if not j.en_suelo:
+				break
+		if j.en_suelo:
+			quit(1)
+			return
+		var inicio_vuelo := j.global_position
+		for i in 10:
 			await physics_frame
-		var delta := j.global_position - inicio
+		var delta := j.global_position - inicio_vuelo
+		_tecla(tecla, false)
+		_tecla(KEY_SPACE, false)
 		print("SALTO ASD ", OS.get_keycode_string(tecla), " ", delta)
-		if delta.dot(casos[tecla]) < 0.5 or delta.y < 0.5 or j.vaulting != null or j.colgado != null:
+		if Rbx.flat(delta).length() > 0.05 or delta.y < 0.5 or j.vaulting != null or j.colgado != null:
 			quit(1)
 			return
 		for i in 85:

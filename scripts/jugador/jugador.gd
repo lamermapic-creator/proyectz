@@ -758,10 +758,9 @@ func jump_or_vault() -> void:
 		return
 	var izquierda := Input.is_physical_key_pressed(KEY_A)
 	var derecha := Input.is_physical_key_pressed(KEY_D)
-	var lateral := float(derecha) - float(izquierda)
 	var atras := Input.is_physical_key_pressed(KEY_S)
-	var salto_direccional := not Input.is_physical_key_pressed(KEY_W) and (izquierda or derecha or atras)
-	if not salto_direccional:
+	var salto_vertical_asd := not Input.is_physical_key_pressed(KEY_W) and (izquierda or derecha or atras)
+	if not salto_vertical_asd:
 		var v = find_vault()
 		if v != null and start_vault(v):
 			return
@@ -774,10 +773,10 @@ func jump_or_vault() -> void:
 		return
 	var hs := Rbx.flat(vel_real).length()
 	var cuerpo := root_cf()
-	_salto_sin_parkour = salto_direccional
-	if salto_direccional:
+	_salto_sin_parkour = salto_vertical_asd
+	if salto_vertical_asd:
 		_subir_a = null
-		_direccion_salto = Rbx.flat(Rbx.right(cuerpo) * lateral - Rbx.look(cuerpo) * float(atras)).normalized()
+		_direccion_salto = Vector3.ZERO
 	else:
 		_direccion_salto = Rbx.flat(Rbx.look(cuerpo)).normalized() if _leer_movimiento().length() > 0.1 else Vector3.ZERO
 	jump_prep_t = ahora()
