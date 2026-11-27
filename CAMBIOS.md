@@ -1,3 +1,7 @@
+## 2026-11-27 — Salto lateral y hacia atrás
+
+- Espacio con A, S o D y sin W impulsa al personaje hacia el lado indicado sin iniciar maniobras de parkour. La dirección se toma con respecto al cuerpo al pulsar Espacio.
+
 ## 2026-11-27 — Prototipo V0.7
 - El botón cuadrado junto al número de versión abre el resumen de novedades de la actualización.
 

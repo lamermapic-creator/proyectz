@@ -44,6 +44,7 @@ var _vel_tumbar_rapido := Vector3.ZERO
 var _salto_pedido := false
 var _direccion_salto := Vector3.ZERO
 var _salto_recto := false
+var _salto_sin_parkour := false
 var _salto_t := -9.0               # último salto (para agarrarse a un borde en el aire)
 var colgado = null               # colgado de una cornisa (ver step_colgado)
 var _soltado_t := -9.0
@@ -755,18 +756,30 @@ func jump_or_vault() -> void:
 		return
 	if not en_suelo or ahora() - jump_prep_t < 0.3:
 		return
-	var v = find_vault()
-	if v != null and start_vault(v):
-		return
-	# estructura escalable un poco más lejos: no salta, va hasta ella y la escala
-	var vl = find_vault(true)
-	if vl != null:
-		_subir_a = {"t": ahora(), "dir": vl.dir}
-		return
+	var izquierda := Input.is_physical_key_pressed(KEY_A)
+	var derecha := Input.is_physical_key_pressed(KEY_D)
+	var lateral := float(derecha) - float(izquierda)
+	var atras := Input.is_physical_key_pressed(KEY_S)
+	var salto_direccional := not Input.is_physical_key_pressed(KEY_W) and (izquierda or derecha or atras)
+	if not salto_direccional:
+		var v = find_vault()
+		if v != null and start_vault(v):
+			return
+		# Estructura un poco más lejos: se aproxima para escalarla.
+		var vl = find_vault(true)
+		if vl != null:
+			_subir_a = {"t": ahora(), "dir": vl.dir}
+			return
 	if jump_height <= 0:
 		return
-	var hs := Vector3(vel_real.x, 0, vel_real.z).length()
-	_direccion_salto = Rbx.flat(Rbx.look(root_cf())).normalized() if _leer_movimiento().length() > 0.1 else Vector3.ZERO
+	var hs := Rbx.flat(vel_real).length()
+	var cuerpo := root_cf()
+	_salto_sin_parkour = salto_direccional
+	if salto_direccional:
+		_subir_a = null
+		_direccion_salto = Rbx.flat(Rbx.right(cuerpo) * lateral - Rbx.look(cuerpo) * float(atras)).normalized()
+	else:
+		_direccion_salto = Rbx.flat(Rbx.look(cuerpo)).normalized() if _leer_movimiento().length() > 0.1 else Vector3.ZERO
 	jump_prep_t = ahora()
 	_salto_t = ahora()
 	if hs < 3:
@@ -786,6 +799,8 @@ func _impulso_salto() -> void:
 ## Tras pulsar saltar cerca (pero no pegado) de algo escalable: avanza hacia ello y lo escala en
 ## cuanto está a distancia. Se cancela si vas hacia atrás, te caes o tarda demasiado.
 func _aproximar_escalada() -> void:
+	if _salto_recto and _salto_sin_parkour:
+		return
 	# saltando hacia algo escalable: al llegar al borde se agarra y sube (no se choca con la pared)
 	if _subir_a == null and not en_suelo and vaulting == null and colgado == null and ahora() - _salto_t < 0.8 and health > 0:
 		var va = find_vault(false, true)
@@ -1792,7 +1807,7 @@ func humanoid_step(dt: float) -> void:
 		if en_suelo and jump_height > 0:
 			v.y = sqrt(2.0 * g * jump_height)
 			en_suelo = false
-			# Conserva el rumbo del cuerpo al pulsar Espacio, aunque se mueva la cámara.
+			# Conserva la dirección elegida al pulsar Espacio.
 			_salto_recto = true
 			if _direccion_salto.length_squared() > 0.1:
 				var t_aire := 2.0 * v.y / g
