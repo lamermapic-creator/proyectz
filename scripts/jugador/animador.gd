@@ -1235,7 +1235,7 @@ func _marcha_animada(root_cf: Transform3D, frame: Transform3D, vel_h: Vector3, s
 			f.anim_suelo = g[0]
 			f.normal = Vector3.UP.lerp(g[1], u)
 		f.anim_paso = en_paso
-		var pos := Vector3(p.x, y, p.z)
+		var pos := _pie_en_su_lado(frame, Vector3(p.x, y, p.z), f.side, min_foot_x)
 		var roll: float = pa[2]
 		if w < 1.0:
 			pos = (f.anim_pos0 as Vector3).lerp(pos, w)
@@ -1278,6 +1278,13 @@ func _registrar_paso(k: String, run01: float) -> void:
 	elif run01 <= 0.3:
 		run_cycle = 0.0
 	step_start[k] = now
+
+
+## Limita el desplazamiento lateral sin cambiar la altura ni el avance del pie.
+static func _pie_en_su_lado(marco: Transform3D, pos: Vector3, lado: float, margen: float) -> Vector3:
+	var derecha := marco.basis.x
+	var lateral := (pos - marco.origin).dot(derecha) * lado
+	return pos + derecha * (lado * maxf(0.0, margen - lateral))
 
 
 ## (red de seguridad) un pie apoyado nunca queda del lado de la otra pierna
@@ -2692,10 +2699,15 @@ func update_rig(dt: float) -> void:
 		# pelvis al sortear: gira y se ladea (vault) o se inclina hacia la pared (encaramarse)
 		if va != null:
 			if va.kind == "vault":
-				pelvis_yaw += 0.55 * va.sv
-				pelvis_roll -= 0.35 * va.sv
-				pelvis_pitch -= 0.1 * va.sv
-				waistP -= 0.35 * va.sv
+				var fase: float = va.p
+				var carga_salto := smoothstep(0.0, 0.16, fase) * (1.0 - smoothstep(0.17, 0.37, fase))
+				var absorcion := smoothstep(0.74, 0.88, fase) * (1.0 - smoothstep(0.89, 1.0, fase))
+				crouch += 0.24 * carga_salto + 0.22 * absorcion
+				cic_x -= 0.17 * va.sv
+				pelvis_yaw += 0.43 * va.sv
+				pelvis_roll -= 0.28 * va.sv
+				pelvis_pitch -= 0.22 * carga_salto
+				waistP -= 0.38 * va.sv + 0.19 * absorcion
 				waistR += 0.3 * va.sv
 				neckP += 0.3 * va.sv
 				neckY -= 0.4 * va.sv
@@ -2752,24 +2764,21 @@ func update_rig(dt: float) -> void:
 			var hip_p := pelvis_cf.origin
 			var Y := Vector3.UP
 			if va.kind == "vault":
-				# las piernas se recogen hacia un lado y pasan por encima; al final bajan para aterrizar
-				var wT := Movimientos.sortear("valla_recoge", p)
-				var wL := Movimientos.sortear("valla_aterriza", p)
-				var tuck := {
-					"R": hip_p + rv * 0.95 + d * 0.55 - Y * (leg_len * 0.42),
-					"L": hip_p + rv * 0.5 + d * 0.2 - Y * (leg_len * 0.6),
-				}
+				# La rodilla derecha guía el salto. La otra pierna despega y aterriza después.
 				for s in ["L", "R"]:
-					var t: Vector3 = tuck[s]
-					if p > 0.25 and p < 0.72:
-						t = Vector3(t.x, maxf(t.y, va.topY + 0.3), t.z)
-					var sgn := -1.0 if s == "L" else 1.0
-					var land_p := hip_p + rv * (sgn * hip_x) + d * (0.35 if s == "R" else -0.1)
-					land_p = Vector3(land_p.x, maxf(va.landY + 0.35, hip_p.y - leg_len * 0.97), land_p.z)
-					var base: Vector3 = leg_targets.get(s, land_p)
-					leg_targets[s] = base.lerp(t, wT).lerp(land_p, wL)
-				leg_targets.poleL = hip_p + d * 3 + rv * 0.5 + Y * 0.5
-				leg_targets.poleR = hip_p + d * 3 + rv * 1.5 + Y * 0.5
+					var guia: bool = s == "R"
+					var lado := 1.0 if guia else -1.0
+					var retraso := 0.0 if guia else 0.12
+					var recoge := smoothstep(0.13 + retraso, 0.42 + retraso, p)
+					var aterriza := smoothstep(0.49 + retraso, 0.88 + retraso, p)
+					var tuck := hip_p + rv * (lado * 0.62 + 0.14) + d * (0.84 if guia else -0.43)
+					tuck.y = maxf(hip_p.y - leg_len * (0.39 if guia else 0.57), va.topY + 0.32)
+					var apoyo := hip_p + rv * (lado * hip_x) + d * (0.78 if guia else -0.24)
+					apoyo.y = maxf(va.landY + 0.35, hip_p.y - leg_len * 0.97)
+					var base: Vector3 = leg_targets.get(s, apoyo)
+					leg_targets[s] = base.lerp(tuck, recoge).lerp(apoyo, aterriza)
+				leg_targets.poleL = hip_p + d * 3 - rv * 0.46 + Y * 0.5
+				leg_targets.poleR = hip_p + d * 3 + rv * 0.84 + Y * 0.8
 			else:
 				# encaramarse: pies contra la pared (trepando), rodilla derecha arriba y luego la izquierda
 				var face_p: Vector3 = va.edge - d * 0.3
@@ -2857,6 +2866,7 @@ func update_rig(dt: float) -> void:
 		var pk := "poleL" if kick_s == "L" else "poleR"
 		leg_targets[pk] = (leg_targets[pk] as Vector3).lerp(pole_k, kick_w)
 	# piernas por IK
+	var marco_paso := Rbx.cfp(root_cf.origin) * yaw_cf
 	for s in ["L", "R"]:
 		var Lg: Limb = leg[s]
 		if leg_targets.has(s):
@@ -2872,6 +2882,10 @@ func update_rig(dt: float) -> void:
 				var off := target - hip_w
 				if off.length() > lim:
 					target = hip_w + off.normalized() * lim
+			var limita_paso := grounded and va == null and pb < 0.01 and hg == null and mt == null and kick_s == ""
+			if limita_paso:
+				target = _pie_en_su_lado(marco_paso, target, f.side, min_foot_x * 0.83)
+				pole = _pie_en_su_lado(marco_paso, pole, f.side, hip_x)
 			var res := solve(Lg, pelvis_cf, target, pole)
 			# la pierna en el aire no atraviesa muros ni mesas: si la rodilla, la espinilla o la
 			# punta del pie chocan con una superficie vertical, el pie se retrasa hasta quedar fuera
@@ -2890,6 +2904,11 @@ func update_rig(dt: float) -> void:
 					var n: Vector3 = hl.normal
 					var pen := 1.0 - (target - (hl.position as Vector3)).dot(n)
 					target += Vector3(n.x, 0, n.z).normalized() * maxf(pen, 0.3)
+					res = solve(Lg, pelvis_cf, target, pole)
+			if limita_paso:
+				var corregido := _pie_en_su_lado(marco_paso, target, f.side, min_foot_x * 0.83)
+				if not corregido.is_equal_approx(target):
+					target = corregido
 					res = solve(Lg, pelvis_cf, target, pole)
 			var lower: Transform3D = res[1]
 			if mt != null:

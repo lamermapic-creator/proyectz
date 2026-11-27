@@ -1,3 +1,8 @@
+## 2026-11-27 — Apoyos de marcha y salto de barrera
+
+- La marcha mantiene separados los pies y orienta las rodillas hacia su propio lado, incluso al invertir la dirección.
+- Al saltar la barrera, el personaje carga el impulso, adelanta una rodilla y recibe la caída con apoyos escalonados.
+
 ## 2026-11-27 — Transiciones de postura, parkour y combate
 
 - Al tumbarse o levantarse, las piernas suavizan los cambios de apoyo y vuelven a la IK directa al completar la postura.

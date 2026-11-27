@@ -640,8 +640,8 @@ func start_vault(v: Dictionary) -> bool:
 	if v.kind == "vault":
 		# rápido si vas corriendo, más pausado si vas andando
 		v.dur = clampf(0.95 - hs * 0.028, 0.55, 0.9) + v.h * 0.04
-		var over: Vector3 = e + d * (v.depth * 0.5)
-		v.pMid = Vector3(over.x, v.topY + 1.45, over.z)
+		var over: Vector3 = e + d * (v.depth * 0.42)
+		v.pMid = Vector3(over.x, maxf(v.topY + 1.58, p0.y + 0.42), over.z)
 		var land: Vector3 = e + d * (v.depth + 1.4)
 		v.p1 = Vector3(land.x, v.landY + Cst, land.z)
 		# arranque: primero se acerca al borde (sin subir), luego el arco por encima
