@@ -1,3 +1,7 @@
+## 2026-11-27 — Combinaciones del salto con y sin arma
+
+- Con las manos libres, el personaje gira hacia la dirección pulsada antes de despegar. Con un arma, el torso sigue la mira. W, W+A y W+D dan un salto completo, W+S salta en el sitio y las entradas laterales o hacia atrás tienen un desplazamiento corto. Las direcciones opuestas se cancelan.
+
 ## 2026-11-27 — Salto vertical con A, S y D
 - Al saltar hacia delante con W, el impulso toma el rumbo del cuerpo con las manos libres o el de la mira con un arma equipada. El torso armado puede seguir la mira durante el vuelo.
 

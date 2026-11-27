@@ -43,6 +43,10 @@ var _tumbar_rapido_hasta := -9.0
 var _vel_tumbar_rapido := Vector3.ZERO
 var _salto_pedido := false
 var _direccion_salto := Vector3.ZERO
+var _distancia_salto := 0.0
+var _giro_salto_desde := 0.0
+var _giro_salto_hasta := 0.0
+var _giro_salto_duracion := 0.0
 var _salto_recto := false
 var _salto_sin_parkour := false
 var _salto_t := -9.0               # último salto (para agarrarse a un borde en el aire)
@@ -768,35 +772,47 @@ func jump_or_vault() -> void:
 		return
 	var izquierda := Input.is_physical_key_pressed(KEY_A)
 	var derecha := Input.is_physical_key_pressed(KEY_D)
+	var lateral := int(derecha) - int(izquierda)
+	var adelante := Input.is_physical_key_pressed(KEY_W)
 	var atras := Input.is_physical_key_pressed(KEY_S)
-	var salto_vertical_asd := not Input.is_physical_key_pressed(KEY_W) and (izquierda or derecha or atras)
-	if not salto_vertical_asd:
+	var armado := arsenal.armado()
+	var eje := Vector2(lateral, int(adelante) - int(atras))
+	if armado and adelante and atras:
+		eje = Vector2.ZERO
+	var salto_sin_parkour := atras or izquierda or derecha
+	if not salto_sin_parkour:
 		var v = find_vault()
 		if v != null and start_vault(v):
 			return
-		# Estructura un poco más lejos: se aproxima para escalarla.
 		var vl = find_vault(true)
 		if vl != null:
 			_subir_a = {"t": ahora(), "dir": vl.dir}
 			return
 	if jump_height <= 0:
 		return
-	var hs := Rbx.flat(vel_real).length()
-	_salto_sin_parkour = salto_vertical_asd
-	if salto_vertical_asd:
-		_subir_a = null
-		_direccion_salto = Vector3.ZERO
-	elif _leer_movimiento().length() > 0.1:
-		var rumbo := _rumbo_mira_armada() if arsenal.armado() else Rbx.yaw_of(root_cf())
-		_direccion_salto = Vector3(-sin(rumbo), 0, -cos(rumbo))
-	else:
-		_direccion_salto = Vector3.ZERO
+	_subir_a = null
+	_salto_sin_parkour = salto_sin_parkour
+	_direccion_salto = Vector3.ZERO
+	_distancia_salto = 0.0
+	_giro_salto_duracion = 0.0
+	var pausa := 0.11 if Rbx.flat(vel_real).length() < 3.0 else 0.0
+	if eje != Vector2.ZERO:
+		var rumbo := _rumbo_mira_armada() if armado else yaw
+		var marco := Rbx.ang(0, rumbo, 0)
+		_direccion_salto = (Rbx.right(marco) * eje.x + Rbx.look(marco) * eje.y).normalized()
+		_distancia_salto = float(C.PLAYER.JumpDistance) * (0.28 if armado and not adelante else 1.0)
+		if not armado:
+			_giro_salto_desde = rotation.y
+			_giro_salto_hasta = atan2(-_direccion_salto.x, -_direccion_salto.z)
+			var angulo := absf(Rbx.wrap_a(_giro_salto_hasta - _giro_salto_desde))
+			if angulo > deg_to_rad(3.0):
+				_giro_salto_duracion = clampf(angulo / 10.0, 0.08, 0.28)
+				pausa = maxf(pausa, _giro_salto_duracion)
 	jump_prep_t = ahora()
 	_salto_t = ahora()
-	if hs < 3:
-		# salto parado: se agacha y se impulsa
+	if pausa > 0.0:
 		L.jumpPrep = jump_prep_t
-		get_tree().create_timer(0.11).timeout.connect(_impulso_salto)
+		get_tree().create_timer(pausa).timeout.connect(_impulso_salto)
 	else:
 		L.jumpPrep = null
 		_salto_pedido = true
@@ -1592,6 +1608,9 @@ func update_character(dt: float) -> void:
 				var step := prone_turn_rate * dt
 				if absf(step) > 1e-5:
 					rotation = Vector3(0, cy + step, 0)
+		elif _giro_salto_duracion > 0.0 and en_suelo and ahora() - jump_prep_t < _giro_salto_duracion:
+			var giro := smooth01((ahora() - jump_prep_t) / _giro_salto_duracion)
+			rotation.y = lerp_angle(_giro_salto_desde, _giro_salto_hasta, giro)
 		elif arsenal.recogiendo != null:
 			# recogiendo: el cuerpo se gira hacia lo que coge (lo deja un poco del lado de la mano)
 			var rp: Vector3 = arsenal.recogiendo.pos
@@ -1814,9 +1833,12 @@ func humanoid_step(dt: float) -> void:
 			en_suelo = false
 			# Conserva la dirección elegida al pulsar Espacio.
 			_salto_recto = true
+			if _giro_salto_duracion > 0.0:
+				rotation.y = _giro_salto_hasta
+				_giro_salto_duracion = 0.0
 			if _direccion_salto.length_squared() > 0.1:
 				var t_aire := 2.0 * v.y / g
-				var hs: float = C.PLAYER.JumpDistance / t_aire
+				var hs := _distancia_salto / t_aire
 				horiz = _direccion_salto * hs
 				air_vel = horiz
 				air_cap = hs

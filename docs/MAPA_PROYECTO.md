@@ -24,7 +24,7 @@
 
 - Moto: barrido de la rueda delantera al caer de morro y transferencia a cuerpo rígido en impactos fuertes, con inercia y vuelco. F levanta desde cerca cuando la moto se estabiliza, con giro suave, pies en sitio y agarres fijos.
 
-- El salto normal con W usa el rumbo del cuerpo con las manos libres y el rumbo de la mira con un arma equipada. Con A, S o D y sin W, Espacio da un salto vertical sin activar parkour. Sin movimiento, el salto normal es vertical. Al bajar una rampa, la sonda de la moto solo busca bordillos en caras opuestas al avance.
+- Con las manos libres, el personaje gira hacia la dirección del salto. Con arma, mira hacia la retícula y ajusta la distancia según la combinación de teclas. Al bajar una rampa, la sonda de la moto solo busca bordillos en caras opuestas al avance.
 
 - Moto en rampas: la retención automática se limita al terreno casi plano, el motor mantiene la fuerza disponible al rodar hacia atrás y la sonda distingue la subida continua de un bordillo.
 

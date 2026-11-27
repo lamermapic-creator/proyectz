@@ -14,49 +14,60 @@ func _probar() -> void:
 	change_scene_to_file("res://escenas/pruebas_movimiento.tscn")
 	await scene_changed
 	var j := current_scene.get_node("Jugador") as Jugador
-	for tecla in [KEY_A, KEY_S, KEY_D]:
-		j.teletransportar(Vector3(0, 0, -54), 0)
-		for i in 12:
-			await physics_frame
-		_tecla(tecla, true)
-		_tecla(KEY_SPACE, true)
-		for i in 18:
-			await physics_frame
-			if not j.en_suelo:
-				break
-		if j.en_suelo:
-			quit(1)
-			return
-		var inicio_vuelo := j.global_position
-		for i in 10:
-			await physics_frame
-		var delta := j.global_position - inicio_vuelo
-		_tecla(tecla, false)
-		_tecla(KEY_SPACE, false)
-		print("SALTO ASD ", OS.get_keycode_string(tecla), " ", delta)
-		if Rbx.flat(delta).length() > 0.05 or delta.y < 0.5 or j.vaulting != null or j.colgado != null:
-			quit(1)
-			return
-		for i in 85:
-			await physics_frame
+	var casos := [
+		[[KEY_W], Vector3.FORWARD, 1.0],
+		[[KEY_A], Vector3.LEFT, 1.0],
+		[[KEY_S], Vector3.BACK, 1.0],
+		[[KEY_D], Vector3.RIGHT, 1.0],
+		[[KEY_W, KEY_A], Vector3.FORWARD + Vector3.LEFT, 1.0],
+		[[KEY_W, KEY_D], Vector3.FORWARD + Vector3.RIGHT, 1.0],
+		[[KEY_W, KEY_S], Vector3.ZERO, 0.0],
+		[[KEY_A, KEY_S], Vector3.LEFT + Vector3.BACK, 1.0],
+		[[KEY_S, KEY_D], Vector3.BACK + Vector3.RIGHT, 1.0],
+		[[KEY_A, KEY_S, KEY_D], Vector3.BACK, 1.0],
+		[[KEY_A, KEY_D], Vector3.ZERO, 0.0],
+	]
 	for armado in [false, true]:
-		j.teletransportar(Vector3(0, 0, -54), 0)
 		if armado:
 			j.arsenal.select_slot(0)
-		for i in 75:
-			await physics_frame
-		# La cámara mira a la izquierda, el cuerpo sigue mirando al frente.
-		j.rotation.y = 0
-		j.yaw = PI / 2
-		_tecla(KEY_W, true)
-		Input.flush_buffered_events()
-		j.jump_or_vault()
-		_tecla(KEY_W, false)
-		var esperado := Vector3.LEFT if armado else Vector3.FORWARD
-		print("SALTO W armado=", armado, " impulso=", j._direccion_salto)
-		if not j._direccion_salto.is_equal_approx(esperado):
-			quit(1)
-			return
-		for i in 100:
-			await physics_frame
+			for i in 60:
+				await physics_frame
+		for caso in casos:
+			j.teletransportar(Vector3(0, 0, -54), 0)
+			for i in 12:
+				await physics_frame
+			# La cámara y el personaje empiezan mirando en direcciones diferentes.
+			j.yaw = PI / 2
+			j.rotation.y = 0
+			for tecla in caso[0]:
+				_tecla(tecla, true)
+			_tecla(KEY_SPACE, true)
+			for i in 24:
+				await physics_frame
+				if not j.en_suelo:
+					break
+			if j.en_suelo:
+				quit(1)
+				return
+			var esperado := (caso[1] as Vector3).normalized().rotated(Vector3.UP, PI / 2)
+			var direccion_correcta := j._direccion_salto.is_equal_approx(esperado)
+			var mira_correcta: bool = armado or esperado.is_zero_approx() or (-j.global_basis.z).dot(esperado) > 0.99
+			var escala: float = caso[2]
+			if armado and not caso[0].has(KEY_W):
+				escala *= 0.28
+			var distancia_correcta := is_equal_approx(j._distancia_salto, float(ZConfig.PLAYER.JumpDistance) * escala)
+			var inicio := j.global_position
+			for i in 12:
+				await physics_frame
+			var delta := j.global_position - inicio
+			for tecla in caso[0]:
+				_tecla(tecla, false)
+			_tecla(KEY_SPACE, false)
+			var vuelo_correcto := Rbx.flat(delta).length() < 0.05 if escala == 0.0 else Rbx.flat(delta).normalized().dot(esperado) > 0.99
+			print("SALTO armado=", armado, " teclas=", caso[0], " delta=", delta)
+			if not (direccion_correcta and mira_correcta and distancia_correcta and vuelo_correcto) or delta.y < 0.35:
+				quit(1)
+				return
+			for i in 85:
+				await physics_frame
 	quit()
