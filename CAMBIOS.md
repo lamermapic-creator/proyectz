@@ -1,3 +1,7 @@
+## 2026-11-27 — Patadas con un arma en mano
+
+- Durante la patada y el pisotón, el arma acompaña el movimiento del pecho y se recoge durante el impulso. La mano de apoyo conserva el agarre en las armas a dos manos y el apuntado recupera su peso de forma gradual.
+
 ## 2026-11-27 — Apoyos de marcha y salto de barrera
 
 - La marcha mantiene separados los pies y orienta las rodillas hacia su propio lado, incluso al invertir la dirección.

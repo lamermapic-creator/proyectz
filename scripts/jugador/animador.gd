@@ -1803,7 +1803,7 @@ func _paso_cc(now: float, dt: float) -> void:
 	if ac.tipo == "patada" or ac.tipo == "pisoton":
 		for k in ["pie_x", "pie_y", "pie_z", "pie_inc", "ro_x", "ro_y", "ro_z"]:
 			cc_pose[k] = pose_golpe[k]
-		cc_kick = {"lado": str(a.lado), "w": clampf(float(pose_golpe.pie_w), 0.0, 1.0)}
+		cc_kick = {"lado": str(a.lado), "w": clampf(float(pose_golpe.pie_w), 0.0, 1.0), "peso_arma": e}
 	# ajuste al blanco (ImpactoCC): la cadera baja y el tronco se inclina hacia él (p. ej. si está en el suelo)
 	ar.impacto.sumar_cuerpo(cc_pose)
 
@@ -3173,6 +3173,7 @@ func update_rig(dt: float) -> void:
 			# asomado: el arma sigue al pecho y se ladea un poco
 			aim_base = aim_base * Rbx.ang(0, 0, -ln * 0.22)
 		var reloading: bool = reload_st != null and now - float(reload_st.start) < float(reload_st.dur)
+		var apoyo_patada: float = cc_kick.peso_arma if not kick_s.is_empty() and not reloading else 0.0
 		if kind == "Gun":
 			if reloading:
 				var R: Dictionary = reload_st.R
@@ -3278,7 +3279,7 @@ func update_rig(dt: float) -> void:
 			sway += Vector3(sin(now * 1.3) * 0.006, sin(now * 0.9) * 0.008, 0) * (1 + exertion * 3)
 		# andando, el brazo del arma también se balancea (desde el hombro) en vez de ir tieso;
 		# las armas largas a dos manos (rifle, bate) mucho menos
-		var libre_k := 0.0 if (aiming or firing_recent or reloading or mel_t >= 0.0 or pb > 0.5) else 1.0
+		var libre_k := 0.0 if (aiming or firing_recent or reloading or mel_t >= 0.0 or pb > 0.5) else 1.0 - apoyo_patada
 		var amp := 0.06 if Armas.base(tool) == "Rifle" and tool != "Subfusil" else (0.12 if Armas.dos_manos(tool) else 0.32)
 		swing_arma = Rbx.damp(swing_arma, float(arm_a.R) * amp * libre_k, 12, dt)
 		var piv := Vector3(0.92, 0.51, 0)
@@ -3370,6 +3371,15 @@ func update_rig(dt: float) -> void:
 							fuera_saca = Rbx.smooth(clampf((u3 - 0.1) / 0.45, 0, 1))
 						support_w = Rbx.smooth(clampf((u3 - 0.7) / 0.3, 0, 1))
 
+		if apoyo_patada > 0.001 and draw_st == null and holster_t == null:
+			# El arma acompaña el pecho. Se recoge sin perder el agarre de la mano izquierda.
+			var pose_corta := Armas.pose(tool, "HIP" if kind == "Gun" else "READY")
+			var lado_pie := -1.0 if kick_s == "L" else 1.0
+			var separacion := -0.09 * lado_pie if Armas.dos_manos(tool) else 0.08
+			var recogida := 0.14 if kind == "Gun" else 0.04
+			var recogida_pecho := chest_cf * Rbx.cf(separacion, 0.06, recogida) * pose_corta * Rbx.ang(-0.14, 0.0, lado_pie * 0.10)
+			handle_cf = handle_cf.interpolate_with(recogida_pecho, apoyo_patada)
+
 		# Recoger el arma antes de que la boca sobrepase un blanco pegado.
 		var recogida_cerca_obj := 0.0
 		if aiming and kind == "Gun" and mt == null and mdl and mdl.has_node("Muzzle") and draw_st == null and holster_t == null and not reloading:
@@ -3391,7 +3401,8 @@ func update_rig(dt: float) -> void:
 				and not (sprinting and not aiming and not firing_recent):
 			conv_t = 1.0 - clampf(arma_alzada * 3.0, 0.0, 1.0)
 		conv_w = Rbx.damp(conv_w, conv_t, 10.0, dt)
-		if conv_w > 0.001 and mdl and mdl.has_node("Muzzle"):
+		var peso_mira := conv_w * (1.0 - apoyo_patada)
+		if peso_mira > 0.001 and mdl and mdl.has_node("Muzzle"):
 			var mz_l: Vector3 = (mdl.get_node("Muzzle") as Node3D).position
 			var mz_w := handle_cf * mz_l
 			var d0 := (-handle_cf.basis.z).normalized()
@@ -3426,7 +3437,7 @@ func update_rig(dt: float) -> void:
 					_ajuste_mira = _ajuste_mira.slerp(Quaternion.IDENTITY, 1.0 - exp(-8.0 * dt))
 			else:
 				_ajuste_mira = _ajuste_mira.slerp(Quaternion.IDENTITY, 1.0 - exp(-8.0 * dt))
-			var qw := _ajuste_mira * Quaternion.IDENTITY.slerp(conv_q, conv_w)
+			var qw := Quaternion.IDENTITY.slerp(_ajuste_mira, 1.0 - apoyo_patada) * Quaternion.IDENTITY.slerp(conv_q, peso_mira)
 			# gira alrededor de la empuñadura (la mano no se mueve; el cañón sube/baja/gira un poco)
 			handle_cf = Transform3D(Basis(qw) * handle_cf.basis, handle_cf.origin)
 		# las armas blancas nunca atraviesan el propio cuerpo (torso, cabeza, cadera, muslos)
